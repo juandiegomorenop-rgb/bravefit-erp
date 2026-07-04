@@ -818,8 +818,11 @@ create table nivel_servicio_mensual (              -- pestaña Operación del da
 );
 
 -- Facturas emitidas en Siigo (Siigo es la autoridad fiscal; aquí solo el vínculo).
--- Vive aparte de cotizaciones porque: (a) una OP Shopify/WhatsApp no tiene
--- cotización, (b) una cotización PP puede facturarse en 2 (anticipo + saldo).
+-- Vive aparte de cotizaciones porque una OP Shopify/WhatsApp no tiene cotización
+-- y necesita dónde registrar su factura. REGLA DE NEGOCIO: una venta PP = UNA
+-- factura con DOS pagos (anticipo 60% + saldo 40%, ver tabla pagos) — NO dos
+-- facturas. Si algún día hay más de una factura por venta será por casos
+-- excepcionales (refacturación/nota), no por el esquema de pago.
 create table facturas (
   id            uuid primary key default gen_random_uuid(),
   siigo_id      text unique,                      -- id del documento en Siigo
@@ -834,9 +837,10 @@ create table facturas (
 create index idx_facturas_cotizacion on facturas (cotizacion_id);
 create index idx_facturas_op on facturas (op_id);
 
--- Pagos/abonos recibidos (PP: 60% anticipo + 40% antes de entrega).
--- Siigo lleva la cartera oficial; esto responde "¿debe saldo?" ANTES de
--- despachar sin salir del ERP. fuente='siigo' cuando lo trae el sync.
+-- Pagos/abonos recibidos: una venta PP tiene UNA factura y DOS pagos
+-- (anticipo 60% + saldo 40% antes de entrega). Siigo lleva la cartera
+-- oficial; esto responde "¿debe saldo?" ANTES de despachar sin salir
+-- del ERP. fuente='siigo' cuando lo trae el sync.
 create table pagos (
   id            uuid primary key default gen_random_uuid(),
   cotizacion_id uuid references cotizaciones(id),
