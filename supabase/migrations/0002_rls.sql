@@ -76,7 +76,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'ciudades','festivos','unidades_medida','categorias_producto','etapas_crm',
+    'ciudades','festivos','unidades_medida','colores','categorias_producto','etapas_crm',
     'estados_cotizacion','etapas_produccion','origenes_op','tipos_material',
     'conceptos_pyg','recargos','secuencias'
   ] loop
@@ -190,6 +190,14 @@ create policy facturas_ins on facturas for insert to authenticated
 create policy facturas_upd on facturas for update to authenticated
   using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
 
+-- pagos: logística consulta "¿debe saldo?" antes de despachar; escribe ventas
+create policy pagos_sel on pagos for select to authenticated
+  using (fn_puede('ventas','ver') or fn_puede('produccion','ver'));
+create policy pagos_ins on pagos for insert to authenticated
+  with check (fn_puede('ventas','editar'));
+create policy pagos_upd on pagos for update to authenticated
+  using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
+
 -- ------------------------------------------------------------
 -- RRHH con alcance fino (la diferencia Ops1 vs Ops2)
 -- ------------------------------------------------------------
@@ -206,6 +214,16 @@ create policy empleados_sel on empleados for select to authenticated
 create policy empleados_mod on empleados for insert to authenticated
   with check (fn_puede('rrhh','crear'));
 create policy empleados_upd on empleados for update to authenticated
+  using (fn_puede('rrhh','editar')) with check (fn_puede('rrhh','editar'));
+
+-- empleados_confidencial (salario, hoja de vida…): SOLO rrhh completo
+-- (Admin) o el propio empleado. Ops1/Ops2 jamás ven esta tabla, ni por
+-- PostgREST directo — la separación es física, no cosmética.
+create policy empconf_sel on empleados_confidencial for select to authenticated
+  using (fn_puede('rrhh','ver') or empleado_id = fn_mi_empleado_id());
+create policy empconf_ins on empleados_confidencial for insert to authenticated
+  with check (fn_puede('rrhh','crear'));
+create policy empconf_upd on empleados_confidencial for update to authenticated
   using (fn_puede('rrhh','editar')) with check (fn_puede('rrhh','editar'));
 
 -- vacaciones: propias siempre · técnicos si el rol lo tiene · Admin todas

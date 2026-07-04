@@ -160,6 +160,13 @@ create table unidades_medida (
   nombre text not null
 );
 
+create table colores (                     -- paleta estándar de racks (planner)
+  id     smallint generated always as identity primary key,
+  nombre text not null unique,
+  hex    text,
+  activo boolean not null default true
+);
+
 create table conceptos_pyg (
   id       smallint generated always as identity primary key,
   nombre   text not null unique,
@@ -403,6 +410,7 @@ create table ordenes_pedido (
   numero        text not null unique,              -- OP-XXX
   cliente_id    uuid not null references clientes(id),
   ciudad_id     smallint references ciudades(id),
+  segmento      text check (segmento in ('B2B','B2C')), -- lo copia de la cotización o lo fija el origen
   origen_id     smallint not null references origenes_op(id),
   cotizacion_id uuid references cotizaciones(id),
   pedido_web_id uuid references pedidos_web(id),
@@ -630,8 +638,9 @@ create table campana_metricas (
   alcance    integer not null default 0,
   clics      integer not null default 0,
   leads      integer not null default 0,
+  ingresos   numeric(14,2) not null default 0,  -- atribuidos (manual o plataforma)
   unique (campana_id, fecha)
-  -- CPL y ROAS se calculan en consulta, nunca se almacenan
+  -- CPL = inversion/leads · ROAS = ingresos/inversion: en consulta, nunca almacenados
 );
 
 create table encuestas (
@@ -669,6 +678,9 @@ create table redes_metricas (
 -- 7 · RECURSOS HUMANOS Y CARTELERA
 -- ------------------------------------------------------------
 
+-- Ficha BÁSICA: lo que Ops1/Ops2 pueden ver de los técnicos.
+-- Lo sensible vive en empleados_confidencial con RLS propio: la separación
+-- es a nivel de BD, no de API (PostgREST directo tampoco expone salarios).
 create table empleados (
   id            uuid primary key default gen_random_uuid(),
   nombre        text not null,
@@ -676,14 +688,18 @@ create table empleados (
   cargo         text,
   area          text,                              -- 'planta', 'administración'…
   es_tecnico    boolean not null default false,    -- clave para permisos Ops1/Ops2
-  tipo_contrato text,
-  salario_base  numeric(14,2),                     -- campo oculto según rol
-  eps           text,
-  arl           text,
   fecha_ingreso date,
-  hoja_vida_url text,                              -- PDF en Storage
   activo        boolean not null default true,
   eliminado_en  timestamptz
+);
+
+create table empleados_confidencial (
+  empleado_id   uuid primary key references empleados(id) on delete cascade,
+  tipo_contrato text,
+  salario_base  numeric(14,2),
+  eps           text,
+  arl           text,
+  hoja_vida_url text                               -- PDF en Storage
 );
 
 alter table usuarios
@@ -693,7 +709,7 @@ alter table usuarios
 create table nominas (
   id          uuid primary key default gen_random_uuid(),
   empleado_id uuid not null references empleados(id),
-  periodo     text not null,                       -- '2026-07'
+  periodo     text not null check (periodo ~ '^\d{4}-\d{2}$'),  -- '2026-07'
   devengos    jsonb not null default '{}'::jsonb,
   deducciones jsonb not null default '{}'::jsonb,
   neto        numeric(14,2),
@@ -719,7 +735,7 @@ create index idx_vacaciones_empleado on vacaciones (empleado_id);
 create table evaluaciones (
   id           uuid primary key default gen_random_uuid(),
   empleado_id  uuid not null references empleados(id),
-  ciclo        text not null,                      -- '2026-1'
+  ciclo        text not null check (ciclo ~ '^\d{4}-[12]$'),  -- '2026-1'
   puntaje      numeric(3,2) check (puntaje between 0 and 5),
   criterios    jsonb not null default '[]'::jsonb,
   estado       text not null default 'pendiente'
@@ -785,7 +801,7 @@ create table eventos (
 -- REGLA DEL DUEÑO: el PyG NO se calcula. Gerencia lo carga (captura o Excel).
 create table pyg_mensual (
   id          bigint generated always as identity primary key,
-  periodo     text not null,                       -- '2026-04'
+  periodo     text not null check (periodo ~ '^\d{4}-\d{2}$'),  -- '2026-04'
   concepto_id smallint not null references conceptos_pyg(id),
   valor       numeric(16,2) not null,
   cargado_por uuid references usuarios(id),
@@ -794,7 +810,7 @@ create table pyg_mensual (
 );
 
 create table nivel_servicio_mensual (              -- pestaña Operación del dashboard
-  periodo     text primary key,                    -- '2026-04'
+  periodo     text primary key check (periodo ~ '^\d{4}-\d{2}$'),  -- '2026-04'
   cumplidos   integer not null default 0,
   incumplidos integer not null default 0,
   observaciones text,
@@ -818,6 +834,29 @@ create table facturas (
 create index idx_facturas_cotizacion on facturas (cotizacion_id);
 create index idx_facturas_op on facturas (op_id);
 
+-- Pagos/abonos recibidos (PP: 60% anticipo + 40% antes de entrega).
+-- Siigo lleva la cartera oficial; esto responde "¿debe saldo?" ANTES de
+-- despachar sin salir del ERP. fuente='siigo' cuando lo trae el sync.
+create table pagos (
+  id            uuid primary key default gen_random_uuid(),
+  cotizacion_id uuid references cotizaciones(id),
+  op_id         uuid references ordenes_pedido(id),
+  factura_id    uuid references facturas(id),
+  concepto      text not null default 'abono'
+                check (concepto in ('anticipo','saldo','abono','total')),
+  monto         numeric(14,2) not null check (monto > 0),
+  medio         text,                             -- transferencia, pasarela, efectivo…
+  fuente        text not null default 'manual'
+                check (fuente in ('manual','siigo','shopify')),
+  recibido_en   date not null default current_date,
+  usuario_id    uuid references usuarios(id),
+  nota          text,
+  check (num_nonnulls(cotizacion_id, op_id, factura_id) >= 1)
+);
+create index idx_pagos_cotizacion on pagos (cotizacion_id);
+create index idx_pagos_op on pagos (op_id);
+create index idx_pagos_factura on pagos (factura_id);
+
 -- Cola de integraciones: webhooks entran aquí; un worker los procesa.
 create table integracion_eventos (
   id           bigint generated always as identity primary key,
@@ -830,9 +869,13 @@ create table integracion_eventos (
   intentos     smallint not null default 0,
   ultimo_error text,
   recibido_en  timestamptz not null default now(),
-  procesado_en timestamptz,
-  unique (sistema, tipo_evento, clave_externa)
+  procesado_en timestamptz
 );
+-- Idempotencia: unique PARCIAL (un unique de tabla no aplica entre NULLs).
+-- Eventos sin clave externa NO se deduplican: el worker debe exigir clave
+-- en shopify/siigo y solo permitir null en eventos manuales/planner.
+create unique index uq_integracion_evento on integracion_eventos
+  (sistema, tipo_evento, clave_externa) where clave_externa is not null;
 create index idx_integracion_pendientes on integracion_eventos (estado, recibido_en)
   where estado in ('pendiente','error');
 
@@ -1073,8 +1116,8 @@ begin
     'cotizaciones','cotizacion_items','ordenes_pedido','op_items','oportunidades',
     'productos','materiales','existencias','solicitudes_compra','sc_items',
     'recepciones','recepcion_items','garantias','clientes','proveedores',
-    'empleados','vacaciones','evaluaciones','pyg_mensual','usuarios','permisos',
-    'facturas'
+    'empleados','empleados_confidencial','vacaciones','evaluaciones','pyg_mensual',
+    'usuarios','permisos','facturas','pagos'
   ] loop
     execute format('create trigger trg_aud_%I after insert or update or delete on %I
                     for each row execute function fn_auditar()', t, t);

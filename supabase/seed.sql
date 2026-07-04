@@ -25,8 +25,8 @@ insert into permisos (rol_id, modulo, puede_ver, puede_crear, puede_editar, pued
 select r.id, x.modulo, x.v, x.c, x.e, false, x.oc::jsonb
   from roles r,
        (values ('produccion',                 true,  true,  true,  '[]'),
-               ('rrhh_vacaciones_tecnicos',   true,  false, false, '["salario_base"]'),
-               ('rrhh_evaluaciones_tecnicos', true,  false, false, '["salario_base"]'),
+               ('rrhh_vacaciones_tecnicos',   true,  false, false, '[]'),
+               ('rrhh_evaluaciones_tecnicos', true,  false, false, '[]'),
                ('cartelera',                  true,  true,  false, '[]'),
                ('dashboard',                  true,  false, false, '[]'),
                ('chat',                       true,  false, false, '[]')
@@ -38,7 +38,7 @@ insert into permisos (rol_id, modulo, puede_ver, puede_crear, puede_editar, pued
 select r.id, x.modulo, x.v, x.c, x.e, false, x.oc::jsonb
   from roles r,
        (values ('produccion',                 true,  true,  true,  '[]'),
-               ('rrhh_evaluaciones_tecnicos', true,  false, false, '["salario_base"]'),
+               ('rrhh_evaluaciones_tecnicos', true,  false, false, '[]'),
                ('cartelera',                  true,  true,  false, '[]'),
                ('dashboard',                  true,  false, false, '[]'),
                ('chat',                       true,  false, false, '[]')
@@ -96,6 +96,11 @@ insert into tipos_material (nombre) values
 -- ---------- Unidades ----------
 insert into unidades_medida (clave, nombre) values
   ('und', 'Unidad'), ('m', 'Metro'), ('kg', 'Kilogramo'), ('gl', 'Galón');
+
+-- ---------- Colores estándar (paleta del planner) ----------
+insert into colores (nombre, hex) values
+  ('Negro', '#0E0E0E'), ('Rojo', '#D43A2F'), ('Azul', '#3B82F6'),
+  ('Blanco', '#FFFFFF'), ('Gris', '#6B6B6B'), ('Verde militar', '#4B5320');
 
 -- ---------- Categorías de producto (1:1 Shopify) ----------
 insert into categorias_producto (clave, nombre, orden) values
