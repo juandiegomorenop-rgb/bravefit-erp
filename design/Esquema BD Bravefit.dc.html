@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0;background:#EDECE9}</style></helmet>
+<div style="max-width:1100px;margin:0 auto;padding:48px 40px 80px;font-family:'Helvetica Neue',Arial,sans-serif;color:#2B2B2B">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2B2B2B;padding-bottom:18px">
+    <div>
+      <div style="font-size:12px;letter-spacing:2px;color:#8a6f1d;font-weight:700">ERP BRAVEFIT · DOCUMENTO TÉCNICO</div>
+      <h1 style="font-size:30px;font-weight:800;margin:6px 0 0">Esquema de base de datos</h1>
+      <div style="font-size:13px;color:#8a8a8a;margin-top:4px">PostgreSQL recomendado · v1 · julio 2026 · insumo para desarrollo en Claude Code</div>
+    </div>
+    <img src="brand/logo-carbon.png" alt="BRAVEFIT" style="height:24px">
+  </div>
+
+  <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:16px 22px;font-size:13.5px;color:#7a5f14;line-height:1.6;margin-top:24px">
+    <b>Principios:</b> nada se repite (3ª forma normal) · catálogos parametrizables (etapas, estados, categorías y roles son tablas, no valores fijos — así agregar módulos o estados no requiere cambiar código) · llaves foráneas con índices para consultas ágiles · borrado lógico (<code>activo</code>/<code>eliminado_en</code>) para no perder historial.
+  </div>
+
+  <!-- NÚCLEO -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 4px;color:#8a6f1d">0 · Núcleo: usuarios, roles y permisos</h2>
+  <div style="font-size:13px;color:#8a8a8a;margin-bottom:14px">Preparado para los perfiles que definirás luego: cada rol tiene permisos por módulo (ver / crear / editar / aprobar) y campos ocultos.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">usuarios</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · uuid<br>empleado_id FK→empleados <span style="color:#8a8a8a">(opcional)</span><br>rol_id FK→roles<br>email · hash_clave · nombre<br>activo · creado_en · ultimo_acceso
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">roles &nbsp;+&nbsp; permisos</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        roles: <b style="color:#8a6f1d">id</b> PK · nombre <span style="color:#8a8a8a">(Admin, Ventas…)</span><br>permisos: <b style="color:#8a6f1d">id</b> PK · rol_id FK→roles<br>&nbsp;&nbsp;modulo <span style="color:#8a8a8a">(ej. 'ops', 'nomina')</span><br>&nbsp;&nbsp;puede_ver · puede_crear · puede_editar · puede_aprobar<br>&nbsp;&nbsp;campos_ocultos jsonb <span style="color:#8a8a8a">(ej. ["salario"])</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VENTAS -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">1 · Ventas y CRM</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">clientes</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · tipo <span style="color:#8a8a8a">(empresa/persona)</span><br>nombre · nit_cedula · email · telefono<br>ciudad_id FK→ciudades · direccion<br>canal_preferido · creado_en
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">productos &nbsp;+&nbsp; categorias_producto</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · sku UNIQUE · nombre<br>categoria_id FK→categorias_producto<br>clasificacion <span style="color:#8a8a8a">(MTS / ATO / MTO)</span><br>origen <span style="color:#8a8a8a">(propio / comercializado — alimenta informe de ventas por origen)</span><br>precio_lista · costo_estandar<br>es_rack bool <span style="color:#8a8a8a">(prioridad de display en O.P.)</span><br>shopify_product_id <span style="color:#8a8a8a">(sync)</span> · activo
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">cotizaciones &nbsp;+&nbsp; cotizacion_items</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · numero UNIQUE <span style="color:#8a8a8a">(CT-2214)</span><br>cliente_id FK→clientes · vendedor_id FK→usuarios<br>segmento <span style="color:#8a8a8a">(B2B / B2C — OBLIGATORIO al crear)</span><br>no_facturar bool <span style="color:#8a8a8a">(cliente pide no factura: NO va a Siigo, SÍ suma a ventas e indicadores)</span><br>estado_id FK→estados_cotizacion · valida_hasta<br>items: cotizacion_id FK · producto_id FK<br>&nbsp;&nbsp;cantidad · precio_unit · descuento_pct<br><span style="color:#8a8a8a">totales calculados, nunca almacenados duplicados</span>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">oportunidades &nbsp;(CRM) + etapas_crm</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · cliente_id FK→clientes<br>cotizacion_id FK→cotizaciones <span style="color:#8a8a8a">(nullable)</span><br>etapa_id FK→etapas_crm <span style="color:#8a8a8a">(tabla: orden, nombre, color)</span><br>valor_estimado · vendedor_id FK→usuarios<br>movida_en <span style="color:#8a8a8a">(drag &amp; drop actualiza etapa_id)</span>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">pedidos_web &nbsp;(Shopify)</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · shopify_order_id UNIQUE<br>cliente_id FK→clientes <span style="color:#8a8a8a">(se crea/match por email)</span><br>estado_pago · estado_entrega · total<br>op_id FK→ordenes_pedido <span style="color:#8a8a8a">(auto al pagar)</span><br>payload jsonb <span style="color:#8a8a8a">(respaldo del webhook)</span> · recibido_en
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">catalogos &nbsp;+&nbsp; catalogo_productos</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · nombre · portada_url · publicado<br>M:N con productos vía catalogo_productos<br>&nbsp;&nbsp;catalogo_id FK · producto_id FK · orden
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCCIÓN -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">2 · Producción y Logística</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden;grid-column:1/-1">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">ordenes_pedido &nbsp;+&nbsp; op_items &nbsp;+&nbsp; op_historial_etapas</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace;display:grid;grid-template-columns:1fr 1fr;gap:0 26px">
+        <div><b style="color:#8a6f1d">id</b> PK · numero UNIQUE <span style="color:#8a8a8a">(OP-1042)</span><br>cliente_id FK→clientes · ciudad_id FK→ciudades<br>origen_id FK→origenes_op <span style="color:#8a8a8a">(Shopify / WhatsApp / Planner / Cotización — parametrizable)</span><br>cotizacion_id FK · pedido_web_id FK <span style="color:#8a8a8a">(nullables)</span><br>etapa_id FK→etapas_produccion <span style="color:#8a8a8a">(tabla con orden)</span></div>
+        <div>requiere_instalacion bool · direccion_entrega<br>fecha_creacion · fecha_entrega_pactada · fecha_entregada<br><span style="color:#8a8a8a">semáforo se CALCULA de fecha_entrega, no se guarda</span><br>op_items: op_id FK · producto_id FK · cantidad · precio_unit<br>op_historial_etapas: op_id FK · etapa_id FK · usuario_id FK · en</div>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">inventario_items &nbsp;+&nbsp; movimientos_inventario</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · producto_id FK <span style="color:#8a8a8a">o</span> material_id FK<br>tipo <span style="color:#8a8a8a">(terminado / materia_prima / en_proceso)</span><br>cantidad_disponible · cantidad_reservada<br>buffer <span style="color:#8a8a8a">(amortiguador Simple Solutions)</span><br>movimientos: item_id FK · tipo(+/−) · cantidad<br>&nbsp;&nbsp;referencia <span style="color:#8a8a8a">(op_id / recepcion_id)</span> · usuario_id FK · en
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">solicitudes_compra &nbsp;+&nbsp; sc_items &nbsp;+&nbsp; recepciones</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · numero <span style="color:#8a8a8a">(SC-118)</span> · tipo_material_id FK<br>proveedor_id FK→proveedores · solicita_area<br>estado <span style="color:#8a8a8a">(pendiente / en_cotizacion / comprado / rechazada)</span><br>valor_estimado <span style="color:#8a8a8a">(lo digita el comprador)</span> · fecha_entrega<br>sc_items: sc_id FK · material_id FK · cantidad<br>recepciones: sc_item_id FK · cant_recibida · faltante · nota · cerrado
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">garantias</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · numero <span style="color:#8a8a8a">(GR-031)</span><br>op_id FK→ordenes_pedido · producto_id FK<br>cliente_id FK · problema · detalle<br>estado <span style="color:#8a8a8a">(revisión / reparación / resuelta)</span><br>costo_resolucion · abierta_en · cerrada_en
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">proveedores &nbsp;·&nbsp; materiales &nbsp;·&nbsp; ciudades</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        proveedores: <b style="color:#8a6f1d">id</b> PK · nombre · nit · contacto<br>materiales: <b style="color:#8a6f1d">id</b> PK · nombre · unidad · tipo_material_id FK<br>ciudades: <b style="color:#8a6f1d">id</b> PK · nombre · departamento<br><span style="color:#8a8a8a">entregas = vista sobre O.P. con fecha_entregada (no tabla aparte)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MERCADEO -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">3 · Mercadeo</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">campanas &nbsp;+&nbsp; campana_metricas</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · plataforma <span style="color:#8a8a8a">(meta / google / tiktok)</span><br>nombre · id_externo · inicio · fin<br>metricas (diarias): campana_id FK · fecha<br>&nbsp;&nbsp;inversion · alcance · clics · leads<br><span style="color:#8a8a8a">CPL y ROAS calculados en consulta</span>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">encuestas &nbsp;+&nbsp; encuesta_respuestas</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · titulo · canal · activa<br>preguntas jsonb <span style="color:#8a8a8a">(flexible por encuesta)</span><br>respuestas: encuesta_id FK · cliente_id FK <span style="color:#8a8a8a">(nullable)</span><br>&nbsp;&nbsp;op_id FK <span style="color:#8a8a8a">(post-entrega)</span> · respuestas jsonb · en
+      </div>
+    </div>
+  </div>
+
+  <!-- RRHH -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">4 · Recursos Humanos y Cartelera</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">empleados &nbsp;+&nbsp; nominas</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · nombre · cedula UNIQUE · cargo · area<br>tipo_contrato · salario_base · eps · arl · fecha_ingreso<br>hoja_vida_url <span style="color:#8a8a8a">(PDF adjunto)</span> · activo<br>nominas: empleado_id FK · periodo <span style="color:#8a8a8a">(2026-07)</span><br>&nbsp;&nbsp;devengos jsonb · deducciones jsonb · neto · liquidada_en
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">vacaciones &nbsp;·&nbsp; evaluaciones</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        vacaciones: <b style="color:#8a6f1d">id</b> PK · empleado_id FK<br>&nbsp;&nbsp;desde · hasta · dias · estado · aprobada_por FK→usuarios<br>evaluaciones: <b style="color:#8a6f1d">id</b> PK · empleado_id FK · ciclo<br>&nbsp;&nbsp;puntaje · criterios jsonb · estado · evaluador_id FK
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">vacantes &nbsp;+&nbsp; aplicaciones</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        vacantes: <b style="color:#8a6f1d">id</b> PK · cargo · area · estado · publicada_en<br>aplicaciones: vacante_id FK · nombre · contacto<br>&nbsp;&nbsp;etapa <span style="color:#8a8a8a">(aplicó / entrevista / finalista / contratado)</span> · cv_url
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;overflow:hidden">
+      <div style="background:#2B2B2B;color:#fff;padding:10px 18px;font-size:13.5px;font-weight:700">publicaciones &nbsp;(Cartelera)</div>
+      <div style="padding:12px 18px;font-size:12.5px;line-height:1.9;font-family:ui-monospace,Menlo,monospace">
+        <b style="color:#8a6f1d">id</b> PK · autor_id FK→usuarios <span style="color:#8a8a8a">(todos pueden escribir)</span><br>titulo · cuerpo · importante bool · fijada bool<br>reacciones: publicacion_id FK · usuario_id FK · tipo<br>eventos: <b style="color:#8a6f1d">id</b> PK · titulo · fecha · lugar
+      </div>
+    </div>
+  </div>
+
+  <!-- INTEGRACIONES -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">5 · Integraciones y auditoría</h2>
+  <div style="background:#fff;border:1px solid #e2e0db;border-radius:12px;padding:18px 22px;font-size:13px;line-height:1.8">
+    <b>integracion_eventos</b> <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8a8a">(id PK · sistema [shopify / siigo / whatsapp] · tipo_evento · payload jsonb · estado · procesado_en)</span> — cola de sincronización: webhooks de Shopify entran aquí y un worker los convierte en pedidos_web/O.P.; las facturas se empujan a <b>Siigo</b> por su API; WhatsApp vía <b>Cloud API oficial de Meta</b> (sin riesgo de baneo).<br>
+    <b>pyg_mensual</b> <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8a8a">(id PK · periodo · concepto_id FK→conceptos_pyg · valor · cargado_por FK→usuarios · en)</span> — el PyG del Dashboard/Finanzas <b>NO se calcula</b>: se carga manualmente desde el cuadro resumen que hace gerencia con datos de contabilidad (pantalla de captura o importación de Excel). conceptos_pyg parametriza filas, % meta y dirección (más/menos es mejor).<br>
+    <b>auditoria</b> <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8a8a">(usuario_id FK · tabla · registro_id · accion · cambios jsonb · en)</span> — quién cambió qué, en todos los módulos.
+  </div>
+
+  <!-- RELACIONES CLAVE -->
+  <h2 style="font-size:19px;font-weight:800;margin:36px 0 14px;color:#8a6f1d">6 · Flujo principal (relaciones clave)</h2>
+  <div style="background:#2B2B2B;color:#fff;border-radius:14px;padding:26px 30px;font-size:13.5px;line-height:2.1;font-family:ui-monospace,Menlo,monospace">
+    <span style="color:#E8C55A">oportunidad</span> (CRM) → <span style="color:#E8C55A">cotización</span> → aprobada → <span style="color:#E8C55A">orden_pedido</span> → etapas → <span style="color:#E8C55A">entrega</span> → factura a <span style="color:#9ecdf2">Siigo</span><br>
+    <span style="color:#9ecdf2">Shopify</span> webhook → <span style="color:#E8C55A">pedido_web</span> → (pagado) → <span style="color:#E8C55A">orden_pedido</span> automática + descuento de <span style="color:#E8C55A">inventario</span><br>
+    consumo bajo buffer → alerta → <span style="color:#E8C55A">solicitud_compra</span> → comprado → <span style="color:#E8C55A">recepción</span> (faltantes → seguimiento) → entrada a <span style="color:#E8C55A">inventario</span><br>
+    <span style="color:#E8C55A">O.P.</span> entregada → encuesta post-entrega · reclamo → <span style="color:#E8C55A">garantía</span> ligada a la O.P. original
+  </div>
+
+  <div style="margin-top:36px;padding-top:16px;border-top:1px solid #d8d6d1;font-size:12px;color:#8a8a8a;display:flex;justify-content:space-between">
+    <span>ERP Bravefit · Esquema v1 · confidencial</span>
+    <span>Escalable: nuevos módulos = nuevas tablas + entrada en permisos, sin tocar lo existente</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0;background:#F4F4F3}</style></helmet>
+<div style="min-height:100vh;background:#F4F4F3;font-family:'Helvetica Neue',Arial,sans-serif;color:#2B2B2B;display:flex;flex-direction:column">
+
+  <!-- ===== Topbar ===== -->
+  <header style="background:#2B2B2B;padding:0 32px;display:flex;align-items:center;gap:28px;height:64px;position:sticky;top:0;z-index:100">
+    <img src="brand/logo-white.png" alt="BRAVEFIT" style="height:22px;display:block;cursor:pointer" onClick="{{ goDashboard }}">
+    <nav style="display:flex;height:100%;align-items:stretch;font-size:13.5px">
+      <div onClick="{{ goDashboard }}" style="display:flex;align-items:center;padding:0 16px;border-bottom:3px solid {{ dashBorder }};border-top:3px solid transparent;color:{{ dashColor }};font-weight:600;cursor:pointer">Dashboard</div>
+      <sc-for list="{{ menus }}" as="m" hint-placeholder-count="4">
+        <div style="position:relative;display:flex;align-items:stretch" onMouseEnter="{{ m.onEnter }}" onMouseLeave="{{ closeMenu }}">
+          <div style="display:flex;align-items:center;gap:6px;padding:0 16px;border-bottom:3px solid {{ m.border }};border-top:3px solid transparent;color:{{ m.color }};font-weight:{{ m.weight }};cursor:pointer">{{ m.label }} <span style="font-size:9px">▼</span></div>
+          <sc-if value="{{ m.open }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;top:64px;left:0;background:#fff;border-radius:0 0 12px 12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:8px;min-width:240px;display:flex;flex-direction:column;gap:1px">
+              <sc-for list="{{ m.items }}" as="it" hint-placeholder-count="3">
+                <div onClick="{{ it.onClick }}" style="padding:10px 14px;border-radius:8px;font-size:13.5px;color:#2B2B2B;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px" style-hover="background:#F4F0E4;color:#8a6f1d"><span>{{ it.label }}</span><sc-if value="{{ it.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="background:#FD5C13;color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px">{{ it.badge }}</span></sc-if></div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+      <div onClick="{{ goComunicacion }}" style="display:flex;align-items:center;padding:0 16px;border-bottom:3px solid {{ comBorder }};border-top:3px solid transparent;color:{{ comColor }};font-weight:600;cursor:pointer">Cartelera</div>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+      <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:8px 16px;font-size:12.5px;color:#9a9a9a;width:210px">🔍 Buscar en el ERP…</div>
+      <button style="background:#BE9A2E;color:#2B2B2B;border:none;border-radius:99px;padding:9px 18px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" style-hover="background:#d4af3a">+ Nueva cotización</button>
+      <div style="width:36px;height:36px;border-radius:50%;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none"><img src="brand/mono2-carbon.png" alt="BF" style="width:22px;display:block"></div>
+    </div>
+  </header>
+
+  <main style="flex:1;padding:28px 36px 48px;display:flex;flex-direction:column;gap:22px;max-width:1440px;width:100%;margin:0 auto;box-sizing:border-box">
+
+  <!-- ============================== DASHBOARD ============================== -->
+  <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Dashboard" style="display:flex;flex-direction:column;gap:22px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div><div style="font-size:26px;font-weight:700">Dashboard</div><div style="font-size:13px;color:#8a8a8a;margin-top:2px">Viernes 4 de julio, 2026 · Medellín</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ dashTabs }}" as="t" hint-placeholder-count="5">
+          <span onClick="{{ t.onClick }}" style="background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.bc }};border-radius:99px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">{{ t.label }}</span>
+        </sc-for>
+      </div>
+    </div>
+    <sc-if value="{{ dtResumen }}" hint-placeholder-val="{{ true }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600;letter-spacing:.5px">VENTAS DEL MES</div><div style="font-size:30px;font-weight:800;margin-top:8px">$184,5M</div><div style="font-size:12.5px;margin-top:6px;color:#1a7f4e;font-weight:600">▲ 12,4% vs junio</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600;letter-spacing:.5px">PEDIDOS ACTIVOS</div><div style="font-size:30px;font-weight:800;margin-top:8px">27</div><div style="font-size:12.5px;margin-top:6px;color:#8a8a8a">8 en producción · 5 en despacho</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#FD5C13;font-weight:600;letter-spacing:.5px">PEDIDOS VENCIDOS</div><div style="font-size:30px;font-weight:800;margin-top:8px;color:#FD5C13">2</div><div style="font-size:12.5px;margin-top:6px;color:#8a8a8a">4 vencen esta semana</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600;letter-spacing:.5px">ENTREGADOS EN JULIO</div><div style="font-size:30px;font-weight:800;margin-top:8px">3 <span style="font-size:14px;color:#8a8a8a;font-weight:600">/ récord 41</span></div><div style="font-size:12.5px;margin-top:6px;color:#8a6f1d;font-weight:600">Récord: abril 2026</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:700">Ventas últimos 6 meses</div><div style="font-size:12px;color:#8a8a8a">millones COP</div></div>
+        <div style="display:flex;align-items:flex-end;gap:18px;height:180px;margin-top:24px;padding:0 6px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:52%;background:#e4ddc9;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;color:#8a8a8a">Feb</div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:64%;background:#e4ddc9;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;color:#8a8a8a">Mar</div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:90%;background:#e4ddc9;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;color:#8a8a8a">Abr</div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:58%;background:#e4ddc9;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;color:#8a8a8a">May</div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:70%;background:#e4ddc9;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;color:#8a8a8a">Jun</div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end"><div style="width:100%;height:78%;background:#BE9A2E;border-radius:6px 6px 0 0"></div><div style="font-size:11.5px;font-weight:700">Jul</div></div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea;display:flex;flex-direction:column;gap:14px">
+        <div style="font-size:15px;font-weight:700">Ventas por ciudad</div>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span>Medellín</span><b>$62,1M</b></div><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:82%;height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span>Bogotá</span><b>$48,7M</b></div><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:64%;height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span>Cali</span><b>$31,2M</b></div><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:41%;height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span>Barranquilla</span><b>$24,9M</b></div><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:33%;height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span>Otras</span><b>$17,6M</b></div><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:23%;height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:700">Pedidos próximos a vencer</div><span onClick="{{ goOps }}" style="font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">Ver todos →</span></div>
+        <div style="display:flex;flex-direction:column;font-size:13px">
+          <div style="display:grid;grid-template-columns:70px 1fr 110px 90px;gap:10px;padding:8px 0;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec">O.P.<span>CLIENTE</span><span>PRODUCTO</span><span style="text-align:right">VENCE</span></div>
+          <div style="display:grid;grid-template-columns:70px 1fr 110px 90px;gap:10px;padding:11px 0;border-bottom:1px solid #f6f5f2;align-items:center"><b>OP-1042</b><span>Smart Fit Envigado</span><span>Rack R-8</span><span style="text-align:right;color:#FD5C13;font-weight:700">Hoy</span></div>
+          <div style="display:grid;grid-template-columns:70px 1fr 110px 90px;gap:10px;padding:11px 0;border-bottom:1px solid #f6f5f2;align-items:center"><b>OP-1038</b><span>Gym Élite Laureles</span><span>Jaula full</span><span style="text-align:right;color:#FD5C13;font-weight:700">Mañana</span></div>
+          <div style="display:grid;grid-template-columns:70px 1fr 110px 90px;gap:10px;padding:11px 0;border-bottom:1px solid #f6f5f2;align-items:center"><b>OP-1051</b><span>C. Rodríguez (homegym)</span><span>Rack R-4</span><span style="text-align:right">5 jul</span></div>
+          <div style="display:grid;grid-template-columns:70px 1fr 110px 90px;gap:10px;padding:11px 0;align-items:center"><b>OP-1047</b><span>Bodytech Poblado</span><span>Accesorios</span><span style="text-align:right">8 jul</span></div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">Redes sociales · últimos 30 días</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">VISUALIZACIONES</div><div style="font-size:22px;font-weight:800;margin-top:4px">412K</div></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">ENGAGEMENT</div><div style="font-size:22px;font-weight:800;margin-top:4px">6,8%</div></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">SEGUIDORES +</div><div style="font-size:22px;font-weight:800;margin-top:4px">1.240</div></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:12px;align-items:center;background:#faf9f7;border-radius:10px;padding:12px 14px">
+          <div style="width:44px;height:44px;border-radius:8px;background:repeating-linear-gradient(45deg,#e8e6e1,#e8e6e1 6px,#f2f0eb 6px,#f2f0eb 12px);flex:none"></div>
+          <div style="font-size:12.5px;line-height:1.4"><b>Publicación más vista</b> · Reel "Rack R-8 en acción" — 96K vistas · 342 comentarios<div style="color:#8a8a8a;margin-top:2px">Instagram · 24 jun</div></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Tab COMERCIAL (Junta) -->
+    <sc-if value="{{ dtComercial }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+        <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:700">Ventas por línea · B2C vs B2B</div><div style="font-size:12px;color:#8a8a8a">millones COP · 2026</div></div>
+          <div style="display:flex;align-items:flex-end;gap:22px;height:200px;margin-top:26px;padding:0 8px">
+            <sc-for list="{{ comBars }}" as="b" hint-placeholder-count="4">
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%">
+                <div style="flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
+                  <div style="font-size:11.5px;font-weight:700;color:#5a5a5a;margin-bottom:4px">{{ b.tot }}</div>
+                  <div style="width:100%;height:{{ b.hB2b }};background:#2B2B2B;border-radius:6px 6px 0 0;flex:none"></div>
+                  <div style="width:100%;height:{{ b.hB2c }};background:#BE9A2E;flex:none"></div>
+                </div>
+                <div style="font-size:11.5px;color:#8a8a8a;flex:none">{{ b.mes }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:20px;margin-top:14px;font-size:12.5px;color:#5a5a5a"><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#BE9A2E"></span>B2C · hogar</span><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#2B2B2B"></span>B2B · gimnasios</span></div>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:15px;font-weight:700">Detalle abril 2026</div>
+          <sc-for list="{{ comBars }}" as="b" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:50px 1fr 1fr;gap:10px;font-size:13px;padding:8px 0;border-bottom:1px solid #f6f5f2;align-items:baseline"><b>{{ b.mes }}</b><span style="color:#8a8a8a">B2C {{ b.b2c }}</span><span style="color:#8a8a8a">B2B {{ b.b2b }}</span></div>
+          </sc-for>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+            <div style="background:#faf9f7;border-radius:10px;padding:13px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">RACKS · ABRIL</div><div style="font-size:22px;font-weight:800;margin-top:2px">32</div></div>
+            <div style="background:#faf9f7;border-radius:10px;padding:13px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">POLEAS · ABRIL</div><div style="font-size:22px;font-weight:800;margin-top:2px">15</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">Top productos vendidos · marzo 2026 (unidades)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;font-size:13px">
+          <sc-for list="{{ topProd }}" as="p" hint-placeholder-count="8">
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>{{ p.n }}</span><b>{{ p.c }}</b></div><div style="height:6px;background:#f0efec;border-radius:99px"><div style="width:{{ p.w }};height:100%;background:#BE9A2E;border-radius:99px"></div></div></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Tab FINANZAS (Junta) -->
+    <sc-if value="{{ dtFinanzas }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="padding:18px 22px 4px;font-size:15px;font-weight:700">PyG mensual 2026 <span style="font-size:12px;color:#8a8a8a;font-weight:400">· millones COP · % sobre ventas de abril vs meta</span></div>
+        <div style="display:grid;grid-template-columns:1.4fr repeat(4,90px) 90px 80px;gap:10px;padding:12px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">CONCEPTO<span style="text-align:right">ENE</span><span style="text-align:right">FEB</span><span style="text-align:right">MAR</span><span style="text-align:right">ABR</span><span style="text-align:right">% ABR</span><span style="text-align:right">META</span></div>
+        <sc-for list="{{ pygRows }}" as="r" hint-placeholder-count="8">
+          <div style="display:grid;grid-template-columns:1.4fr repeat(4,90px) 90px 80px;gap:10px;padding:12px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7">
+            <b>{{ r.n }}</b>
+            <span style="text-align:right;color:#5a5a5a">{{ r.vals.0 }}</span><span style="text-align:right;color:#5a5a5a">{{ r.vals.1 }}</span><span style="text-align:right;color:#5a5a5a">{{ r.vals.2 }}</span><b style="text-align:right">{{ r.vals.3 }}</b>
+            <span style="text-align:right"><span style="background:{{ r.pctBg }};color:{{ r.pctFg }};padding:3px 10px;border-radius:99px;font-weight:700;font-size:12px">{{ r.pct }}</span></span>
+            <span style="text-align:right;color:#8a8a8a">{{ r.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:16px;align-items:start">
+        <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+          <div style="font-size:15px;font-weight:700;margin-bottom:12px">Posición de caja · abril</div>
+          <sc-for list="{{ cajaRows }}" as="c" hint-placeholder-count="5">
+            <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f6f5f2;font-size:13.5px"><span style="color:#5a5a5a">{{ c.n }}</span><b>{{ c.v }}</b></div>
+          </sc-for>
+        </div>
+        <div style="background:#2B2B2B;color:#fff;border-radius:14px;padding:24px 28px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:12px;color:#8a8a8a;font-weight:600;letter-spacing:1px">LECTURA RÁPIDA · ABRIL</div>
+          <div style="font-size:15px;line-height:1.6">Utilidad operacional <b style="color:#E8C55A">$62,5M (22,8%)</b> — por encima de la meta del 18%. El gasto de administración (18,2%) sigue por encima de la meta del 15%.</div>
+          <div style="font-size:13px;color:#c9c9c9;line-height:1.6">CxC ($177M) supera CxP ($115M): sano, pero hay $177M en la calle — foco en recaudo.</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Tab MERCADEO (Junta) -->
+    <sc-if value="{{ dtMercadeoJ }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="padding:18px 22px 4px;font-size:15px;font-weight:700">Pauta (Meta) vs facturación</div>
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 120px;gap:12px;padding:12px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">MES<span style="text-align:right">PAUTA</span><span style="text-align:right">FACTURACIÓN</span><span style="text-align:right">RETORNO</span></div>
+        <sc-for list="{{ pautaRows }}" as="p" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 120px;gap:12px;padding:13px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>{{ p.mes }}</b><span style="text-align:right;color:#5a5a5a">{{ p.pauta }}</span><span style="text-align:right;color:#5a5a5a">{{ p.ventas }}</span><b style="text-align:right;color:#8a6f1d">{{ p.ratio }}</b></div>
+        </sc-for>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-top:4px">Alianzas activas</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
+        <sc-for list="{{ alianzas }}" as="a" hint-placeholder-count="6">
+          <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:18px 20px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:14.5px">{{ a.n }}</b><span style="background:#E8F3EC;color:#1a7f4e;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:700">ACTIVA</span></div>
+            <div style="font-size:12.5px;color:#5a5a5a;line-height:1.5">{{ a.d }}</div>
+            <div style="background:#F4F0E4;border-left:3px solid #BE9A2E;border-radius:6px;padding:8px 12px;font-size:12px;color:#7a5f14;font-weight:600">{{ a.imp }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Tab OPERACIÓN (Junta) -->
+    <sc-if value="{{ dtOperacion }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+        <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:15px;font-weight:700">Nivel de servicio</div><div style="font-size:12px;color:#8a8a8a">pedidos cumplidos / total · meta 85%</div></div>
+          <div style="display:flex;align-items:flex-end;gap:22px;height:190px;margin-top:26px;padding:0 8px;position:relative">
+            <div style="position:absolute;left:0;right:0;bottom:85%;border-top:2px dashed #BE9A2E;font-size:10.5px;color:#8a6f1d;text-align:right;padding-right:4px">meta 85%</div>
+            <sc-for list="{{ nivelBars }}" as="b" hint-placeholder-count="4">
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end">
+                <div style="font-size:12px;font-weight:700;color:#5a5a5a">{{ b.pct }}</div>
+                <div style="width:100%;height:{{ b.h }};background:{{ b.bg }};border-radius:6px 6px 0 0"></div>
+                <div style="font-size:11.5px;color:#8a8a8a">{{ b.mes }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="background:#fff;border-radius:14px;padding:20px 24px;border:1px solid #ececea">
+            <div style="font-size:12px;color:#8a8a8a;font-weight:600;margin-bottom:10px">CUMPLIDOS VS INCUMPLIDOS</div>
+            <sc-for list="{{ nivelBars }}" as="b" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:44px 1fr 1fr;gap:10px;padding:7px 0;border-bottom:1px solid #f6f5f2;font-size:13px;align-items:baseline"><b>{{ b.mes }}</b><span style="color:#1a7f4e">✓ {{ b.cump }}</span><span style="color:#c2410c">✗ {{ b.incum }}</span></div>
+            </sc-for>
+          </div>
+          <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:16px 20px;font-size:13px;color:#7a5f14;line-height:1.6">{{ obsOperacion }}</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <!-- ============================== COTIZACIONES ============================== -->
+  <sc-if value="{{ isCotizaciones }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Cotizaciones" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">Cotizaciones</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nueva cotización</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span style="background:#2B2B2B;color:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer">Todas (24)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Borrador (3)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Enviadas (12)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Aprobadas (6)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Rechazadas (3)</span>
+    </div>
+    <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:13px 20px;font-size:12.5px;color:#7a5f14">⚙ Al crear una cotización el sistema <b>siempre pregunta B2B o B2C</b>. Si el cliente pide no facturar, se marca <b>NO FACTURA</b>: no se envía a Siigo, pero <b>sí suma</b> a ventas e indicadores.</div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">COT.<span>SEGM.</span><span>CLIENTE</span><span>PRODUCTOS</span><span style="text-align:right">TOTAL</span><span>ESTADO</span><span>VENDEDOR</span><span>FECHA</span></div>
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7"><b>CT-2214</b><span><span style="background:#2B2B2B;color:#fff;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">B2B</span></span><span>Smart Fit Envigado</span><span style="color:#8a8a8a">Rack R-8 + accesorios</span><b style="text-align:right">$28.400.000</b><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-start"><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700">APROBADA</span><span style="background:#1a1a1a;color:#E8C55A;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700">⛔ NO FACTURA · suma a ventas</span></span><span>Laura G.</span><span style="color:#8a8a8a">2 jul</span></div>
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7"><b>CT-2213</b><span><span style="background:#2B2B2B;color:#fff;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">B2B</span></span><span>Gimnasio Fénix Bogotá</span><span style="color:#8a8a8a">Jaula full crossfit</span><b style="text-align:right">$41.900.000</b><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">ENVIADA</span></span><span>Andrés P.</span><span style="color:#8a8a8a">1 jul</span></div>
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7"><b>CT-2212</b><span><span style="background:#BE9A2E;color:#2B2B2B;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">B2C</span></span><span>C. Rodríguez (homegym)</span><span style="color:#8a8a8a">Rack R-4 + banco</span><b style="text-align:right">$6.850.000</b><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">ENVIADA</span></span><span>Laura G.</span><span style="color:#8a8a8a">30 jun</span></div>
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7"><b>CT-2211</b><span><span style="background:#2B2B2B;color:#fff;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">B2B</span></span><span>Bodytech Poblado</span><span style="color:#8a8a8a">Accesorios varios</span><b style="text-align:right">$3.120.000</b><span><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">BORRADOR</span></span><span>Andrés P.</span><span style="color:#8a8a8a">30 jun</span></div>
+      <div style="display:grid;grid-template-columns:90px 60px 1.3fr 1fr 120px 150px 100px 80px;gap:12px;padding:15px 22px;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7"><b>CT-2210</b><span><span style="background:#2B2B2B;color:#fff;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">B2B</span></span><span>Colegio San José Cali</span><span style="color:#8a8a8a">Dotación gimnasio escolar</span><b style="text-align:right">$18.700.000</b><span><span style="background:#FCE9E3;color:#c2410c;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">RECHAZADA</span></span><span>Laura G.</span><span style="color:#8a8a8a">27 jun</span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== CRM EMBUDO ============================== -->
+  <sc-if value="{{ isCrm }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="CRM Embudo" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">CRM · Embudo de ventas</div></div>
+      <div style="display:flex;gap:10px;align-items:center"><span style="font-size:12.5px;color:#8a8a8a">Arrastra las fichas entre etapas</span><button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nueva oportunidad</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:start">
+      <sc-for list="{{ crmCols }}" as="col" hint-placeholder-count="5">
+        <div onDragOver="{{ col.onDragOver }}" onDrop="{{ col.onDrop }}" style="background:#EDECE9;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:420px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 6px"><span style="font-size:12px;font-weight:700;letter-spacing:.6px;color:{{ col.titleColor }}">{{ col.title }}</span><span style="font-size:11.5px;color:#8a8a8a;font-weight:600">{{ col.total }}</span></div>
+          <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="2">
+            <div draggable="{{ true }}" onDragStart="{{ card.onDragStart }}" style="background:#fff;border-radius:11px;padding:14px;border:1px solid #e6e5e1;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.04)" style-hover="box-shadow:0 4px 12px rgba(0,0,0,.1);border-color:#d8c98e">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:13px">{{ card.cliente }}</b><span style="font-size:11px;color:#8a8a8a">{{ card.cot }}</span></div>
+              <div style="font-size:12px;color:#8a8a8a;margin-top:3px">{{ card.producto }}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><b style="font-size:14px;color:#8a6f1d">{{ card.valor }}</b><span style="font-size:11px;color:#8a8a8a">{{ card.dias }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== PRODUCTOS ============================== -->
+  <sc-if value="{{ isProductos }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Productos" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">Lista de productos</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nuevo producto</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span style="background:#2B2B2B;color:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer">Todos (48)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Racks (12)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Accesorios para racks (18)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Bancos (8)</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Otros (10)</span>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px"><span></span>SKU<span>PRODUCTO</span><span>CATEGORÍA</span><span style="text-align:right">PRECIO LISTA</span><span style="text-align:right">STOCK</span><span>ESTADO</span></div>
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:12px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><div style="width:40px;height:40px;border-radius:8px;background:repeating-linear-gradient(45deg,#eceae5,#eceae5 5px,#f4f2ed 5px,#f4f2ed 10px)"></div><b>RK-R8</b><span>Rack R-8 · uso comercial</span><span style="color:#8a8a8a">Racks</span><b style="text-align:right">$9.800.000</b><span style="text-align:right">14</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ACTIVO</span></span></div>
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:12px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><div style="width:40px;height:40px;border-radius:8px;background:repeating-linear-gradient(45deg,#eceae5,#eceae5 5px,#f4f2ed 5px,#f4f2ed 10px)"></div><b>RK-R4</b><span>Rack R-4 · homegym</span><span style="color:#8a8a8a">Racks</span><b style="text-align:right">$4.200.000</b><span style="text-align:right">9</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ACTIVO</span></span></div>
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:12px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><div style="width:40px;height:40px;border-radius:8px;background:repeating-linear-gradient(45deg,#eceae5,#eceae5 5px,#f4f2ed 5px,#f4f2ed 10px)"></div><b>AC-J24</b><span>Juego de J-cups (par)</span><span style="color:#8a8a8a">Accesorios para racks</span><b style="text-align:right">$380.000</b><span style="text-align:right;color:#FD5C13;font-weight:700">2</span><span><span style="background:#FCE9E3;color:#c2410c;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">STOCK BAJO</span></span></div>
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:12px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><div style="width:40px;height:40px;border-radius:8px;background:repeating-linear-gradient(45deg,#eceae5,#eceae5 5px,#f4f2ed 5px,#f4f2ed 10px)"></div><b>AC-DIP1</b><span>Barras de dips acoplables</span><span style="color:#8a8a8a">Accesorios para racks</span><b style="text-align:right">$520.000</b><span style="text-align:right">21</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ACTIVO</span></span></div>
+      <div style="display:grid;grid-template-columns:56px 110px 1.4fr 150px 130px 100px 110px;gap:12px;padding:12px 22px;align-items:center;font-size:13px" style-hover="background:#faf9f7"><div style="width:40px;height:40px;border-radius:8px;background:repeating-linear-gradient(45deg,#eceae5,#eceae5 5px,#f4f2ed 5px,#f4f2ed 10px)"></div><b>BN-P2</b><span>Banco plano profesional</span><span style="color:#8a8a8a">Bancos</span><b style="text-align:right">$1.150.000</b><span style="text-align:right">0</span><span><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">AGOTADO</span></span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== CATÁLOGOS ============================== -->
+  <sc-if value="{{ isCatalogos }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Catalogos" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">Catálogos para ventas</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nuevo catálogo</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="height:160px;background:#2B2B2B;display:grid;place-items:center"><img src="brand/logo-white.png" style="height:20px;opacity:.9" alt="BRAVEFIT"></div>
+        <div style="padding:18px 20px"><b style="font-size:14.5px">Catálogo general 2026</b><div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">48 productos · actualizado 15 jun</div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button style="flex:1;background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer">Compartir</button><button style="flex:1;background:#fff;border:1px solid #ddd;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">PDF</button></div></div>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="height:160px;background:#BE9A2E;display:grid;place-items:center"><span style="font-weight:800;letter-spacing:2px;color:#2B2B2B;font-size:15px">RACKS</span></div>
+        <div style="padding:18px 20px"><b style="font-size:14.5px">Línea Racks comerciales</b><div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">12 productos · actualizado 28 jun</div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button style="flex:1;background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer">Compartir</button><button style="flex:1;background:#fff;border:1px solid #ddd;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">PDF</button></div></div>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="height:160px;background:#D5D5D5;display:grid;place-items:center"><img src="brand/logo-carbon.png" style="height:20px" alt="BRAVEFIT"></div>
+        <div style="padding:18px 20px"><b style="font-size:14.5px">Homegym esencial</b><div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">16 productos · actualizado 20 jun</div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button style="flex:1;background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer">Compartir</button><button style="flex:1;background:#fff;border:1px solid #ddd;border-radius:99px;padding:8px 0;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">PDF</button></div></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== PEDIDOS WEB (SHOPIFY) ============================== -->
+  <sc-if value="{{ isShopify }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Pedidos web" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">Pedidos web · Shopify</div></div>
+      <div style="display:flex;align-items:center;gap:8px;background:#E8F3EC;border-radius:99px;padding:8px 16px;font-size:12.5px;color:#1a7f4e;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:#1a7f4e"></span>Sincronizado con Shopify · hace 4 min</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <span onClick="{{ setShopNuevas }}" style="background:{{ stNBg }};color:{{ stNFg }};border:1px solid #ddd;border-radius:99px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">Nuevas sin entregar</span>
+      <span onClick="{{ setShopHist }}" style="background:{{ stHBg }};color:{{ stHFg }};border:1px solid #ddd;border-radius:99px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">Histórico de ventas</span>
+      <span onClick="{{ setShopAna }}" style="background:{{ stABg }};color:{{ stAFg }};border:1px solid #ddd;border-radius:99px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">Analítica</span>
+    </div>
+
+    <sc-if value="{{ shopTabAna }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:22px 26px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <sc-for list="{{ shopTabs }}" as="t" hint-placeholder-count="4">
+          <div onClick="{{ t.onClick }}" style="background:{{ t.bg }};border:1px solid {{ t.border }};border-radius:12px;padding:10px 22px;text-align:center;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+            <div style="font-size:12.5px;color:#5a5a5a">{{ t.label }}</div>
+            <div style="font-size:15px;font-weight:700;margin-top:2px">{{ t.value }} <span style="font-size:11.5px;color:#8a8a8a;font-weight:400">{{ t.delta }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:700;border-bottom:1px dotted #b5b5b3;display:inline-block">{{ shopMetricLabel }} a lo largo del tiempo</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px">{{ shopMetricValue }} <span style="font-size:13px;color:#8a8a8a;font-weight:400">{{ shopMetricDelta }}</span></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div style="display:flex;flex-direction:column;justify-content:space-between;height:200px;font-size:11.5px;color:#8a8a8a;text-align:right;padding:4px 0"><span>{{ shopY2 }}</span><span>{{ shopY1 }}</span><span>{{ shopY0 }}</span></div>
+        <div style="flex:1">
+          <svg viewBox="0 0 800 220" style="width:100%;height:auto;display:block">
+            <line x1="30" y1="25" x2="770" y2="25" stroke="#f0efec" stroke-width="1"></line>
+            <line x1="30" y1="112" x2="770" y2="112" stroke="#f0efec" stroke-width="1"></line>
+            <line x1="30" y1="200" x2="770" y2="200" stroke="#e2e0db" stroke-width="1"></line>
+            <path d="{{ shopPathPrev }}" fill="none" stroke="#9ecdf2" stroke-width="2" stroke-dasharray="6 5"></path>
+            <path d="{{ shopPathCur }}" fill="none" stroke="#1a91da" stroke-width="2.5"></path>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:#8a8a8a;padding:6px 4px 0">
+            <span>3 de jun</span><span>7 de jun</span><span>11 de jun</span><span>15 de jun</span><span>19 de jun</span><span>23 de jun</span><span>27 de jun</span><span>1 de jul</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:22px;justify-content:center;font-size:12.5px;color:#5a5a5a">
+        <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#1a91da"></span>Del 3 de jun al 3 de jul de 2026</span>
+        <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#9ecdf2"></span>Del 3 de may al 2 de jun de 2026</span>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ shopTabHist }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">VENTAS WEB 2026</div><div style="font-size:26px;font-weight:800;margin-top:6px">$86,4M</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">PEDIDOS 2026</div><div style="font-size:26px;font-weight:800;margin-top:6px">214</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">TICKET PROMEDIO</div><div style="font-size:26px;font-weight:800;margin-top:6px">$404 mil</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">TASA DEVOLUCIÓN</div><div style="font-size:26px;font-weight:800;margin-top:6px">0,9%</div></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">PEDIDO<span>CLIENTE</span><span>PRODUCTOS</span><span style="text-align:right">TOTAL</span><span>FECHA</span><span>ESTADO</span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1024</b><span>Julián Restrepo · Envigado</span><span style="color:#8a8a8a">Rack R-8 comercial</span><b style="text-align:right">$9.800.000</b><span style="color:#8a8a8a">26 jun</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ENTREGADO</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1023</b><span>Paula Andrade · Medellín</span><span style="color:#8a8a8a">Banco plano + J-cups</span><b style="text-align:right">$1.530.000</b><span style="color:#8a8a8a">22 jun</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ENTREGADO</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1022</b><span>Esteban Gil · Bogotá</span><span style="color:#8a8a8a">Barras de dips</span><b style="text-align:right">$520.000</b><span style="color:#8a8a8a">18 jun</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ENTREGADO</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1021</b><span>Natalia Vélez · Cali</span><span style="color:#8a8a8a">Rack R-4 homegym</span><b style="text-align:right">$4.200.000</b><span style="color:#8a8a8a">14 jun</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ENTREGADO</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px;gap:12px;padding:14px 22px;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1020</b><span>Mario Zapata · Pereira</span><span style="color:#8a8a8a">Mancuernero 3 niveles</span><b style="text-align:right">$2.400.000</b><span style="color:#8a8a8a">10 jun</span><span><span style="background:#FCE9E3;color:#c2410c;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">DEVUELTO</span></span></div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ shopTabNuevas }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:14px 20px;font-size:13px;color:#7a5f14">⚙ Los pedidos <b>pagados</b> se convierten automáticamente en Órdenes de Pedido (O.P.) y descuentan inventario.</div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px 150px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">PEDIDO<span>CLIENTE</span><span>PRODUCTOS</span><span style="text-align:right">TOTAL</span><span>PAGO</span><span>ESTADO</span><span>O.P. GENERADA</span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px 150px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1027</b><span>María Fernanda López · Bogotá</span><span style="color:#8a8a8a">Rack R-4 + J-cups</span><b style="text-align:right">$4.580.000</b><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PAGADO</span></span><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">NUEVO</span></span><b style="color:#8a6f1d">OP-1056 ✓ auto</b></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px 150px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1026</b><span>Carlos Mejía · Medellín</span><span style="color:#8a8a8a">Barras de dips</span><b style="text-align:right">$520.000</b><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PAGADO</span></span><span><span style="background:#EDF0FA;color:#3b5bb5;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">EN PROCESO</span></span><b style="color:#8a6f1d">OP-1054 ✓ auto</b></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 1fr 110px 120px 130px 150px;gap:12px;padding:15px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>#SH-1025</b><span>Ana Torres · Pereira</span><span style="color:#8a8a8a">Banco plano</span><b style="text-align:right">$1.150.000</b><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PENDIENTE</span></span><span><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">EN ESPERA</span></span><span style="color:#b5b5b3">— al confirmar pago</span></div>
+    </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <!-- ============================== INVENTARIOS ============================== -->
+  <sc-if value="{{ isInventarios }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Inventarios" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Producción y Logística /</div><div style="font-size:26px;font-weight:700">Inventarios</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Movimiento de inventario</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">VALOR INVENTARIO</div><div style="font-size:26px;font-weight:800;margin-top:6px">$312,8M</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">REFERENCIAS</div><div style="font-size:26px;font-weight:800;margin-top:6px">126</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#FD5C13;font-weight:600">STOCK BAJO</div><div style="font-size:26px;font-weight:800;margin-top:6px;color:#FD5C13">7</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">RESERVADO EN O.P.</div><div style="font-size:26px;font-weight:800;margin-top:6px">$48,2M</div></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="background:#2B2B2B;color:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer">Producto terminado</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">Materia prima</span>
+      <span style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#5a5a5a;cursor:pointer">En proceso</span>
+      <span style="margin-left:auto;font-size:12px;color:#8a8a8a">Clasificación: <b style="color:#1a7f4e">MTS</b> stock permanente · <b style="color:#a06d10">ATO</b> se personaliza color · <b style="color:#3b5bb5">MTO</b> bajo pedido</span>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">SKU<span>REFERENCIA</span><span>CLASIF.</span><span style="text-align:right">DISPONIBLE</span><span style="text-align:right">RESERVADO</span><span style="text-align:right">BUFFER</span><span>AMORTIGUADOR (consumo del buffer)</span><span>ESTADO</span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>RK-R8</b><span>Rack R-8 · negro (alta rotación)</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">MTS</span></span><b style="text-align:right">14</b><span style="text-align:right;color:#8a8a8a">5</span><span style="text-align:right;color:#8a8a8a">20</span><div style="height:8px;background:#f0efec;border-radius:99px"><div style="width:30%;height:100%;background:#1a7f4e;border-radius:99px"></div></div><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">OK</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>RK-R8C</b><span>Rack R-8 · color personalizado</span><span><span style="background:#FDF3E4;color:#a06d10;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">ATO</span></span><b style="text-align:right">6 <span style="font-weight:400;color:#8a8a8a">sin pintar</span></b><span style="text-align:right;color:#8a8a8a">2</span><span style="text-align:right;color:#8a8a8a">8</span><div style="height:8px;background:#f0efec;border-radius:99px"><div style="width:62%;height:100%;background:#d4a017;border-radius:99px"></div></div><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ATENTO</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>AC-J24</b><span>Juego de J-cups (par)</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">MTS</span></span><b style="text-align:right;color:#FD5C13">2</b><span style="text-align:right;color:#8a8a8a">2</span><span style="text-align:right;color:#8a8a8a">12</span><div style="height:8px;background:#f0efec;border-radius:99px"><div style="width:92%;height:100%;background:#E5484D;border-radius:99px"></div></div><span><span style="background:#FCE9E3;color:#c2410c;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">REPONER YA</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>MP-T50</b><span>Tubería estructural 50×50 (m)</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">MTS</span></span><b style="text-align:right">340</b><span style="text-align:right;color:#8a8a8a">120</span><span style="text-align:right;color:#8a8a8a">500</span><div style="height:8px;background:#f0efec;border-radius:99px"><div style="width:48%;height:100%;background:#d4a017;border-radius:99px"></div></div><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">OK</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>MP-PIN12</b><span>Pintura electrostática negra (kg)</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">MTS</span></span><b style="text-align:right;color:#FD5C13">8</b><span style="text-align:right;color:#8a8a8a">6</span><span style="text-align:right;color:#8a8a8a">40</span><div style="height:8px;background:#f0efec;border-radius:99px"><div style="width:88%;height:100%;background:#E5484D;border-radius:99px"></div></div><span><span style="background:#FCE9E3;color:#c2410c;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">REPONER YA</span></span></div>
+      <div style="display:grid;grid-template-columns:100px 1.3fr 80px 100px 100px 90px 1fr 110px;gap:12px;padding:14px 22px;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>JL-CUST</b><span>Jaulas personalizadas (por proyecto)</span><span><span style="background:#EDF0FA;color:#3b5bb5;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700">MTO</span></span><span style="text-align:right;color:#8a8a8a">—</span><span style="text-align:right;color:#8a8a8a">—</span><span style="text-align:right;color:#8a8a8a">—</span><div style="font-size:11.5px;color:#8a8a8a">Sin buffer · se fabrica bajo pedido</div><span><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">N/A</span></span></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:22px 24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+        <div style="font-size:15px;font-weight:700">Tendencia de consumo · {{ invSelName }}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ invChips }}" as="c" hint-placeholder-count="4">
+            <span onClick="{{ c.onClick }}" style="background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.bc }};border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">{{ c.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#8a8a8a;margin-bottom:16px">{{ invUnidad }} · reposición por consumo (revisar a diario, plan Simple Solutions)</div>
+      <div style="display:flex;align-items:flex-end;gap:18px;height:150px;padding:0 6px">
+        <sc-for list="{{ invBars }}" as="b" hint-placeholder-count="6">
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end">
+            <div style="font-size:11.5px;font-weight:700;color:#5a5a5a">{{ b.val }}</div>
+            <div style="width:100%;height:{{ b.h }};background:{{ b.bg }};border-radius:6px 6px 0 0"></div>
+            <div style="font-size:11.5px;color:#8a8a8a">{{ b.mes }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== ÓRDENES DE PEDIDO ============================== -->
+  <sc-if value="{{ isOps }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Ordenes de pedido" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Producción y Logística /</div><div style="font-size:26px;font-weight:700">Órdenes de pedido (O.P.)</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nueva O.P.</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span onClick="{{ setVLista }}" style="background:{{ vListaBg }};color:{{ vListaFg }};border:1px solid #ddd;border-radius:99px;padding:7px 18px;font-size:12.5px;font-weight:600;cursor:pointer">☰ Lista</span>
+      <span onClick="{{ setVKanban }}" style="background:{{ vKanbanBg }};color:{{ vKanbanFg }};border:1px solid #ddd;border-radius:99px;padding:7px 18px;font-size:12.5px;font-weight:600;cursor:pointer">▦ Kanban</span>
+      <span onClick="{{ setVCal }}" style="background:{{ vCalBg }};color:{{ vCalFg }};border:1px solid #ddd;border-radius:99px;padding:7px 18px;font-size:12.5px;font-weight:600;cursor:pointer">▤ Calendario</span>
+      <span style="margin-left:auto;font-size:11.5px;color:#8a8a8a;display:flex;gap:12px;align-items:center;flex-wrap:wrap">Entrega: <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#F0F0EE;border:1px solid #ddd"></span>+3 sem</span><span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#F5C518"></span>2–3 sem</span><span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#E5484D"></span>1–2 sem</span><span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#1a1a1a"></span>Vencido</span></span>
+    </div>
+
+    <sc-if value="{{ opViewLista }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:80px 1.2fr 100px 1.2fr 110px 60px 130px 130px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">O.P.<span>CLIENTE</span><span>CIUDAD</span><span>PRODUCTO PRINCIPAL</span><span>ORIGEN</span><span>INSTAL.</span><span>ETAPA</span><span style="text-align:right">ENTREGA</span></div>
+      <sc-for list="{{ opsList }}" as="op" hint-placeholder-count="6">
+        <div onClick="{{ op.onOpen }}" style="display:grid;grid-template-columns:80px 1.2fr 100px 1.2fr 110px 60px 130px 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#F4F0E4">
+          <b>{{ op.id }}</b><span>{{ op.cliente }}</span><span style="color:#8a8a8a">{{ op.ciudad }}</span><span style="color:#5a5a5a">{{ op.principal }}</span>
+          <span><span style="background:{{ op.oBg }};color:{{ op.oFg }};padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">{{ op.origen }}</span></span>
+          <b style="color:{{ op.instColor }}">{{ op.instLabel }}</b>
+          <span><span style="background:{{ op.etBg }};color:{{ op.etFg }};padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">{{ op.etapaLabel }}</span></span>
+          <span style="text-align:right"><span style="background:{{ op.eBg }};color:{{ op.eFg }};padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">{{ op.eLabel }}</span></span>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ opViewKanban }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:start">
+      <sc-for list="{{ opCols }}" as="col" hint-placeholder-count="5">
+        <div onDragOver="{{ col.onDragOver }}" onDrop="{{ col.onDrop }}" style="background:#EDECE9;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:380px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 6px"><span style="font-size:11.5px;font-weight:700;letter-spacing:.6px;color:{{ col.titleColor }}">{{ col.title }}</span><span style="font-size:11.5px;color:#8a8a8a;font-weight:600">{{ col.total }}</span></div>
+          <sc-for list="{{ col.cards }}" as="op" hint-placeholder-count="2">
+            <div draggable="{{ true }}" onDragStart="{{ op.onDragStart }}" onClick="{{ op.onOpen }}" style="background:#fff;border-radius:11px;padding:13px;border:1px solid #e6e5e1;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.04)" style-hover="box-shadow:0 4px 12px rgba(0,0,0,.1);border-color:#d8c98e">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:12.5px">{{ op.id }}</b><span style="background:{{ op.eBg }};color:{{ op.eFg }};padding:2px 9px;border-radius:99px;font-size:10.5px;font-weight:700">{{ op.eLabel }}</span></div>
+              <div style="font-size:12.5px;font-weight:600;margin-top:6px">{{ op.cliente }}</div>
+              <div style="font-size:11.5px;color:#8a8a8a;margin-top:2px">{{ op.principal }}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px;font-size:11px;color:#8a8a8a"><span>{{ op.ciudad }} · Instal: <b style="color:{{ op.instColor }}">{{ op.instLabel }}</b></span><span style="background:{{ op.oBg }};color:{{ op.oFg }};padding:2px 8px;border-radius:99px;font-weight:700;font-size:10px">{{ op.origen }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ opViewCal }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:12.5px;color:#8a8a8a">Ubicar por:</span>
+      <span onClick="{{ calByEntrega }}" style="background:{{ calEntBg }};color:{{ calEntFg }};border:1px solid {{ calEntBc }};border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Fecha de entrega</span>
+      <span onClick="{{ calByCreada }}" style="background:{{ calCreBg }};color:{{ calCreFg }};border:1px solid {{ calCreBc }};border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Fecha de creación</span>
+      <b style="margin-left:auto;font-size:14px">Julio 2026</b>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid #f0efec">
+        <div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">DOM</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">LUN</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">MAR</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">MIÉ</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">JUE</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">VIE</div><div style="padding:10px;text-align:center;font-size:11.5px;font-weight:600;color:#8a8a8a">SÁB</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr)">
+        <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+          <div style="min-height:86px;border-bottom:1px solid #f6f5f2;border-right:1px solid #f6f5f2;padding:6px 8px;background:{{ c.bg }}">
+            <div style="font-size:11.5px;color:#8a8a8a;font-weight:600">{{ c.day }}</div>
+            <sc-for list="{{ c.ops }}" as="o" hint-placeholder-count="0">
+              <div onClick="{{ o.onOpen }}" style="background:{{ o.bg }};color:{{ o.fg }};border-radius:6px;padding:3px 7px;font-size:10.5px;font-weight:700;margin-top:4px;cursor:pointer">{{ o.id }}</div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <!-- ============================== DETALLE O.P. ============================== -->
+  <sc-if value="{{ isOpDetail }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Detalle OP" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div onClick="{{ backToOps }}" style="font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">← Volver a Órdenes de pedido</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
+          <div style="font-size:26px;font-weight:700">{{ opDId }}</div>
+          <span style="background:{{ opDOBg }};color:{{ opDOFg }};padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">{{ opDOrigen }}</span>
+          <span style="background:{{ opDEBg }};color:{{ opDEFg }};padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">Entrega: {{ opDELabel }}</span>
+          <span style="background:#F4F0E4;color:#8a6f1d;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:700">{{ opDInst }}</span>
+        </div>
+      </div>
+      <button onClick="{{ printOp }}" style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 22px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">🖨 Imprimir O.P.</button>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:22px 26px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <sc-for list="{{ opDSteps }}" as="s" hint-placeholder-count="5">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:100px">
+            <div style="width:30px;height:30px;border-radius:50%;background:{{ s.dotBg }};color:{{ s.dotFg }};display:grid;place-items:center;font-size:13px;font-weight:700">●</div>
+            <div style="font-size:11.5px;letter-spacing:.5px;color:{{ s.txtColor }};font-weight:{{ s.txtWeight }}">{{ s.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="display:grid;grid-template-columns:1.6fr 70px 130px 130px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">PRODUCTO<span style="text-align:right">CANT.</span><span style="text-align:right">PRECIO UNIT.</span><span style="text-align:right">SUBTOTAL</span></div>
+        <sc-for list="{{ opDItems }}" as="it" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:1.6fr 70px 130px 130px;gap:12px;padding:13px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px"><b>{{ it.n }}</b><span style="text-align:right">{{ it.c }}</span><span style="text-align:right;color:#8a8a8a">{{ it.precio }}</span><b style="text-align:right">{{ it.subtotal }}</b></div>
+        </sc-for>
+        <div style="display:flex;justify-content:space-between;padding:15px 22px;background:#F4F0E4;font-size:14px"><b>Total O.P.</b><b style="color:#8a6f1d">{{ opDTotal }}</b></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:20px 22px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px">Cliente</div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Nombre</span><b>{{ opDCliente }}</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Ciudad</span><b>{{ opDCiudad }}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#8a8a8a">Dirección</span><b style="text-align:right">{{ opDDir }}</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Teléfono</span><b>{{ opDTel }}</b></div>
+        </div>
+        <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:20px 22px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px">Fechas y pago</div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Creada</span><b>{{ opDCreada }}</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Entrega pactada</span><b>{{ opDELabel }}</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Anticipo</span><b style="color:#1a7f4e">{{ opDAnticipo }}</b></div>
+        </div>
+        <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:13px 18px;font-size:12.5px;color:#7a5f14">📄 La versión imprimible detallada (planos, despiece, checklist de despacho) está en desarrollo.</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== SOLICITUDES DE COMPRA ============================== -->
+  <sc-if value="{{ isCompras }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Solicitudes de compra" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Producción y Logística /</div><div style="font-size:26px;font-weight:700">Solicitudes de compra</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nueva solicitud</button>
+    </div>
+    <div style="font-size:12.5px;color:#8a8a8a">Un renglón por tipo de material · clic para ver los ítems, registrar recepción y faltantes. El valor estimado lo digita el comprador al recibir cotizaciones.</div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:30px 80px 1.3fr 1fr 130px 110px 140px 110px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px"><span></span>SOL.<span>TIPO DE MATERIAL</span><span>PROVEEDOR</span><span style="text-align:right">VALOR EST.</span><span>SOLICITA</span><span>ESTADO</span><span style="text-align:right">ENTREGA</span></div>
+      <sc-for list="{{ comprasRows }}" as="c" hint-placeholder-count="5">
+        <div style="border-bottom:1px solid #f6f5f2">
+          <div onClick="{{ c.onToggle }}" style="display:grid;grid-template-columns:30px 80px 1.3fr 1fr 130px 110px 140px 110px;gap:12px;padding:14px 22px;align-items:center;font-size:13px;cursor:pointer" style-hover="background:#faf9f7">
+            <span style="color:#8a8a8a">{{ c.arrow }}</span><b>{{ c.id }}</b>
+            <span><b>{{ c.tipo }}</b> <span style="color:#8a8a8a;font-size:12px">· {{ c.resumen }}</span></span>
+            <span style="color:#8a8a8a">{{ c.proveedor }}</span>
+            <b style="text-align:right">{{ c.valor }}</b>
+            <span>{{ c.solicita }}</span>
+            <span><span style="background:{{ c.estBg }};color:{{ c.estFg }};padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">{{ c.estLabel }}</span></span>
+            <b style="text-align:right;color:#8a6f1d">{{ c.entrega }}</b>
+          </div>
+          <sc-if value="{{ c.expanded }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#faf9f7;padding:14px 22px 16px 62px;display:flex;flex-direction:column;gap:8px">
+              <div style="font-size:11.5px;font-weight:600;color:#8a8a8a;letter-spacing:.4px">ÍTEMS DE LA SOLICITUD · RECEPCIÓN</div>
+              <sc-for list="{{ c.itemsD }}" as="it" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;align-items:baseline;font-size:13px">
+                  <b style="color:{{ it.color }};width:16px">{{ it.icon }}</b>
+                  <span>{{ it.n }}</span>
+                  <sc-if value="{{ it.hasNota }}" hint-placeholder-val="{{ false }}"><span style="background:#FCE9E3;color:#c2410c;border-radius:8px;padding:3px 10px;font-size:11.5px;font-weight:600">Faltante: {{ it.nota }}</span></sc-if>
+                </div>
+              </sc-for>
+              <sc-if value="{{ c.esComprado }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:10px;margin-top:6px">
+                  <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">Registrar recepción</button>
+                  <button style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:8px 18px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">Cerrar solicitud</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#8a8a8a"><span><b style="color:#1a7f4e">✓</b> recibido completo</span><span><b style="color:#c2410c">⚠</b> faltante en seguimiento</span><span><b style="color:#b5b5b3">○</b> sin recibir</span></div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== GARANTÍAS ============================== -->
+  <sc-if value="{{ isGarantias }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Garantias" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Producción y Logística /</div><div style="font-size:26px;font-weight:700">Garantías</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Registrar garantía</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">GARANTÍAS DEL MES</div><div style="font-size:26px;font-weight:800;margin-top:6px">3</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">GARANTÍAS DEL AÑO</div><div style="font-size:26px;font-weight:800;margin-top:6px">14</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">% SOBRE ENTREGAS</div><div style="font-size:26px;font-weight:800;margin-top:6px">1,1%</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">T. MEDIO RESOLUCIÓN</div><div style="font-size:26px;font-weight:800;margin-top:6px">6 días</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="display:grid;grid-template-columns:70px 1.2fr 1fr 130px 70px;gap:12px;padding:13px 20px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">N°<span>CLIENTE</span><span>PROBLEMA</span><span>ESTADO</span><span style="text-align:right">FECHA</span></div>
+        <sc-for list="{{ garRows }}" as="g" hint-placeholder-count="3">
+          <div onClick="{{ g.onClick }}" style="display:grid;grid-template-columns:70px 1.2fr 1fr 130px 70px;gap:12px;padding:14px 20px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer;background:{{ g.bg }}" style-hover="background:#F4F0E4">
+            <b>{{ g.id }}</b><span>{{ g.cliente }}</span><span style="color:#8a8a8a">{{ g.problema }}</span>
+            <span><span style="background:{{ g.eBg }};color:{{ g.eFg }};padding:4px 10px;border-radius:99px;font-size:10.5px;font-weight:700">{{ g.estado }}</span></span>
+            <span style="text-align:right;color:#8a8a8a">{{ g.fecha }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:22px 24px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">{{ garDId }} · {{ garDCliente }}</b><span style="background:{{ garDEBg }};color:{{ garDEFg }};padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700">{{ garDEstado }}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">PRODUCTO</div><b>{{ garDProducto }}</b></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">O.P. ORIGINAL</div><b>{{ garDOp }}</b></div>
+        </div>
+        <div><div style="font-size:12px;font-weight:700;color:#8a8a8a;letter-spacing:.4px">DETALLE</div><div style="font-size:13px;line-height:1.5;margin-top:6px">{{ garDDetalle }}</div></div>
+        <div style="background:#F4F0E4;border-radius:10px;padding:13px 16px"><div style="font-size:12px;font-weight:700;color:#8a6f1d;letter-spacing:.4px">RESOLUCIÓN</div><div style="font-size:13px;line-height:1.5;margin-top:6px;color:#5a4a10">{{ garDResol }}</div></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== ENTREGAS ============================== -->
+  <sc-if value="{{ isEntregas }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Entregas" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Producción y Logística /</div><div style="font-size:26px;font-weight:700">Entregas</div></div>
+      <div style="display:flex;gap:8px"><span style="border:1px solid #BE9A2E;background:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">2026</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">ENTREGAS DE JULIO</div><div style="font-size:26px;font-weight:800;margin-top:6px">3</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">ENTREGAS 2026</div><div style="font-size:26px;font-weight:800;margin-top:6px">183</div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#BE9A2E;font-weight:600">RÉCORD MENSUAL</div><div style="font-size:26px;font-weight:800;margin-top:6px;color:#8a6f1d">41 <span style="font-size:13px;font-weight:600;color:#8a8a8a">abr 2026</span></div></div>
+      <div style="background:#fff;border-radius:14px;padding:18px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">PROMEDIO MENSUAL</div><div style="font-size:26px;font-weight:800;margin-top:6px">26</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="font-size:15px;font-weight:700;margin-bottom:16px">Entregas por mes · 2026</div>
+        <div style="display:flex;align-items:flex-end;gap:16px;height:170px;padding:0 6px">
+          <sc-for list="{{ entBars }}" as="b" hint-placeholder-count="7">
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;height:100%;justify-content:flex-end">
+              <div style="font-size:11.5px;font-weight:{{ b.w }};color:#5a5a5a">{{ b.val }}</div>
+              <div style="width:100%;height:{{ b.h }};background:{{ b.bg }};border-radius:6px 6px 0 0"></div>
+              <div style="font-size:11.5px;color:#8a8a8a">{{ b.mes }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">Últimas entregas</div>
+        <div style="display:flex;flex-direction:column;font-size:13px">
+          <div style="display:grid;grid-template-columns:80px 1fr 90px 60px;gap:10px;padding:8px 0;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec">O.P.<span>CLIENTE</span><span>CIUDAD</span><span style="text-align:right">INSTAL.</span></div>
+          <sc-for list="{{ entregasRec }}" as="e" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:80px 1fr 90px 60px;gap:10px;padding:11px 0;border-bottom:1px solid #f6f5f2;align-items:center"><b>{{ e.op }}</b><span>{{ e.cliente }}</span><span style="color:#8a8a8a">{{ e.ciudad }}</span><b style="text-align:right;color:#8a6f1d">{{ e.inst }}</b></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== ANÁLISIS DE VENTAS ============================== -->
+  <sc-if value="{{ isVentasAnalisis }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Analisis de ventas" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Ventas /</div><div style="font-size:26px;font-weight:700">Análisis de ventas</div></div>
+      <div style="display:flex;gap:8px"><span style="border:1px solid #BE9A2E;background:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">Este mes · julio 2026</span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <sc-for list="{{ ventasChips }}" as="c" hint-placeholder-count="5">
+        <span onClick="{{ c.onClick }}" style="background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.bc }};border-radius:99px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">{{ c.label }}</span>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+      <div style="background:#fff;border-radius:14px;padding:22px 26px;border:1px solid #ececea;display:flex;flex-direction:column;gap:16px">
+        <sc-for list="{{ ventasRows }}" as="r" hint-placeholder-count="5">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13.5px"><span>{{ r.n }}</span><b>{{ r.v }}</b></div>
+            <div style="height:10px;background:#f0efec;border-radius:99px"><div style="width:{{ r.w }};height:100%;background:#BE9A2E;border-radius:99px"></div></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#2B2B2B;color:#fff;border-radius:14px;padding:22px 24px"><div style="font-size:12px;color:#8a8a8a;font-weight:600;letter-spacing:.5px">VENTAS DEL MES</div><div style="font-size:32px;font-weight:800;margin-top:6px;color:#E8C55A">$184,5M</div><div style="font-size:12.5px;margin-top:4px;color:#c9c9c9">▲ 12,4% vs junio · COP</div></div>
+        <div style="background:#fff;border-radius:14px;padding:20px 24px;border:1px solid #ececea;font-size:13px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a"># Ventas cerradas</span><b>34</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Ticket promedio</span><b>$5,4M</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a8a8a">Tasa de cierre (cotiz. → venta)</span><b>38%</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== MERCADEO ============================== -->
+  <sc-if value="{{ isMercadeo }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Mercadeo" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Mercadeo /</div><div style="font-size:26px;font-weight:700">Campañas · Meta, Google y TikTok</div></div>
+      <div style="display:flex;gap:8px"><span style="border:1px solid #BE9A2E;background:#fff;border-radius:99px;padding:7px 16px;font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">Últimos 30 días</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">INVERSIÓN TOTAL</div><div style="font-size:28px;font-weight:800;margin-top:6px">$8,4M</div><div style="font-size:12.5px;margin-top:4px;color:#8a8a8a">3 plataformas</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">LEADS GENERADOS</div><div style="font-size:28px;font-weight:800;margin-top:6px">214</div><div style="font-size:12.5px;margin-top:4px;color:#1a7f4e;font-weight:600">▲ 18% vs mes anterior</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">COSTO POR LEAD</div><div style="font-size:28px;font-weight:800;margin-top:6px">$39.250</div><div style="font-size:12.5px;margin-top:4px;color:#1a7f4e;font-weight:600">▼ 9% mejor</div></div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea"><div style="font-size:12px;color:#8a8a8a;font-weight:600">ROAS ESTIMADO</div><div style="font-size:28px;font-weight:800;margin-top:6px">5,2×</div><div style="font-size:12.5px;margin-top:4px;color:#8a8a8a">ventas atribuidas / inversión</div></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:110px 1.4fr 120px 110px 110px 110px 110px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">PLATAFORMA<span>CAMPAÑA</span><span style="text-align:right">INVERSIÓN</span><span style="text-align:right">ALCANCE</span><span style="text-align:right">CLICS</span><span style="text-align:right">LEADS</span><span style="text-align:right">CPL</span></div>
+      <div style="display:grid;grid-template-columns:110px 1.4fr 120px 110px 110px 110px 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Meta</b><span>Racks comerciales · gimnasios</span><b style="text-align:right">$4,1M</b><span style="text-align:right">286K</span><span style="text-align:right">7.240</span><b style="text-align:right">122</b><span style="text-align:right">$33.600</span></div>
+      <div style="display:grid;grid-template-columns:110px 1.4fr 120px 110px 110px 110px 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Google</b><span>Search "rack sentadillas Colombia"</span><b style="text-align:right">$2,8M</b><span style="text-align:right">41K</span><span style="text-align:right">3.180</span><b style="text-align:right">64</b><span style="text-align:right">$43.750</span></div>
+      <div style="display:grid;grid-template-columns:110px 1.4fr 120px 110px 110px 110px 110px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>TikTok</b><span>Homegym · video UGC</span><b style="text-align:right">$1,5M</b><span style="text-align:right">512K</span><span style="text-align:right">9.860</span><b style="text-align:right">28</b><span style="text-align:right">$53.570</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:700">Encuestas activas</div><span style="font-size:12.5px;color:#8a6f1d;font-weight:600;cursor:pointer">+ Nueva encuesta</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#faf9f7;border-radius:10px;padding:13px 16px"><div><b>Satisfacción post-entrega</b><div style="font-size:12px;color:#8a8a8a;margin-top:2px">Enviada al entregar cada O.P.</div></div><div style="text-align:right"><b style="font-size:17px">4,7<span style="color:#8a8a8a;font-size:12px">/5</span></b><div style="font-size:11.5px;color:#8a8a8a">86 respuestas</div></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#faf9f7;border-radius:10px;padding:13px 16px"><div><b>¿Qué accesorio te falta?</b><div style="font-size:12px;color:#8a8a8a;margin-top:2px">Instagram stories · jun 2026</div></div><div style="text-align:right"><b style="font-size:17px">312</b><div style="font-size:11.5px;color:#8a8a8a">respuestas</div></div></div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:22px 24px;border:1px solid #ececea">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">Redes sociales · 30 días</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">VISUALIZACIONES</div><div style="font-size:22px;font-weight:800;margin-top:4px">412K</div></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">ENGAGEMENT</div><div style="font-size:22px;font-weight:800;margin-top:4px">6,8%</div></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:14px"><div style="font-size:11.5px;color:#8a8a8a;font-weight:600">MÁS COMENTADA</div><div style="font-size:22px;font-weight:800;margin-top:4px">342 💬</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== RRHH · EMPLEADOS ============================== -->
+  <sc-if value="{{ isEmpleados }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Empleados" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Recursos Humanos /</div><div style="font-size:26px;font-weight:700">Empleados y nómina</div></div>
+      <div style="display:flex;gap:10px"><button style="background:#fff;border:1px solid #ddd;border-radius:99px;padding:10px 20px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">Liquidar nómina de julio</button><button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nuevo empleado</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+        <div style="display:grid;grid-template-columns:44px 1.2fr 1fr 110px;gap:12px;padding:13px 20px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px"><span></span>NOMBRE<span>CARGO</span><span>ÁREA</span></div>
+        <sc-for list="{{ empleados }}" as="e" hint-placeholder-count="5">
+          <div onClick="{{ e.onClick }}" style="display:grid;grid-template-columns:44px 1.2fr 1fr 110px;gap:12px;padding:12px 20px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px;cursor:pointer;background:{{ e.bg }}" style-hover="background:#F4F0E4">
+            <div style="width:32px;height:32px;border-radius:50%;background:#2B2B2B;color:#E8C55A;display:grid;place-items:center;font-weight:700;font-size:11.5px">{{ e.ini }}</div>
+            <b>{{ e.nombre }}</b><span style="color:#8a8a8a">{{ e.cargo }}</span><span style="color:#8a8a8a">{{ e.area }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:22px 24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="width:52px;height:52px;border-radius:50%;background:#2B2B2B;color:#E8C55A;display:grid;place-items:center;font-weight:700;font-size:17px">{{ empIni }}</div>
+          <div><b style="font-size:16px">{{ empNombre }}</b><div style="font-size:12.5px;color:#8a8a8a;margin-top:2px">{{ empCargo }} · desde {{ empIngreso }}</div></div>
+          <button style="margin-left:auto;background:#fff;border:1px solid #ddd;border-radius:99px;padding:8px 16px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:#2B2B2B">Hoja de vida completa</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">CÉDULA</div><b>{{ empCedula }}</b></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">CONTRATO</div><b>{{ empContrato }}</b></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">SALARIO BASE</div><b>{{ empSalario }}</b></div>
+          <div style="background:#faf9f7;border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:#8a8a8a;font-weight:600">EPS / ARL</div><b>{{ empEps }}</b></div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">Nómina de junio (liquidada)</div>
+          <div style="display:flex;flex-direction:column;font-size:12.5px;border:1px solid #f0efec;border-radius:10px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #f6f5f2"><span style="color:#8a8a8a">Salario base</span><b>{{ empSalario }}</b></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #f6f5f2"><span style="color:#8a8a8a">Aux. transporte + extras</span><b>{{ empExtras }}</b></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #f6f5f2"><span style="color:#8a8a8a">Deducciones (salud + pensión)</span><b style="color:#c2410c">−{{ empDeduc }}</b></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#F4F0E4"><b>Neto pagado</b><b style="color:#8a6f1d">{{ empNeto }}</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== RRHH · VACACIONES ============================== -->
+  <sc-if value="{{ isVacaciones }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Vacaciones" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Recursos Humanos /</div><div style="font-size:26px;font-weight:700">Vacaciones</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Registrar solicitud</button>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 130px 110px 130px 140px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">EMPLEADO<span>PERIODO SOLICITADO</span><span style="text-align:right">DÍAS</span><span style="text-align:right">SALDO</span><span>ESTADO</span><span></span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 130px 110px 130px 140px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Camila Ruiz</b><span style="color:#8a8a8a">14 jul – 25 jul</span><span style="text-align:right">10</span><span style="text-align:right;color:#8a8a8a">15 días</span><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PENDIENTE</span></span><button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">Aprobar</button></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 130px 110px 130px 140px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Andrés Pineda</b><span style="color:#8a8a8a">4 ago – 8 ago</span><span style="text-align:right">5</span><span style="text-align:right;color:#8a8a8a">12 días</span><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">APROBADA</span></span><span></span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 130px 110px 130px 140px;gap:12px;padding:14px 22px;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Jorge Álvarez</b><span style="color:#8a8a8a">1 jul – 4 jul · en curso</span><span style="text-align:right">4</span><span style="text-align:right;color:#8a8a8a">8 días</span><span><span style="background:#EDF0FA;color:#3b5bb5;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">EN VACACIONES</span></span><span></span></div>
+    </div>
+    <div style="background:#FDF6E8;border:1px solid #ecd9a3;border-radius:12px;padding:14px 20px;font-size:13px;color:#7a5f14">📅 Regla: máximo 2 personas de la misma área en vacaciones simultáneamente. El sistema alertará conflictos automáticamente.</div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== RRHH · EVALUACIONES ============================== -->
+  <sc-if value="{{ isEvaluaciones }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Evaluaciones" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Recursos Humanos /</div><div style="font-size:26px;font-weight:700">Evaluaciones de desempeño</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">Iniciar ciclo 2026-2</button>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:1px solid #ececea;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 110px 1fr 130px;gap:12px;padding:13px 22px;color:#8a8a8a;font-size:11.5px;font-weight:600;border-bottom:1px solid #f0efec;letter-spacing:.4px">EMPLEADO<span>CICLO</span><span style="text-align:right">PUNTAJE</span><span>DESEMPEÑO</span><span>ESTADO</span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 110px 1fr 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Laura Gómez</b><span style="color:#8a8a8a">2026-1</span><b style="text-align:right">4,6/5</b><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:92%;height:100%;background:#BE9A2E;border-radius:99px"></div></div><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">COMPLETADA</span></span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 110px 1fr 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Andrés Pineda</b><span style="color:#8a8a8a">2026-1</span><b style="text-align:right">4,1/5</b><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:82%;height:100%;background:#BE9A2E;border-radius:99px"></div></div><span><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">COMPLETADA</span></span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 110px 1fr 130px;gap:12px;padding:14px 22px;border-bottom:1px solid #f6f5f2;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Camila Ruiz</b><span style="color:#8a8a8a">2026-1</span><b style="text-align:right">3,8/5</b><div style="height:7px;background:#f0efec;border-radius:99px"><div style="width:76%;height:100%;background:#BE9A2E;border-radius:99px"></div></div><span><span style="background:#FDF3E4;color:#a06d10;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PLAN DE MEJORA</span></span></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 110px 1fr 130px;gap:12px;padding:14px 22px;align-items:center;font-size:13px" style-hover="background:#faf9f7"><b>Jorge Álvarez</b><span style="color:#8a8a8a">2026-1</span><span style="text-align:right;color:#8a8a8a">—</span><div style="height:7px;background:#f0efec;border-radius:99px"></div><span><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">PENDIENTE</span></span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== RRHH · RECLUTAMIENTO ============================== -->
+  <sc-if value="{{ isReclutamiento }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Reclutamiento" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:12px;color:#8a8a8a">Recursos Humanos /</div><div style="font-size:26px;font-weight:700">Reclutamiento</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Nueva vacante</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:20px 22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:15px">Soldador estructural</b><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ABIERTA</span></div>
+        <div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">Producción · Medellín · publicada 20 jun</div>
+        <div style="display:flex;gap:14px;margin-top:16px;font-size:12.5px">
+          <div style="flex:1;background:#faf9f7;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block">18</b><span style="color:#8a8a8a">Aplicaron</span></div>
+          <div style="flex:1;background:#faf9f7;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block">5</b><span style="color:#8a8a8a">Entrevista</span></div>
+          <div style="flex:1;background:#F4F0E4;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block;color:#8a6f1d">2</b><span style="color:#8a6f1d">Finalistas</span></div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:20px 22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:15px">Vendedor B2B gimnasios</b><span style="background:#E8F3EC;color:#1a7f4e;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">ABIERTA</span></div>
+        <div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">Ventas · Medellín · publicada 28 jun</div>
+        <div style="display:flex;gap:14px;margin-top:16px;font-size:12.5px">
+          <div style="flex:1;background:#faf9f7;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block">31</b><span style="color:#8a8a8a">Aplicaron</span></div>
+          <div style="flex:1;background:#faf9f7;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block">3</b><span style="color:#8a8a8a">Entrevista</span></div>
+          <div style="flex:1;background:#F4F0E4;border-radius:10px;padding:10px;text-align:center"><b style="font-size:18px;display:block;color:#8a6f1d">0</b><span style="color:#8a6f1d">Finalistas</span></div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:20px 22px;opacity:.7">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:15px">Auxiliar de bodega</b><span style="background:#F0F0EE;color:#5a5a5a;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">CERRADA</span></div>
+        <div style="font-size:12.5px;color:#8a8a8a;margin-top:4px">Logística · contratado: Jorge Álvarez · may 2026</div>
+        <div style="margin-top:16px;font-size:12.5px;color:#8a8a8a">Proceso completado en 21 días · 44 aplicaciones</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================== RRHH · COMUNICACIÓN ============================== -->
+  <sc-if value="{{ isComunicacion }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Comunicacion interna" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><div style="font-size:26px;font-weight:700">Cartelera</div><div style="font-size:13px;color:#8a8a8a;margin-top:2px">Noticias e información del equipo · todos pueden publicar</div></div>
+      <button style="background:#2B2B2B;color:#fff;border:none;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer">+ Publicar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#fff;border-radius:14px;border:1px solid #ececea;padding:16px 20px;display:flex;gap:12px;align-items:center">
+          <div style="width:36px;height:36px;border-radius:50%;background:#2B2B2B;color:#E8C55A;display:grid;place-items:center;font-weight:700;font-size:12.5px;flex:none">JD</div>
+          <div style="flex:1;background:#faf9f7;border:1px solid #ececea;border-radius:99px;padding:10px 18px;font-size:13px;color:#9a9a9a">Escribe un mensaje para el equipo…</div>
+          <button style="background:#BE9A2E;color:#2B2B2B;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer">Publicar</button>
+        </div>
+        <div style="background:#2B2B2B;color:#fff;border-radius:14px;padding:24px 26px">
+          <span style="background:#BE9A2E;color:#2B2B2B;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.5px">IMPORTANTE</span>
+          <div style="font-size:18px;font-weight:700;margin-top:12px">Nuevo récord: 41 pedidos entregados en abril 🏆</div>
+          <div style="font-size:13.5px;color:#c9c9c9;margin-top:8px;line-height:1.5">Gracias al equipo de producción y logística por el esfuerzo. Celebración este viernes 5pm en el taller.</div>
+          <div style="font-size:12px;color:#8a8a8a;margin-top:12px">Gerencia · 1 jul · 👍 12</div>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:22px 26px;border:1px solid #ececea">
+          <div style="font-size:15.5px;font-weight:700">Cierre de nómina: reportar horas extra antes del 28</div>
+          <div style="font-size:13px;color:#8a8a8a;margin-top:6px;line-height:1.5">Recuerden registrar las horas extra de julio en el módulo de RRHH antes del 28 de julio para incluirlas en la liquidación.</div>
+          <div style="font-size:12px;color:#b5b5b3;margin-top:10px">RRHH · 30 jun · 👍 5</div>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:22px 26px;border:1px solid #ececea">
+          <div style="font-size:15.5px;font-weight:700">Bienvenido Jorge Álvarez al equipo de logística</div>
+          <div style="font-size:13px;color:#8a8a8a;margin-top:6px;line-height:1.5">Jorge se une como auxiliar de bodega. Ayúdenlo a conocer los procesos de despacho.</div>
+          <div style="font-size:12px;color:#b5b5b3;margin-top:10px">RRHH · 26 jun · 👍 9</div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #ececea">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Próximos eventos</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="display:flex;gap:12px;align-items:center"><div style="width:42px;text-align:center;background:#F4F0E4;border-radius:8px;padding:6px 0"><b style="display:block;font-size:15px;color:#8a6f1d">5</b><span style="font-size:10px;color:#8a6f1d">JUL</span></div><div><b>Celebración récord</b><div style="font-size:11.5px;color:#8a8a8a">5:00pm · Taller</div></div></div>
+          <div style="display:flex;gap:12px;align-items:center"><div style="width:42px;text-align:center;background:#faf9f7;border-radius:8px;padding:6px 0"><b style="display:block;font-size:15px">20</b><span style="font-size:10px;color:#8a8a8a">JUL</span></div><div><b>Día de la Independencia</b><div style="font-size:11.5px;color:#8a8a8a">Festivo · no laboral</div></div></div>
+          <div style="display:flex;gap:12px;align-items:center"><div style="width:42px;text-align:center;background:#faf9f7;border-radius:8px;padding:6px 0"><b style="display:block;font-size:15px">28</b><span style="font-size:10px;color:#8a8a8a">JUL</span></div><div><b>Cierre horas extra</b><div style="font-size:11.5px;color:#8a8a8a">Módulo RRHH</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    open: null,
+    screen: 'dashboard',
+    empSel: 0,
+    crmCards: [
+      { id: 1, col: 0, cliente: 'Gimnasio Fénix', cot: 'CT-2213', producto: 'Jaula full crossfit', valor: '$41,9M', dias: '2 días' },
+      { id: 2, col: 0, cliente: 'Hotel Dann Cali', cot: '—', producto: 'Gimnasio hotel · por cotizar', valor: '$35M est.', dias: 'hoy' },
+      { id: 3, col: 1, cliente: 'C. Rodríguez', cot: 'CT-2212', producto: 'Rack R-4 + banco', valor: '$6,8M', dias: '3 días' },
+      { id: 4, col: 1, cliente: 'Colegio Alemán', cot: 'CT-2209', producto: 'Dotación gimnasio', valor: '$22,4M', dias: '6 días' },
+      { id: 5, col: 2, cliente: 'Smart Fit Envigado', cot: 'CT-2214', producto: 'Rack R-8 + accesorios', valor: '$28,4M', dias: '1 día' },
+      { id: 6, col: 3, cliente: 'Bodytech Poblado', cot: 'CT-2201', producto: 'Accesorios varios', valor: '$3,1M', dias: 'cerrada 28 jun' },
+      { id: 7, col: 4, cliente: 'Colegio San José', cot: 'CT-2210', producto: 'Dotación escolar', valor: '$18,7M', dias: 'precio' }
+    ],
+    drag: null,
+    shopTab: 'nuevas', shopMetric: 1,
+    opView: 'lista', calField: 'entrega', opSel: null, opDrag: null,
+    compExp: 'SC-118', garSel: 0, ventasDim: 'cliente', invSku: 0,
+    dashTab: 'resumen'
+  };
+
+  // ==== DATOS JUNTA 2026 (ene–abr, COP) ====
+  JUNTA = {
+    meses: ['Ene','Feb','Mar','Abr'],
+    pyg: [
+      { n:'Ventas', v:[148.7,201.2,214.0,274.0], pct:null, ideal:null },
+      { n:'Costo de ventas', v:[108.0,120.1,109.3,145.0], ideal:57, dir:'menos' },
+      { n:'Utilidad bruta', v:[40.7,81.1,104.7,129.0], ideal:43, dir:'mas' },
+      { n:'Gasto administración', v:[42.8,40.7,42.4,50.0], ideal:15, dir:'menos' },
+      { n:'Gasto de venta', v:[8.9,10.5,12.4,16.5], ideal:10, dir:'menos' },
+      { n:'Utilidad operacional', v:[-11.0,29.9,49.8,62.5], ideal:18, dir:'mas' },
+      { n:'Gasto financiero', v:[2.8,2.1,2.9,1.5], ideal:1, dir:'menos' },
+      { n:'Utilidad antes de imptos.', v:[-13.8,27.8,46.9,61.0], ideal:17, dir:'mas' }
+    ],
+    caja: [ ['Bancos','$15,2M'], ['Fiducia','$30,1M'], ['Cuentas por cobrar','$177,0M'], ['Cuentas por pagar','$115,0M'], ['Inventarios','$45,0M'] ],
+    b2c: [148.7,201.2,150.7,187.5],
+    b2b: [0,0,63.2,86.5],
+    topProductos: [
+      ['Piso de caucho ensamble perdido (m²)',32],['Almacenador de discos a rack',15],['Sist. polea graduable 180 lbs a pared',14],['Rack PF5 Fijo',11],['Sist. polea graduable 180 lbs a rack',9],['Almacenador de 2 barras a rack',7],['Discos encauchetados 25 lbs',6],['Banco reclinable',5]
+    ],
+    racks: [null,null,15,32], poleas: [null,null,23,15],
+    pauta: [5.5,4.0,6.1,7.2],
+    alianzas: [
+      { n:'Richard Ríos', d:'Showroom personal equipado con Bravefit · visibilidad en nuestro Instagram.', imp:'Visibilidad de marca' },
+      { n:'Alianza Caro Ferrer', d:'Generó un referido que materializó una compra.', imp:'Venta directa: $15.000.000' },
+      { n:'Alianza Latinos', d:'Patrocinio de equipo de fútbol infantil · marca en camiseta.', imp:'Visibilidad / responsabilidad social' },
+      { n:'#Bravefitricolor', d:'Campaña de mayo con 1–2 activaciones para el mundial de fútbol.', imp:'Visibilidad de marca' },
+      { n:'Power Club', d:'Contenido con influencers sobre las poleas instaladas.', imp:'Visibilidad de marca' },
+      { n:'TikTok', d:'Apertura de cuenta · inversión estimada $500.000/mes.', imp:'Presencia en redes' }
+    ],
+    cumplidos: [12,31,40,35], incumplidos: [13,15,12,8], metaNivel: 85,
+    obsOperacion: 'Abril: desafíos operativos — Semana Santa y festivos redujeron días efectivos de producción, y el daño en el torno obligó a tercerizar componentes de poleas y Smith. Costo total del daño: $7,2M.'
+  };
+
+  // ==== ESTRUCTURA DE NAVEGACIÓN (agregar módulos/submenús aquí) ====
+  // Cada item: { label, screen, badge? } — para roles, luego se agrega { roles: [...] }
+  NAV = [
+    { key: 'ventas', label: 'Ventas', items: [
+      { label: 'Cotizaciones', screen: 'cotizaciones' },
+      { label: 'CRM · Embudo de ventas', screen: 'crm' },
+      { label: 'Lista de productos', screen: 'productos' },
+      { label: 'Catálogos para ventas', screen: 'catalogos' },
+      { label: 'Pedidos web (Shopify)', screen: 'shopify', badge: '3' },
+      { label: 'Análisis de ventas', screen: 'ventasAnalisis' }
+    ]},
+    { key: 'prod', label: 'Producción y Logística', items: [
+      { label: 'Inventarios', screen: 'inventarios' },
+      { label: 'Órdenes de pedido (O.P.)', screen: 'ops' },
+      { label: 'Solicitudes de compra', screen: 'compras' },
+      { label: 'Garantías', screen: 'garantias' },
+      { label: 'Entregas', screen: 'entregas' }
+    ]},
+    { key: 'mkt', label: 'Mercadeo', items: [
+      { label: 'Campañas y encuestas', screen: 'mercadeo' }
+    ]},
+    { key: 'rrhh', label: 'Recursos Humanos', items: [
+      { label: 'Empleados y nómina', screen: 'empleados' },
+      { label: 'Vacaciones', screen: 'vacaciones' },
+      { label: 'Evaluaciones de desempeño', screen: 'evaluaciones' },
+      { label: 'Reclutamiento', screen: 'reclutamiento' }
+    ]}
+  ];
+
+  EMPLEADOS = [
+    { nombre: 'Laura Gómez', ini: 'LG', cargo: 'Líder comercial', area: 'Ventas', cedula: '1.037.612.884', contrato: 'Indefinido', salario: '$4.800.000', eps: 'Sura / Sura', ingreso: 'mar 2022', extras: '$340.000', deduc: '$412.000', neto: '$4.728.000' },
+    { nombre: 'Andrés Pineda', ini: 'AP', cargo: 'Vendedor B2B', area: 'Ventas', cedula: '1.020.443.190', contrato: 'Indefinido', salario: '$3.200.000', eps: 'Sanitas / Sura', ingreso: 'ago 2023', extras: '$580.000', deduc: '$302.400', neto: '$3.477.600' },
+    { nombre: 'Camila Ruiz', ini: 'CR', cargo: 'Coordinadora mercadeo', area: 'Mercadeo', cedula: '1.045.998.312', contrato: 'Indefinido', salario: '$3.600.000', eps: 'Sura / Colmena', ingreso: 'ene 2024', extras: '$200.000', deduc: '$304.000', neto: '$3.496.000' },
+    { nombre: 'Óscar Herrera', ini: 'OH', cargo: 'Jefe de producción', area: 'Producción', cedula: '98.554.201', contrato: 'Indefinido', salario: '$5.200.000', eps: 'Nueva EPS / Sura', ingreso: 'jun 2021', extras: '$460.000', deduc: '$452.800', neto: '$5.207.200' },
+    { nombre: 'Jorge Álvarez', ini: 'JA', cargo: 'Auxiliar de bodega', area: 'Logística', cedula: '1.152.700.443', contrato: 'Fijo 1 año', salario: '$1.800.000', eps: 'Savia / Positiva', ingreso: 'may 2026', extras: '$262.000', deduc: '$144.000', neto: '$1.918.000' }
+  ];
+
+  CRM_STAGES = [
+    { title: 'PROSPECTO', color: '#5a5a5a' },
+    { title: 'COTIZACIÓN ENVIADA', color: '#a06d10' },
+    { title: 'NEGOCIACIÓN', color: '#3b5bb5' },
+    { title: 'GANADA', color: '#1a7f4e' },
+    { title: 'PERDIDA', color: '#c2410c' }
+  ];
+
+  TODAY = new Date(2026, 6, 3);
+  MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  ETAPAS = ['POR INICIAR','FABRICACIÓN','PINTURA','ENSAMBLE','DESPACHO'];
+  ETAPA_CH = [{bg:'#F0F0EE',fg:'#5a5a5a'},{bg:'#EDF0FA',fg:'#3b5bb5'},{bg:'#FDF3E4',fg:'#a06d10'},{bg:'#EDF0FA',fg:'#3b5bb5'},{bg:'#E8F3EC',fg:'#1a7f4e'}];
+  ORIGEN_CH = { Shopify:{bg:'#E8F5E4',fg:'#3a7d2c'}, WhatsApp:{bg:'#E4F5F0',fg:'#0e7a63'}, Planner:{bg:'#EFEAFA',fg:'#6b4fbb'}, 'Cotización':{bg:'#F0F0EE',fg:'#5a5a5a'} };
+  OPS = [
+    {id:'OP-1042',cliente:'Smart Fit Envigado',ciudad:'Envigado',inst:true,origen:'Cotización',etapa:3,creada:'2026-06-10',entrega:'2026-07-03',dir:'Cra 43A #18-95, Envigado',tel:'+57 304 221 8874',anticipo:'50% pagado',items:[{n:'Rack R-8 comercial',c:4,p:9800000,rack:true},{n:'Juego J-cups (par)',c:4,p:380000},{n:'Barras de dips acoplables',c:2,p:520000}]},
+    {id:'OP-1038',cliente:'Gym Élite Laureles',ciudad:'Medellín',inst:true,origen:'WhatsApp',etapa:3,creada:'2026-06-05',entrega:'2026-07-04',dir:'Circular 74B #39-22, Laureles',tel:'+57 311 458 2210',anticipo:'50% pagado',items:[{n:'Jaula full crossfit 6×3 m',c:1,p:41900000}]},
+    {id:'OP-1054',cliente:'Carlos Mejía',ciudad:'Medellín',inst:false,origen:'Shopify',etapa:4,creada:'2026-06-28',entrega:'2026-07-04',dir:'Cra 80 #32-15',tel:'+57 315 640 9982',anticipo:'100% pagado (web)',items:[{n:'Barras de dips acoplables',c:1,p:520000}]},
+    {id:'OP-1051',cliente:'C. Rodríguez (homegym)',ciudad:'Medellín',inst:false,origen:'Planner',etapa:2,creada:'2026-06-18',entrega:'2026-07-05',dir:'Cl 10 #38-40 apto 802',tel:'+57 300 812 4471',anticipo:'100% pagado',items:[{n:'Rack R-4 homegym',c:1,p:4200000,rack:true},{n:'Banco plano profesional',c:1,p:1150000}]},
+    {id:'OP-1056',cliente:'María Fernanda López',ciudad:'Bogotá',inst:false,origen:'Shopify',etapa:0,creada:'2026-07-02',entrega:'2026-07-15',dir:'Cl 127 #15-32, Usaquén',tel:'+57 310 224 7789',anticipo:'100% pagado (web)',items:[{n:'Rack R-4 homegym',c:1,p:4200000,rack:true},{n:'Juego J-cups (par)',c:1,p:380000}]},
+    {id:'OP-1057',cliente:'Hotel Dann Cali',ciudad:'Cali',inst:true,origen:'Planner',etapa:0,creada:'2026-07-01',entrega:'2026-07-24',dir:'Av Colombia #1-40',tel:'+57 602 882 3300',anticipo:'50% pagado',items:[{n:'Rack R-8 comercial',c:2,p:9800000,rack:true},{n:'Banco plano profesional',c:3,p:1150000},{n:'Mancuernero 3 niveles',c:1,p:2400000}]},
+    {id:'OP-1035',cliente:'Colegio Militar Bogotá',ciudad:'Bogotá',inst:true,origen:'Cotización',etapa:2,creada:'2026-05-20',entrega:'2026-06-28',dir:'Cl 128 #58-70',tel:'+57 601 625 4410',anticipo:'50% pagado',items:[{n:'Rack R-8 comercial',c:3,p:9800000,rack:true},{n:'Jaula dominadas exterior',c:2,p:6800000}]},
+    {id:'OP-1058',cliente:'Camilo Duque',ciudad:'Manizales',inst:false,origen:'WhatsApp',etapa:1,creada:'2026-06-30',entrega:'2026-08-01',dir:'Cra 23 #62-16',tel:'+57 312 448 0921',anticipo:'50% pagado',items:[{n:'Rack R-4 homegym',c:1,p:4200000,rack:true}]}
+  ];
+
+  fmtDate(iso) { const d = new Date(iso + 'T12:00:00'); return d.getDate() + ' ' + this.MESES[d.getMonth()]; }
+  money(v) { return '$' + v.toLocaleString('es-CO'); }
+  opChip(op) {
+    const dl = Math.round((new Date(op.entrega + 'T12:00:00') - this.TODAY) / 864e5);
+    const f = this.fmtDate(op.entrega);
+    if (dl < 0) return { bg: '#1a1a1a', fg: '#fff', label: 'VENCIDO · ' + f };
+    if (dl <= 14) return { bg: '#E5484D', fg: '#fff', label: f };
+    if (dl <= 21) return { bg: '#F5C518', fg: '#5a4a00', label: f };
+    return { bg: '#F0F0EE', fg: '#5a5a5a', label: f };
+  }
+  opPrincipal(op) {
+    const r = op.items.find((i) => i.rack) || [...op.items].sort((a, b) => b.p - a.p)[0];
+    return r.n + (op.items.length > 1 ? ' +' + (op.items.length - 1) : '');
+  }
+  opDeco(op) {
+    const ch = this.opChip(op), o = this.ORIGEN_CH[op.origen], et = this.ETAPA_CH[op.etapa];
+    return { ...op, principal: this.opPrincipal(op), instLabel: op.inst ? 'Sí' : 'No', instColor: op.inst ? '#8a6f1d' : '#b5b5b3',
+      etapaLabel: this.ETAPAS[op.etapa], etBg: et.bg, etFg: et.fg, oBg: o.bg, oFg: o.fg,
+      eBg: ch.bg, eFg: ch.fg, eLabel: ch.label, creadaF: this.fmtDate(op.creada),
+      onOpen: () => this.go('opDetail', op.id),
+      onDragStart: () => this.setState({ opDrag: op.id }) };
+  }
+
+  SHOP_METRICS = [
+    {label:'Sesiones',value:'3.133',delta:'▼ 53%',y0:'0',y1:'200',y2:'400',max:420,cur:[60,80,70,90,65,75,380,120,85,70,90,80,75,85,70,65],prev:[70,90,80,100,340,110,90,80,75,300,95,85,80,90,260,75]},
+    {label:'Ventas totales',value:'$710 k',delta:'▼ 70%',y0:'$ 0',y1:'$ 750 k',y2:'$ 1,5 M',max:1500,cur:[0,0,0,0,0,710,120,0,0,0,0,0,0,0,0,0],prev:[0,0,0,0,300,80,0,0,0,1020,140,0,0,0,320,0]},
+    {label:'Pedidos',value:'1',delta:'▼ 80%',y0:'0',y1:'3',y2:'6',max:6,cur:[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0],prev:[0,0,0,0,2,1,0,0,0,3,1,0,0,0,1,0]},
+    {label:'Tasa de conversión',value:'0,03 %',delta:'▼ 58%',y0:'0%',y1:'1%',y2:'2%',max:2,cur:[0,0,0,0,0,1.03,0.2,0,0,0,0,0,0,0,0,0],prev:[0,0,0,0,0.65,0.3,0,0,0,1.15,0.4,0,0,0,0.5,0]}
+  ];
+  shopPath(arr, max) {
+    return arr.map((v, i) => (i === 0 ? 'M' : 'L') + (30 + i * (740 / 15)).toFixed(1) + ' ' + (200 - (v / max) * 175).toFixed(1)).join(' ');
+  }
+  VENTAS_DIMS = {
+    cliente: [['Homegym / personas naturales','$62,7M',100],['Smart Fit (varias sedes)','$48,2M',77],['Bodytech','$31,4M',50],['Gym Élite Laureles','$22,9M',37],['Hotel Dann','$19,3M',31]],
+    vendedor: [['Laura Gómez','$96,4M',100],['Andrés Pineda','$70,1M',73],['Canal web (sin vendedor)','$18,0M',19]],
+    producto: [['Rack R-8 comercial','$74,2M',100],['Rack R-4 homegym','$38,5M',52],['Jaulas crossfit','$29,1M',39],['Accesorios para racks','$23,8M',32],['Bancos','$18,9M',25]],
+    ciudad: [['Medellín','$62,1M',100],['Bogotá','$48,7M',78],['Cali','$31,2M',50],['Barranquilla','$24,9M',40],['Otras','$17,6M',28]],
+    canal: [['Directo / cotización','$118,2M',100],['Shopify','$41,3M',35],['WhatsApp','$25,0M',21]],
+    origen: [['Producto propio (fabricado)','$147,6M',100],['Producto comercializado','$36,9M',25]],
+    segmento: [['B2B · gimnasios y empresas','$121,8M',100],['B2C · hogar','$62,7M',51]]
+  };
+  VENTAS_DIM_LABELS = [['cliente','Por cliente'],['vendedor','Por vendedor'],['producto','Por producto'],['ciudad','Por ciudad'],['canal','Por canal'],['origen','Propio vs comercializado'],['segmento','B2B vs B2C']];
+  INV_SKUS = [
+    {n:'Rack R-8', unidad:'uds fabricadas', vals:[6,7,10,12,8,9]},
+    {n:'Rack R-4', unidad:'uds fabricadas', vals:[9,11,14,16,12,13]},
+    {n:'J-cups', unidad:'pares vendidos', vals:[18,22,30,34,26,28]},
+    {n:'Tubería 50×50', unidad:'metros consumidos', vals:[280,320,410,480,350,380]}
+  ];
+  COMPRAS_EST = { pend:{l:'PENDIENTE',bg:'#F0F0EE',fg:'#5a5a5a'}, encotiz:{l:'EN COTIZACIÓN',bg:'#FDF3E4',fg:'#a06d10'}, comprado:{l:'COMPRADO',bg:'#E8F3EC',fg:'#1a7f4e'}, rech:{l:'RECHAZADA',bg:'#FCE9E3',fg:'#c2410c'} };
+  COMPRAS = [
+    {id:'SC-118',tipo:'Tubería',resumen:'Tubería estructural · 3 ítems',proveedor:'Aceros del Valle',solicita:'Taller',estado:'comprado',valor:'$14.200.000',entrega:'8 jul',items:[{n:'Tubo 50×50×2,0 mm · 120 m',st:'ok'},{n:'Tubo 60×60×2,0 mm · 60 m',st:'ok'},{n:'Tubo 75×75×2,5 mm · 40 m',st:'falt',nota:'Llegaron 32 m · faltan 8 m — proveedor envía saldo el 10 jul'}]},
+    {id:'SC-119',tipo:'Platinería',resumen:'Platinas y láminas · 5 ítems',proveedor:'Por definir',solicita:'Producción',estado:'encotiz',valor:'— en cotización',entrega:'—',items:[{n:'Platina 2" × 3/16 · 80 uds',st:'pend'},{n:'Platina 1½" × 1/8 · 120 uds',st:'pend'},{n:'Lámina HR 4 mm · 6 uds',st:'pend'},{n:'Lámina CR 2 mm · 4 uds',st:'pend'},{n:'Ángulo 1½" · 40 uds',st:'pend'}]},
+    {id:'SC-120',tipo:'Cojinería',resumen:'Espumas y tapizado · 4 ítems',proveedor:'Espumas Medellín',solicita:'Producción',estado:'comprado',valor:'$3.850.000',entrega:'5 jul',items:[{n:'Espuma alta densidad 5 cm · 20 láminas',st:'ok'},{n:'Cuerina negra · 45 m',st:'ok'},{n:'Cuerina gris · 20 m',st:'ok'},{n:'Hilo calibre 40 · 12 conos',st:'ok'}]},
+    {id:'SC-121',tipo:'Tornillería',resumen:'Tornillos y anclajes · 6 ítems',proveedor:'Ferretería Central',solicita:'Taller',estado:'pend',valor:'— por cotizar',entrega:'—',items:[{n:'Tornillo 5/8" × 4" grado 8 · 400 uds',st:'pend'},{n:'Tornillo 1/2" × 3" · 600 uds',st:'pend'},{n:'Tuerca de seguridad 5/8" · 400 uds',st:'pend'},{n:'Arandela plana 5/8" · 800 uds',st:'pend'},{n:'Anclaje expansivo 1/2" · 200 uds',st:'pend'},{n:'Chazos metálicos · 300 uds',st:'pend'}]},
+    {id:'SC-115',tipo:'Plásticos de ingeniería',resumen:'UHMW y topes · 2 ítems',proveedor:'Importadora RGX',solicita:'Producción',estado:'rech',valor:'$2.100.000',entrega:'—',items:[{n:'Lámina UHMW 12 mm · 4 uds',st:'pend'},{n:'Topes de caucho · 200 uds',st:'pend'}]}
+  ];
+  GARANTIAS = [
+    {id:'GR-031',cliente:'Bodytech Poblado',producto:'Rack R-8',problema:'Pintura descascarada en la base',estado:'EN REPARACIÓN',eBg:'#FDF3E4',eFg:'#a06d10',fecha:'28 jun',op:'OP-980 · entregada feb 2026',detalle:'El cliente reporta descascaramiento de pintura en la base de 2 de los 4 racks instalados. Equipos recogidos el 30 jun.',resol:'Reproceso de pintura electrostática. Reinstalación programada: 8 jul.'},
+    {id:'GR-030',cliente:'C. Valencia (homegym)',producto:'Banco plano',problema:'Costura del cojín abierta',estado:'EN REVISIÓN',eBg:'#EDF0FA',eFg:'#3b5bb5',fecha:'25 jun',op:'OP-1012 · entregada abr 2026',detalle:'Fotos recibidas por WhatsApp. Se evalúa si se cambia el cojín completo o se retapiza.',resol:'Pendiente diagnóstico de cojinería.'},
+    {id:'GR-029',cliente:'Smart Fit Itagüí',producto:'J-cups',problema:'Caucho protector suelto',estado:'RESUELTA',eBg:'#E8F3EC',eFg:'#1a7f4e',fecha:'12 jun',op:'OP-995 · entregada mar 2026',detalle:'Se enviaron 4 pares de repuesto con adhesivo industrial mejorado.',resol:'Cerrada el 18 jun · costo $180.000.'}
+  ];
+  ENTREGAS_MES = [['Ene',24],['Feb',26],['Mar',31],['Abr',41],['May',28],['Jun',30],['Jul',3]];
+  ENTREGAS_REC = [
+    {op:'OP-1049',cliente:'Julián Restrepo',ciudad:'Envigado',inst:'No',fecha:'2 jul'},
+    {op:'OP-1044',cliente:'CrossFit 70-30',ciudad:'Barranquilla',inst:'Sí',fecha:'1 jul'},
+    {op:'OP-1046',cliente:'L. Marín (homegym)',ciudad:'Rionegro',inst:'No',fecha:'1 jul'}
+  ];
+  componentDidMount() {
+    const s = localStorage.getItem('bf-erp-screen');
+    if (s) this.setState({ screen: s });
+  }
+
+  go(screen, opSel) {
+    this.setState(opSel !== undefined ? { screen, open: null, opSel } : { screen, open: null });
+    localStorage.setItem('bf-erp-screen', screen);
+    const sc = document.scrollingElement; if (sc) sc.scrollTop = 0;
+  }
+
+  renderVals() {
+    const { open, screen, empSel, crmCards, drag } = this.state;
+
+    const menus = this.NAV.map((m) => {
+      const active = m.items.some((it) => it.screen === screen);
+      return {
+        label: m.label,
+        open: open === m.key,
+        color: (open === m.key || active) ? '#E8C55A' : '#b5b5b3',
+        border: active ? '#BE9A2E' : 'transparent',
+        weight: active ? '600' : '400',
+        onEnter: () => this.setState({ open: m.key }),
+        items: m.items.map((it) => ({
+          label: it.label,
+          hasBadge: !!it.badge,
+          badge: it.badge || '',
+          onClick: () => this.go(it.screen)
+        }))
+      };
+    });
+
+    const crmCols = this.CRM_STAGES.map((st, ci) => {
+      const cards = crmCards.filter((c) => c.col === ci).map((c) => ({
+        ...c,
+        onDragStart: () => this.setState({ drag: c.id })
+      }));
+      return {
+        title: st.title,
+        titleColor: st.color,
+        total: cards.length + (cards.length === 1 ? ' ficha' : ' fichas'),
+        cards,
+        onDragOver: (e) => e.preventDefault(),
+        onDrop: () => {
+          if (drag == null) return;
+          this.setState({
+            crmCards: this.state.crmCards.map((c) => (c.id === drag ? { ...c, col: ci } : c)),
+            drag: null
+          });
+        }
+      };
+    });
+
+    const emp = this.EMPLEADOS[empSel];
+    const empleados = this.EMPLEADOS.map((e, i) => ({
+      ...e,
+      bg: i === empSel ? '#F4F0E4' : 'transparent',
+      onClick: () => this.setState({ empSel: i })
+    }));
+
+    const { shopTab, shopMetric, opView, calField, opSel, opDrag, compExp, garSel, ventasDim, invSku } = this.state;
+
+    // ---- O.P. ----
+    const opsSorted = [...this.OPS].sort((a, b) => a.entrega.localeCompare(b.entrega));
+    const opsList = opsSorted.map((op) => this.opDeco(op));
+    const opCols = this.ETAPAS.map((et, ci) => ({
+      title: et, titleColor: this.ETAPA_CH[ci].fg,
+      total: opsSorted.filter((o) => o.etapa === ci).length + '',
+      cards: opsSorted.filter((o) => o.etapa === ci).map((o) => this.opDeco(o)),
+      onDragOver: (e) => e.preventDefault(),
+      onDrop: () => { if (opDrag == null) return; const t = this.OPS.find((o) => o.id === opDrag); if (t) t.etapa = ci; this.setState({ opDrag: null }); }
+    }));
+    const first = new Date(2026, 6, 1); const dow = first.getDay();
+    const calCells = [];
+    for (let i = 0; i < 35; i++) {
+      const day = i - dow + 1;
+      const iso = day >= 1 && day <= 31 ? '2026-07-' + String(day).padStart(2, '0') : null;
+      calCells.push({
+        day: iso ? String(day) : '', isToday: day === 3,
+        bg: day === 3 ? '#F4F0E4' : '#fff',
+        ops: iso ? opsSorted.filter((o) => o[calField] === iso).map((o) => { const ch = this.opChip(o); return { id: o.id, bg: ch.bg === '#F0F0EE' ? '#E4E9F5' : ch.bg, fg: ch.bg === '#F0F0EE' ? '#3b5bb5' : ch.fg, onOpen: () => this.go('opDetail', o.id) }; }) : []
+      });
+    }
+    const opD = this.OPS.find((o) => o.id === opSel) || this.OPS[0];
+    const opDd = this.opDeco(opD);
+    const opDItems = opD.items.map((it) => ({ n: it.n, c: it.c, precio: this.money(it.p), subtotal: this.money(it.c * it.p) }));
+    const opDTotal = this.money(opD.items.reduce((s, it) => s + it.c * it.p, 0));
+    const opDSteps = this.ETAPAS.map((et, i) => ({
+      label: et,
+      dotBg: i < opD.etapa ? '#BE9A2E' : i === opD.etapa ? '#2B2B2B' : '#e2e0db',
+      dotFg: i <= opD.etapa ? '#fff' : '#8a8a8a',
+      txtColor: i === opD.etapa ? '#2B2B2B' : '#8a8a8a',
+      txtWeight: i === opD.etapa ? '700' : '400'
+    }));
+
+    // ---- Shopify ----
+    const sm = this.SHOP_METRICS[shopMetric];
+    const shopTabs = this.SHOP_METRICS.map((m, i) => ({
+      label: m.label, value: m.value, delta: m.delta,
+      bg: i === shopMetric ? '#fff' : 'transparent',
+      border: i === shopMetric ? '#d8d8d5' : 'transparent',
+      onClick: () => this.setState({ shopMetric: i })
+    }));
+
+    // ---- Compras ----
+    const comprasRows = this.COMPRAS.map((c) => {
+      const est = this.COMPRAS_EST[c.estado];
+      return { ...c, estLabel: est.l, estBg: est.bg, estFg: est.fg,
+        arrow: compExp === c.id ? '▾' : '▸',
+        expanded: compExp === c.id,
+        esComprado: c.estado === 'comprado',
+        onToggle: () => this.setState({ compExp: compExp === c.id ? null : c.id }),
+        itemsD: c.items.map((it) => ({ n: it.n,
+          icon: it.st === 'ok' ? '✓' : it.st === 'falt' ? '⚠' : '○',
+          color: it.st === 'ok' ? '#1a7f4e' : it.st === 'falt' ? '#c2410c' : '#b5b5b3',
+          hasNota: !!it.nota, nota: it.nota || '' })) };
+    });
+
+    // ---- Garantías ----
+    const garRows = this.GARANTIAS.map((g, i) => ({ ...g, bg: i === garSel ? '#F4F0E4' : 'transparent', onClick: () => this.setState({ garSel: i }) }));
+    const garD = this.GARANTIAS[garSel];
+
+    // ---- Entregas ----
+    const entBars = this.ENTREGAS_MES.map(([mes, v]) => ({ mes, val: v, h: Math.round((v / 41) * 100) + '%', bg: v === 41 ? '#BE9A2E' : '#e4ddc9', w: v === 41 ? '700' : '400' }));
+
+    // ---- Ventas análisis ----
+    const ventasChips = this.VENTAS_DIM_LABELS.map(([k, l]) => ({
+      label: l, bg: ventasDim === k ? '#2B2B2B' : '#fff', fg: ventasDim === k ? '#fff' : '#5a5a5a',
+      bc: ventasDim === k ? '#2B2B2B' : '#ddd',
+      onClick: () => this.setState({ ventasDim: k })
+    }));
+    const ventasRows = this.VENTAS_DIMS[ventasDim].map(([n, v, w]) => ({ n, v, w: w + '%' }));
+
+    // ---- Inventario tendencia ----
+    const invChips = this.INV_SKUS.map((s, i) => ({
+      label: s.n, bg: invSku === i ? '#2B2B2B' : '#fff', fg: invSku === i ? '#fff' : '#5a5a5a', bc: invSku === i ? '#2B2B2B' : '#ddd',
+      onClick: () => this.setState({ invSku: i })
+    }));
+    const invSel = this.INV_SKUS[invSku];
+    const invMax = Math.max(...invSel.vals);
+    const invBars = invSel.vals.map((v, i) => ({ mes: ['Feb','Mar','Abr','May','Jun','Jul'][i], val: v, h: Math.round((v / invMax) * 100) + '%', bg: i === 5 ? '#BE9A2E' : '#e4ddc9' }));
+
+    // ---- Dashboard Junta ----
+    const { dashTab } = this.state;
+    const J = this.JUNTA;
+    const dashTabs = [['resumen','Resumen'],['comercial','Comercial'],['finanzas','Finanzas'],['mercadeoJ','Mercadeo'],['operacion','Operación']].map(([k,l]) => ({
+      label: l, bg: dashTab === k ? '#2B2B2B' : '#fff', fg: dashTab === k ? '#fff' : '#5a5a5a', bc: dashTab === k ? '#2B2B2B' : '#ddd',
+      onClick: () => this.setState({ dashTab: k })
+    }));
+    const fmtM = (v) => '$' + v.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+    const pygRows = J.pyg.map((r, ri) => {
+      const abr = r.v[3]; const ventasAbr = J.pyg[0].v[3];
+      const pctReal = ri === 0 ? null : Math.round((abr / ventasAbr) * 1000) / 10;
+      let ok = null;
+      if (r.ideal != null) ok = r.dir === 'menos' ? pctReal <= r.ideal : pctReal >= r.ideal;
+      return { n: r.n, vals: r.v.map(fmtM), abr: fmtM(abr),
+        pct: pctReal == null ? '—' : pctReal.toLocaleString('es-CO') + '%',
+        meta: r.ideal == null ? '—' : r.ideal + '%',
+        pctBg: ok == null ? 'transparent' : ok ? '#E8F3EC' : '#FCE9E3',
+        pctFg: ok == null ? '#2B2B2B' : ok ? '#1a7f4e' : '#c2410c',
+        bold: ri === 0 || r.dir === 'mas' };
+    });
+    const cajaRows = J.caja.map(([n, v]) => ({ n, v }));
+    const maxTot = 274;
+    const comBars = J.meses.map((m, i) => {
+      const tot = J.b2c[i] + J.b2b[i];
+      return { mes: m, tot: fmtM(tot),
+        hB2c: Math.round((J.b2c[i] / maxTot) * 100) + '%',
+        hB2b: Math.round((J.b2b[i] / maxTot) * 100) + '%',
+        b2c: fmtM(J.b2c[i]), b2b: J.b2b[i] ? fmtM(J.b2b[i]) : '—' };
+    });
+    const maxCant = J.topProductos[0][1];
+    const topProd = J.topProductos.map(([n, c]) => ({ n, c, w: Math.round((c / maxCant) * 100) + '%' }));
+    const pautaRows = J.meses.map((m, i) => {
+      const ventas = J.pyg[0].v[i];
+      return { mes: m, pauta: fmtM(J.pauta[i]), ventas: fmtM(ventas), ratio: (Math.round(ventas / J.pauta[i])) + '×' };
+    });
+    const alianzas = J.alianzas;
+    const nivelBars = J.meses.map((m, i) => {
+      const tot = J.cumplidos[i] + J.incumplidos[i];
+      const pct = Math.round((J.cumplidos[i] / tot) * 1000) / 10;
+      return { mes: m, pct: pct.toLocaleString('es-CO') + '%', h: Math.round(pct) + '%',
+        bg: pct >= J.metaNivel ? '#1a7f4e' : pct >= 70 ? '#d4a017' : '#E5484D',
+        cump: J.cumplidos[i], incum: J.incumplidos[i] };
+    });
+
+    return {
+      // nav
+      menus,
+      // dashboard junta
+      dashTabs,
+      dtResumen: dashTab === 'resumen', dtComercial: dashTab === 'comercial', dtFinanzas: dashTab === 'finanzas', dtMercadeoJ: dashTab === 'mercadeoJ', dtOperacion: dashTab === 'operacion',
+      pygRows, cajaRows, comBars, topProd, pautaRows, alianzas, nivelBars,
+      obsOperacion: this.JUNTA.obsOperacion,
+      closeMenu: () => this.setState({ open: null }),
+      goDashboard: () => this.go('dashboard'),
+      goOps: () => this.go('ops'),
+      dashColor: screen === 'dashboard' ? '#E8C55A' : '#b5b5b3',
+      dashBorder: screen === 'dashboard' ? '#BE9A2E' : 'transparent',
+      goComunicacion: () => this.go('comunicacion'),
+      comColor: screen === 'comunicacion' ? '#E8C55A' : '#b5b5b3',
+      comBorder: screen === 'comunicacion' ? '#BE9A2E' : 'transparent',
+      // screens
+      isDashboard: screen === 'dashboard',
+      isCotizaciones: screen === 'cotizaciones',
+      isCrm: screen === 'crm',
+      isProductos: screen === 'productos',
+      isCatalogos: screen === 'catalogos',
+      isShopify: screen === 'shopify',
+      isInventarios: screen === 'inventarios',
+      isOps: screen === 'ops',
+      isCompras: screen === 'compras',
+      isMercadeo: screen === 'mercadeo',
+      isEmpleados: screen === 'empleados',
+      isVacaciones: screen === 'vacaciones',
+      isEvaluaciones: screen === 'evaluaciones',
+      isReclutamiento: screen === 'reclutamiento',
+      isComunicacion: screen === 'comunicacion',
+      // crm
+      crmCols,
+      // empleados
+      empleados,
+      empNombre: emp.nombre, empIni: emp.ini, empCargo: emp.cargo, empIngreso: emp.ingreso,
+      empCedula: emp.cedula, empContrato: emp.contrato, empSalario: emp.salario, empEps: emp.eps,
+      empExtras: emp.extras, empDeduc: emp.deduc, empNeto: emp.neto,
+      // nuevos screens
+      isVentasAnalisis: screen === 'ventasAnalisis',
+      isOpDetail: screen === 'opDetail',
+      isGarantias: screen === 'garantias',
+      isEntregas: screen === 'entregas',
+      // ops
+      opsList, opCols, calCells,
+      opViewLista: opView === 'lista', opViewKanban: opView === 'kanban', opViewCal: opView === 'calendario',
+      setVLista: () => this.setState({ opView: 'lista' }),
+      setVKanban: () => this.setState({ opView: 'kanban' }),
+      setVCal: () => this.setState({ opView: 'calendario' }),
+      vListaBg: opView === 'lista' ? '#2B2B2B' : '#fff', vListaFg: opView === 'lista' ? '#fff' : '#5a5a5a',
+      vKanbanBg: opView === 'kanban' ? '#2B2B2B' : '#fff', vKanbanFg: opView === 'kanban' ? '#fff' : '#5a5a5a',
+      vCalBg: opView === 'calendario' ? '#2B2B2B' : '#fff', vCalFg: opView === 'calendario' ? '#fff' : '#5a5a5a',
+      calByEntrega: () => this.setState({ calField: 'entrega' }),
+      calByCreada: () => this.setState({ calField: 'creada' }),
+      calEntBg: calField === 'entrega' ? '#F4F0E4' : '#fff', calEntFg: calField === 'entrega' ? '#8a6f1d' : '#5a5a5a', calEntBc: calField === 'entrega' ? '#BE9A2E' : '#ddd',
+      calCreBg: calField === 'creada' ? '#F4F0E4' : '#fff', calCreFg: calField === 'creada' ? '#8a6f1d' : '#5a5a5a', calCreBc: calField === 'creada' ? '#BE9A2E' : '#ddd',
+      // op detail
+      backToOps: () => this.go('ops'),
+      printOp: () => window.print(),
+      opDId: opDd.id, opDCliente: opDd.cliente, opDCiudad: opDd.ciudad, opDDir: opDd.dir, opDTel: opDd.tel,
+      opDInst: opDd.inst ? 'Con instalación' : 'Sin instalación', opDOrigen: opDd.origen, opDOBg: opDd.oBg, opDOFg: opDd.oFg,
+      opDCreada: opDd.creadaF, opDEBg: opDd.eBg, opDEFg: opDd.eFg, opDELabel: opDd.eLabel, opDAnticipo: opDd.anticipo,
+      opDItems, opDTotal, opDSteps,
+      // shopify
+      shopTabs,
+      shopTabNuevas: shopTab === 'nuevas', shopTabHist: shopTab === 'historico', shopTabAna: shopTab === 'analitica',
+      setShopNuevas: () => this.setState({ shopTab: 'nuevas' }),
+      setShopHist: () => this.setState({ shopTab: 'historico' }),
+      setShopAna: () => this.setState({ shopTab: 'analitica' }),
+      stNBg: shopTab === 'nuevas' ? '#2B2B2B' : '#fff', stNFg: shopTab === 'nuevas' ? '#fff' : '#5a5a5a',
+      stHBg: shopTab === 'historico' ? '#2B2B2B' : '#fff', stHFg: shopTab === 'historico' ? '#fff' : '#5a5a5a',
+      stABg: shopTab === 'analitica' ? '#2B2B2B' : '#fff', stAFg: shopTab === 'analitica' ? '#fff' : '#5a5a5a',
+      shopPathCur: this.shopPath(sm.cur, sm.max), shopPathPrev: this.shopPath(sm.prev, sm.max),
+      shopY0: sm.y0, shopY1: sm.y1, shopY2: sm.y2, shopMetricLabel: sm.label, shopMetricValue: sm.value, shopMetricDelta: sm.delta,
+      // compras
+      comprasRows,
+      // garantías
+      garRows,
+      garDId: garD.id, garDCliente: garD.cliente, garDProducto: garD.producto, garDProblema: garD.problema,
+      garDEstado: garD.estado, garDEBg: garD.eBg, garDEFg: garD.eFg, garDFecha: garD.fecha, garDOp: garD.op,
+      garDDetalle: garD.detalle, garDResol: garD.resol,
+      // entregas
+      entBars,
+      entregasRec: this.ENTREGAS_REC,
+      // ventas análisis
+      ventasChips, ventasRows,
+      // inventario
+      invChips, invBars, invUnidad: invSel.unidad, invSelName: invSel.n
+    };
+  }
+}
+</script>
+</body>
+</html>
