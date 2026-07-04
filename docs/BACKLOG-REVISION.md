@@ -19,11 +19,12 @@
   libre A PROPÓSITO — el modelo ATO/MTO cobra recargo justamente por colores NO
   estándar, así que un FK a `colores` los bloquearía. `colores` es la fuente del
   dropdown de estándar en la UI; "no estándar" = no pertenece a la tabla.
-- **DECISIÓN PARA JUAN — bloqueo por saldo**: ¿la BD debe IMPEDIR marcar
-  Entregada una OP con saldo pendiente (v_op_saldo.pagado < total), o basta
-  con advertencia prominente en la UI y que un Admin pueda autorizar
-  excepciones? Recomendación: advertencia + confirmación explícita de Admin
-  (bloqueo duro genera fricción cuando un pago llegó pero no se ha registrado).
+- **DECIDIDO por Juan (2026-07-04) — bloqueo por saldo**: la BD IMPIDE marcar
+  Entregada una OP con saldo pendiente (implementado en fn_validar_entrega_op).
+  Si el pago llegó pero no está registrado, el flujo correcto es registrar el
+  pago primero. La UI debe mostrar el saldo (v_op_saldo) de forma prominente
+  ANTES de que el operario intente mover la ficha, para que el error no lo
+  sorprenda al final.
 - **Descuento de BOM en garantías**: las garantías reparan piezas puntuales, no
   refabrican el producto completo → los consumos se registran como movimientos
   manuales colgados de garantia_id (no hay fn_descontar_bom para garantías).

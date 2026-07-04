@@ -1088,6 +1088,8 @@ language plpgsql as $$
 declare
   v_etapa etapas_produccion%rowtype;
   v_primer_entrega smallint;
+  v_total  numeric(14,2);
+  v_pagado numeric(14,2);
 begin
   select * into v_etapa from etapas_produccion where id = new.etapa_id;
 
@@ -1133,6 +1135,19 @@ begin
        or exists (select 1 from op_items oi
                    where oi.op_id = new.id and oi.cantidad_entregada < oi.cantidad) then
       raise exception 'La OP % no puede marcarse entregada: tiene ítems sin despachar al 100%%', new.numero;
+    end if;
+
+    -- REGLA DE JUAN (2026-07-04): con saldo pendiente NO hay entrega. Si el
+    -- cliente ya pagó, se registra el pago primero — eso también es la realidad.
+    select coalesce(sum(oi.cantidad * oi.precio_unit), 0) into v_total
+      from op_items oi where oi.op_id = new.id;
+    select coalesce(sum(p.monto), 0) into v_pagado
+      from pagos p
+     where p.op_id = new.id
+        or (new.cotizacion_id is not null and p.cotizacion_id = new.cotizacion_id);
+    if v_pagado < v_total then
+      raise exception 'La OP % tiene saldo pendiente (pagado $% de $%): registre el pago antes de marcarla entregada',
+        new.numero, v_pagado, v_total;
     end if;
   end if;
   return new;
