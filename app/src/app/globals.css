@@ -59,3 +59,23 @@ body {
   color: var(--color-carbon);
   font-family: var(--font-sans);
 }
+
+/*
+ * Versión imprimible (detalle de O.P.): layout limpio A4.
+ * Los elementos de navegación/interacción llevan la clase `no-print`
+ * o la variante Tailwind `print:hidden`.
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

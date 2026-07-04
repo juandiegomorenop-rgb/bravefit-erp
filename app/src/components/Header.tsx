@@ -22,7 +22,7 @@ export function Header({ nav, email }: { nav: NavItem[]; email: string | null })
       : pathname.startsWith(`/${item.href.split("/")[1]}`);
 
   return (
-    <header className="sticky top-0 z-50 h-16 bg-carbon text-white">
+    <header className="sticky top-0 z-50 h-16 bg-carbon text-white print:hidden">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Inicio">
           <Image

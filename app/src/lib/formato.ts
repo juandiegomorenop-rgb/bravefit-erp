@@ -21,6 +21,30 @@ export function formatFecha(fecha: Date): string {
   }).format(fecha);
 }
 
+/** Formatea fecha corta es-CO: new Date(2026, 2, 15) → "15 mar 2026". */
+export function formatFechaCorta(fecha: Date): string {
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+    .format(fecha)
+    .replace(/\./g, "");
+}
+
+/** Formatea fecha y hora cortas es-CO: "15 mar 2026, 2:05 p. m.". */
+export function formatFechaHora(fecha: Date): string {
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    year: "numeric",
+  })
+    .format(fecha)
+    .replace(/\./g, "");
+}
+
 export type Semaforo = "ninguno" | "amarillo" | "rojo" | "vencido";
 
 /**
