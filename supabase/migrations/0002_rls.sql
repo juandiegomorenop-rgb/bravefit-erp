@@ -116,8 +116,6 @@ call pr_politicas_modulo('ordenes_pedido',          'produccion');
 call pr_politicas_modulo('op_items',                'produccion');
 call pr_politicas_modulo('op_historial_etapas',     'produccion');
 call pr_politicas_modulo('op_observaciones',        'produccion');
-call pr_politicas_modulo('existencias',             'produccion');
-call pr_politicas_modulo('movimientos_inventario',  'produccion');
 call pr_politicas_modulo('solicitudes_compra',      'produccion');
 call pr_politicas_modulo('sc_items',                'produccion');
 call pr_politicas_modulo('recepciones',             'produccion');
@@ -126,6 +124,22 @@ call pr_politicas_modulo('garantias',               'produccion');
 call pr_politicas_modulo('materiales',              'produccion');
 call pr_politicas_modulo('proveedores',             'produccion');
 call pr_politicas_modulo('producto_componentes',    'produccion');  -- BOM lo usa planta
+
+-- Inventario: los SALDOS los mantiene solo el trigger del kardex (security
+-- definer) — ningún usuario tiene UPDATE directo sobre existencias, y el
+-- kardex y los despachos son inmutables (sin política de update/delete).
+create policy existencias_sel on existencias for select to authenticated
+  using (fn_puede('produccion','ver'));
+create policy existencias_ins on existencias for insert to authenticated
+  with check (fn_puede('produccion','crear'));
+create policy movinv_sel on movimientos_inventario for select to authenticated
+  using (fn_puede('produccion','ver'));
+create policy movinv_ins on movimientos_inventario for insert to authenticated
+  with check (fn_puede('produccion','crear'));
+create policy despachos_sel on op_despachos for select to authenticated
+  using (fn_puede('produccion','ver'));
+create policy despachos_ins on op_despachos for insert to authenticated
+  with check (fn_puede('produccion','crear'));
 
 -- Mercadeo
 call pr_politicas_modulo('campanas',           'mercadeo');
@@ -165,6 +179,15 @@ create policy productos_upd on productos for update to authenticated
 create policy prod_dim_sel on producto_dimensiones for select to authenticated
   using (fn_puede('ventas','ver') or fn_puede('produccion','ver'));
 create policy prod_dim_mod on producto_dimensiones for all to authenticated
+  using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
+
+-- facturas: las lee ventas Y producción (garantías muestran # factura);
+-- las escribe el worker de Siigo (service_role) o quien edite ventas
+create policy facturas_sel on facturas for select to authenticated
+  using (fn_puede('ventas','ver') or fn_puede('produccion','ver'));
+create policy facturas_ins on facturas for insert to authenticated
+  with check (fn_puede('ventas','editar'));
+create policy facturas_upd on facturas for update to authenticated
   using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
 
 -- ------------------------------------------------------------

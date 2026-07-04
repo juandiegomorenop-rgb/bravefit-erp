@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/*
+ * Tokens de diseño ERP Bravefit — fuente: design/README.md (alta fidelidad).
+ * Expuestos como variables CSS vía @theme de Tailwind 4:
+ * se usan como clases (bg-carbon, text-dorado-oscuro, rounded-card, …)
+ * o como var(--color-carbon) en CSS puro.
+ */
+@theme {
+  /* Marca */
+  --color-carbon: #2b2b2b;
+  --color-dorado: #be9a2e;
+  --color-dorado-hover: #d4af3a;
+  --color-dorado-oscuro: #8a6f1d;
+  --color-dorado-claro: #e8c55a;
+  --color-naranja: #fd5c13; /* solo alertas/destacados */
+  --color-gris-claro: #d5d5d5;
+
+  /* Fondos */
+  --color-fondo: #f4f4f3;
+  --color-card: #ffffff;
+  --color-sutil: #faf9f7;
+  --color-dorado-suave: #f4f0e4;
+  --color-kanban: #edece9;
+  --color-aviso: #fdf6e8;
+  --color-aviso-borde: #ecd9a3;
+  --color-aviso-texto: #7a5f14;
+  --color-borde: #ececea;
+
+  /* Semánticos */
+  --color-verde: #1a7f4e;
+  --color-verde-bg: #e8f3ec;
+  --color-ambar: #a06d10;
+  --color-ambar-bg: #fdf3e4;
+  --color-rojo: #c2410c;
+  --color-rojo-bg: #fce9e3;
+  --color-azul: #3b5bb5;
+  --color-azul-bg: #edf0fa;
+  --color-neutro: #5a5a5a;
+  --color-neutro-bg: #f0f0ee;
+
+  /* Semáforo de entrega de O.P. (calculado, nunca almacenado) */
+  --color-semaforo-amarillo: #f5c518;
+  --color-semaforo-amarillo-texto: #5a4a00;
+  --color-semaforo-rojo: #e5484d;
+  --color-semaforo-vencido: #1a1a1a; /* texto blanco */
+
+  /* Tipografía */
+  --font-sans: "Helvetica Neue", Arial, sans-serif;
+
+  /* Radios */
+  --radius-card: 14px;
+  --radius-pill: 99px;
+  --radius-input: 10px;
+}
+
+body {
+  background: var(--color-fondo);
+  color: var(--color-carbon);
+  font-family: var(--font-sans);
+}

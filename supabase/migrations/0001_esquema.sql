@@ -84,9 +84,12 @@ create table secuencias (
   siguiente integer not null default 1
 );
 
--- Entrega el siguiente número formateado de forma atómica (bloquea la fila)
+-- Entrega el siguiente número formateado de forma atómica (bloquea la fila).
+-- SECURITY DEFINER: el consecutivo lo consume cualquier rol autorizado a crear
+-- el documento, aunque no tenga permiso de escritura directa sobre secuencias.
 create or replace function fn_siguiente_numero(p_clave text)
-returns text language plpgsql as $$
+returns text language plpgsql
+security definer set search_path = public as $$
 declare v_num text;
 begin
   update secuencias
@@ -186,7 +189,9 @@ create table clientes (
   eliminado_en timestamptz,
   creado_en    timestamptz not null default now()
 );
-create index idx_clientes_email on clientes (lower(email));
+-- Único: el matching por email del webhook Shopify debe ser determinista
+create unique index uq_clientes_email on clientes (lower(email))
+  where email is not null and eliminado_en is null;
 create index idx_clientes_nombre on clientes using gin (to_tsvector('spanish', nombre));
 
 create table proveedores (
@@ -317,16 +322,17 @@ create table cotizaciones (
   pago_anticipado_completo boolean not null default false,
   valida_hasta  date not null,                     -- creado + 15 días (default en app)
   origen        text not null default 'manual' check (origen in ('manual','chat','planner')),
-  siigo_factura_id     text,                       -- id factura en Siigo
-  siigo_factura_numero text,                       -- número fiscal devuelto por Siigo
+  -- la factura Siigo vive en la tabla facturas (una cotización puede tener varias)
   notas         text,
   activo        boolean not null default true,
   eliminado_en  timestamptz,
-  creado_en     timestamptz not null default now()
+  creado_en     timestamptz not null default now(),
+  check (valida_hasta >= creado_en::date)
 );
 create index idx_cotizaciones_cliente on cotizaciones (cliente_id);
 create index idx_cotizaciones_estado on cotizaciones (estado_id);
 create index idx_cotizaciones_creado on cotizaciones (creado_en desc);
+create index idx_cotizaciones_vendedor on cotizaciones (vendedor_id);
 
 create table cotizacion_items (
   id            uuid primary key default gen_random_uuid(),
@@ -336,7 +342,7 @@ create table cotizacion_items (
   es_transporte boolean not null default false,
   aplica_iva    boolean not null default true,     -- transporte: elegible sin IVA
   cantidad      numeric(12,3) not null check (cantidad > 0),
-  precio_unit   numeric(14,2) not null,            -- CON IVA si aplica_iva
+  precio_unit   numeric(14,2) not null check (precio_unit >= 0), -- CON IVA si aplica_iva
   alto_override_cm  numeric(8,2),
   fondo_override_cm numeric(8,2),
   color         text,
@@ -344,6 +350,7 @@ create table cotizacion_items (
   check (producto_id is not null or descripcion is not null)
 );
 create index idx_cotitems_cotizacion on cotizacion_items (cotizacion_id);
+create index idx_cotitems_producto on cotizacion_items (producto_id);
 
 create table oportunidades (
   id             uuid primary key default gen_random_uuid(),
@@ -359,6 +366,9 @@ create table oportunidades (
   creado_en      timestamptz not null default now()
 );
 create index idx_oportunidades_etapa on oportunidades (etapa_id);
+create index idx_oportunidades_cliente on oportunidades (cliente_id);
+create index idx_oportunidades_vendedor on oportunidades (vendedor_id);
+create index idx_oportunidades_cotizacion on oportunidades (cotizacion_id);
 
 create table pedidos_web (
   id               uuid primary key default gen_random_uuid(),
@@ -372,6 +382,8 @@ create table pedidos_web (
   payload          jsonb not null,                 -- respaldo íntegro del webhook
   recibido_en      timestamptz not null default now()
 );
+create index idx_pedidosweb_op on pedidos_web (op_id);
+create index idx_pedidosweb_cliente on pedidos_web (cliente_id);
 
 -- Métricas diarias de la tienda (para la pestaña Analítica estilo Shopify)
 create table shopify_metricas_diarias (
@@ -399,7 +411,9 @@ create table ordenes_pedido (
   requiere_instalacion boolean not null default false,
   direccion_entrega text,
   fecha_entrega_pactada date,
-  fecha_entregada       date,                      -- solo cuando 100% despachado
+  fecha_entregada       date,                      -- solo cuando 100% despachado (trigger lo garantiza)
+  mp_descontada_en timestamptz,                    -- idempotencia del descuento de BOM:
+                                                   -- se estampa una sola vez al entrar a Corte
   notas         text,
   activo        boolean not null default true,
   eliminado_en  timestamptz,
@@ -407,8 +421,14 @@ create table ordenes_pedido (
   -- SEMÁFORO: calculado siempre desde fecha_entrega_pactada, NUNCA almacenado
 );
 create index idx_op_etapa on ordenes_pedido (etapa_id);
-create index idx_op_entrega on ordenes_pedido (fecha_entrega_pactada);
 create index idx_op_cliente on ordenes_pedido (cliente_id);
+create index idx_op_cotizacion on ordenes_pedido (cotizacion_id);
+create index idx_op_pedido_web on ordenes_pedido (pedido_web_id);
+-- Parciales: el semáforo/dashboard consulta OPs abiertas; Entregas consulta cerradas
+create index idx_op_abiertas on ordenes_pedido (fecha_entrega_pactada)
+  where activo and fecha_entregada is null;
+create index idx_op_entregadas on ordenes_pedido (fecha_entregada)
+  where fecha_entregada is not null;
 
 alter table pedidos_web
   add constraint fk_pedidos_web_op foreign key (op_id) references ordenes_pedido(id);
@@ -419,13 +439,26 @@ create table op_items (
   producto_id  uuid not null references productos(id),
   cantidad     numeric(12,3) not null check (cantidad > 0),
   cantidad_entregada numeric(12,3) not null default 0 check (cantidad_entregada >= 0),
-  precio_unit  numeric(14,2) not null,
+  precio_unit  numeric(14,2) not null check (precio_unit >= 0),
   alto_override_cm  numeric(8,2),
   fondo_override_cm numeric(8,2),
   color        text,
   check (cantidad_entregada <= cantidad)           -- entregas parciales controladas
 );
 create index idx_opitems_op on op_items (op_id);
+create index idx_opitems_producto on op_items (producto_id);
+
+-- Despachos por evento: trazabilidad de cada entrega parcial (cuándo, cuánto,
+-- quién). cantidad_entregada de op_items se DERIVA de aquí vía trigger.
+create table op_despachos (
+  id          bigint generated always as identity primary key,
+  op_item_id  uuid not null references op_items(id) on delete cascade,
+  cantidad    numeric(12,3) not null check (cantidad > 0),
+  usuario_id  uuid references usuarios(id),
+  nota        text,
+  en          timestamptz not null default now()
+);
+create index idx_despachos_item on op_despachos (op_item_id);
 
 create table op_historial_etapas (
   id         bigint generated always as identity primary key,
@@ -449,31 +482,47 @@ create table op_observaciones (
 
 -- ---- Inventario (una sola bodega) --------------------------
 
+-- Los saldos NUNCA se escriben desde la app: los actualiza el trigger del
+-- kardex (fn_aplicar_movimiento) de forma atómica. Los CHECK >= 0 abortan
+-- cualquier movimiento que dejaría stock negativo.
 create table existencias (
   id          uuid primary key default gen_random_uuid(),
   producto_id uuid references productos(id),
   material_id uuid references materiales(id),
   tipo        text not null check (tipo in ('terminado','materia_prima','en_proceso')),
-  cantidad_disponible numeric(12,3) not null default 0,
-  cantidad_reservada  numeric(12,3) not null default 0,
-  check (num_nonnulls(producto_id, material_id) = 1),
+  cantidad_disponible numeric(12,3) not null default 0 check (cantidad_disponible >= 0),
+  cantidad_reservada  numeric(12,3) not null default 0 check (cantidad_reservada >= 0),
+  -- coherencia tipo/entidad: materiales solo materia_prima; productos terminado/en_proceso
+  check ((material_id is not null and producto_id is null and tipo = 'materia_prima')
+      or (producto_id is not null and material_id is null and tipo in ('terminado','en_proceso'))),
   unique (producto_id, tipo),
   unique (material_id, tipo)
 );
 
+-- Kardex INMUTABLE: no se edita ni borra; toda corrección es un 'ajuste' nuevo.
 create table movimientos_inventario (
   id            bigint generated always as identity primary key,
   existencia_id uuid not null references existencias(id),
   tipo          text not null check (tipo in ('entrada_compra','salida_produccion','entrada_produccion','salida_venta','ajuste','devolucion','entrada_garantia','salida_garantia')),
-  cantidad      numeric(12,3) not null,           -- signo según tipo (validado en app)
-  costo_unit    numeric(14,4),                    -- para recalcular promedio ponderado
+  cantidad      numeric(12,3) not null,
+  costo_unit    numeric(14,4),                    -- obligatorio en compras (check abajo)
   op_id         uuid references ordenes_pedido(id),
   recepcion_id  uuid,                             -- FK diferida
   usuario_id    uuid references usuarios(id),
   nota          text,
-  en            timestamptz not null default now()
+  en            timestamptz not null default now(),
+  check (cantidad <> 0),
+  -- el signo lo garantiza la BD, no la app: entradas > 0, salidas < 0, ajuste libre
+  check (case
+           when tipo in ('entrada_compra','entrada_produccion','devolucion','entrada_garantia') then cantidad > 0
+           when tipo in ('salida_produccion','salida_venta','salida_garantia') then cantidad < 0
+           else true
+         end),
+  check (tipo <> 'entrada_compra' or costo_unit is not null)
 );
 create index idx_movinv_existencia on movimientos_inventario (existencia_id, en desc);
+create index idx_movinv_op on movimientos_inventario (op_id);
+create index idx_movinv_recepcion on movimientos_inventario (recepcion_id);
 
 -- Consumo mensual por material (alimenta buffers y tendencias) = vista, no tabla
 
@@ -495,6 +544,7 @@ create table solicitudes_compra (
   eliminado_en     timestamptz,
   creado_en        timestamptz not null default now()
 );
+create index idx_sc_estado on solicitudes_compra (estado);
 
 create table sc_items (
   id          uuid primary key default gen_random_uuid(),
@@ -512,6 +562,7 @@ create table recepciones (
   fecha      timestamptz not null default now(),
   cerrada    boolean not null default false        -- cierra cuando no quedan faltantes
 );
+create index idx_recepciones_sc on recepciones (sc_id);
 
 alter table movimientos_inventario
   add constraint fk_movinv_recepcion foreign key (recepcion_id) references recepciones(id);
@@ -520,11 +571,13 @@ create table recepcion_items (
   id             uuid primary key default gen_random_uuid(),
   recepcion_id   uuid not null references recepciones(id) on delete cascade,
   sc_item_id     uuid not null references sc_items(id),
-  cant_recibida  numeric(12,3) not null default 0,
-  cant_faltante  numeric(12,3) not null default 0,
+  cant_recibida  numeric(12,3) not null default 0 check (cant_recibida >= 0),
+  cant_faltante  numeric(12,3) not null default 0 check (cant_faltante >= 0),
   nota           text,
   faltante_resuelto boolean not null default false -- seguimiento hasta cierre
 );
+create index idx_recitems_recepcion on recepcion_items (recepcion_id);
+create index idx_recitems_scitem on recepcion_items (sc_item_id);
 
 -- ---- Garantías (prioridad ambulancia) ----------------------
 
@@ -535,8 +588,8 @@ create table garantias (
   producto_id   uuid references productos(id),
   cliente_id    uuid not null references clientes(id),
   vendedor_id   uuid references usuarios(id),      -- contacto ante dudas
-  factura_numero    text,
-  cotizacion_numero text,
+  -- # cotización y # factura NO se duplican como texto: se derivan de la OP
+  -- (op → cotizacion → numero) y de la tabla facturas (op_id / cotizacion_id)
   problema      text not null,
   detalle       text,
   recogida      text not null default 'por_definir'
@@ -546,9 +599,12 @@ create table garantias (
   abierta_en    timestamptz not null default now(),
   cerrada_en    timestamptz,
   activo        boolean not null default true,
-  eliminado_en  timestamptz
+  eliminado_en  timestamptz,
+  check (cerrada_en is null or cerrada_en >= abierta_en)
 );
 create index idx_garantias_abierta on garantias (abierta_en desc);
+create index idx_garantias_etapa on garantias (etapa_id);
+create index idx_garantias_op on garantias (op_id);
 
 -- ------------------------------------------------------------
 -- 6 · MERCADEO
@@ -562,7 +618,8 @@ create table campanas (
   inicio     date,
   fin        date,
   activo     boolean not null default true,
-  eliminado_en timestamptz
+  eliminado_en timestamptz,
+  check (fin is null or inicio is null or fin >= inicio)
 );
 
 create table campana_metricas (
@@ -594,6 +651,7 @@ create table encuesta_respuestas (
   respuestas  jsonb not null,
   en          timestamptz not null default now()
 );
+create index idx_encresp_op on encuesta_respuestas (op_id);
 
 create table redes_metricas (
   id            bigint generated always as identity primary key,
@@ -743,6 +801,23 @@ create table nivel_servicio_mensual (              -- pestaña Operación del da
   cargado_por uuid references usuarios(id)
 );
 
+-- Facturas emitidas en Siigo (Siigo es la autoridad fiscal; aquí solo el vínculo).
+-- Vive aparte de cotizaciones porque: (a) una OP Shopify/WhatsApp no tiene
+-- cotización, (b) una cotización PP puede facturarse en 2 (anticipo + saldo).
+create table facturas (
+  id            uuid primary key default gen_random_uuid(),
+  siigo_id      text unique,                      -- id del documento en Siigo
+  numero        text unique,                      -- número fiscal devuelto por Siigo
+  cotizacion_id uuid references cotizaciones(id),
+  op_id         uuid references ordenes_pedido(id),
+  total         numeric(14,2),
+  emitida_en    timestamptz,
+  creado_en     timestamptz not null default now(),
+  check (num_nonnulls(cotizacion_id, op_id) >= 1)
+);
+create index idx_facturas_cotizacion on facturas (cotizacion_id);
+create index idx_facturas_op on facturas (op_id);
+
 -- Cola de integraciones: webhooks entran aquí; un worker los procesa.
 create table integracion_eventos (
   id           bigint generated always as identity primary key,
@@ -781,8 +856,12 @@ create table chat_mensajes (
 -- 9 · VISTAS DE APOYO
 -- ------------------------------------------------------------
 
+-- TODAS las vistas con security_invoker: aplican el RLS del usuario que
+-- consulta (sin esto, en PG15 una vista corre con permisos del dueño y
+-- se salta el RLS de las tablas base).
+
 -- Entregas = OPs con fecha_entregada (regla: no es tabla aparte)
-create view v_entregas as
+create view v_entregas with (security_invoker = true) as
   select op.id, op.numero, op.cliente_id, op.ciudad_id, op.fecha_entregada,
          op.requiere_instalacion,
          (select sum(oi.cantidad * oi.precio_unit) from op_items oi where oi.op_id = op.id) as valor
@@ -790,7 +869,7 @@ create view v_entregas as
    where op.fecha_entregada is not null and op.activo;
 
 -- Producto principal de una OP: el rack; si no hay, el de mayor precio
-create view v_op_producto_principal as
+create view v_op_producto_principal with (security_invoker = true) as
   select distinct on (oi.op_id)
          oi.op_id, p.id as producto_id, p.nombre, p.es_rack,
          (select count(*) - 1 from op_items x where x.op_id = oi.op_id) as otros_items
@@ -799,7 +878,7 @@ create view v_op_producto_principal as
    order by oi.op_id, p.es_rack desc, oi.precio_unit desc;
 
 -- Consumo mensual por material (tendencias + buffers)
-create view v_consumo_material_mensual as
+create view v_consumo_material_mensual with (security_invoker = true) as
   select e.material_id, date_trunc('month', m.en)::date as mes,
          sum(abs(m.cantidad)) as consumo
     from movimientos_inventario m
@@ -808,11 +887,163 @@ create view v_consumo_material_mensual as
    group by e.material_id, date_trunc('month', m.en);
 
 -- ------------------------------------------------------------
--- 10 · TRIGGER GENÉRICO DE AUDITORÍA
+-- 10 · INTEGRIDAD DE NEGOCIO (la BD garantiza las reglas, no la app)
+-- ------------------------------------------------------------
+
+-- 10.1 · Kardex: aplicar movimiento al saldo + costo promedio ponderado.
+-- SECURITY DEFINER: el saldo lo mantiene la BD; el usuario solo necesita
+-- permiso de INSERT sobre movimientos_inventario. FOR UPDATE serializa
+-- movimientos concurrentes sobre la misma existencia (webhooks, Corte…).
+create or replace function fn_aplicar_movimiento() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_saldo_previo numeric(12,3);
+  v_material     uuid;
+  v_costo_previo numeric(14,4);
+begin
+  select e.cantidad_disponible, e.material_id
+    into v_saldo_previo, v_material
+    from existencias e
+   where e.id = new.existencia_id
+     for update;
+
+  -- promedio ponderado: solo entradas con costo sobre materia prima
+  if v_material is not null and new.costo_unit is not null and new.cantidad > 0
+     and new.tipo in ('entrada_compra','devolucion') then
+    select costo_promedio into v_costo_previo
+      from materiales where id = v_material for update;
+    update materiales
+       set costo_promedio = round(
+             (greatest(v_saldo_previo, 0) * v_costo_previo + new.cantidad * new.costo_unit)
+             / (greatest(v_saldo_previo, 0) + new.cantidad), 4)
+     where id = v_material;
+  end if;
+
+  update existencias
+     set cantidad_disponible = cantidad_disponible + new.cantidad
+   where id = new.existencia_id;
+  -- si queda negativo, el CHECK de existencias aborta TODA la transacción
+  return new;
+end $$;
+
+create trigger trg_aplicar_movimiento after insert on movimientos_inventario
+  for each row execute function fn_aplicar_movimiento();
+
+-- 10.2 · Kardex y despachos inmutables (correcciones = ajuste/despacho nuevo)
+create or replace function fn_inmutable() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'La tabla % es inmutable: registre un ajuste o un evento nuevo', tg_table_name;
+end $$;
+
+create trigger trg_movinv_inmutable before update or delete on movimientos_inventario
+  for each row execute function fn_inmutable();
+create trigger trg_despachos_inmutable before update on op_despachos
+  for each row execute function fn_inmutable();
+
+-- 10.3 · Despachos → cantidad_entregada derivada (nunca editada a mano).
+-- INSERT suma, DELETE (solo Admin/servidor) reversa. Los CHECK de op_items
+-- (0 <= entregada <= cantidad) acotan ambos sentidos atómicamente.
+create or replace function fn_aplicar_despacho() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    update op_items set cantidad_entregada = cantidad_entregada + new.cantidad
+     where id = new.op_item_id;
+    return new;
+  else
+    update op_items set cantidad_entregada = cantidad_entregada - old.cantidad
+     where id = old.op_item_id;
+    return old;
+  end if;
+end $$;
+
+create trigger trg_aplicar_despacho after insert or delete on op_despachos
+  for each row execute function fn_aplicar_despacho();
+
+-- 10.4 · Una OP solo se marca Entregada con el 100% despachado.
+-- Al entrar a la etapa de entrega con todo despachado, estampa la fecha sola.
+create or replace function fn_validar_entrega_op() returns trigger
+language plpgsql as $$
+declare v_es_entrega boolean;
+begin
+  select es_entrega into v_es_entrega
+    from etapas_produccion where id = new.etapa_id;
+
+  if v_es_entrega and new.fecha_entregada is null then
+    new.fecha_entregada := current_date;
+  end if;
+
+  if (new.fecha_entregada is not null and old.fecha_entregada is null)
+     or (v_es_entrega and new.etapa_id is distinct from old.etapa_id) then
+    if not exists (select 1 from op_items oi where oi.op_id = new.id)
+       or exists (select 1 from op_items oi
+                   where oi.op_id = new.id and oi.cantidad_entregada < oi.cantidad) then
+      raise exception 'La OP % no puede marcarse entregada: tiene ítems sin despachar al 100%%', new.numero;
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger trg_op_entrega before update on ordenes_pedido
+  for each row execute function fn_validar_entrega_op();
+
+-- 10.5 · CRM: no se puede Ganar (→ OP automática) sin cotización con ítems,
+-- y 'días en etapa' se marca solo al mover la ficha.
+create or replace function fn_validar_ganada() returns trigger
+language plpgsql as $$
+begin
+  if new.etapa_id is distinct from old.etapa_id
+     and exists (select 1 from etapas_crm e where e.id = new.etapa_id and e.es_ganada) then
+    if new.cotizacion_id is null
+       or not exists (select 1 from cotizacion_items ci
+                       where ci.cotizacion_id = new.cotizacion_id) then
+      raise exception 'No se puede ganar la oportunidad sin una cotización con ítems';
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger trg_oportunidad_ganada before update on oportunidades
+  for each row execute function fn_validar_ganada();
+
+create or replace function fn_marcar_movida() returns trigger
+language plpgsql as $$
+begin
+  new.movida_en := now();
+  return new;
+end $$;
+
+create trigger trg_oportunidad_movida before update on oportunidades
+  for each row when (old.etapa_id is distinct from new.etapa_id)
+  execute function fn_marcar_movida();
+
+-- 10.6 · Recepciones: la suma recibida por ítem de SC no supera lo pedido.
+-- FOR UPDATE sobre sc_items serializa recepciones concurrentes del mismo ítem.
+create or replace function fn_validar_recepcion() returns trigger
+language plpgsql as $$
+declare v_pedida numeric(12,3); v_previa numeric(12,3);
+begin
+  select cantidad into v_pedida from sc_items where id = new.sc_item_id for update;
+  select coalesce(sum(cant_recibida), 0) into v_previa
+    from recepcion_items
+   where sc_item_id = new.sc_item_id and id <> new.id;
+  if v_previa + new.cant_recibida > v_pedida then
+    raise exception 'Recepción supera lo solicitado: % recibido de % pedido',
+      v_previa + new.cant_recibida, v_pedida;
+  end if;
+  return new;
+end $$;
+
+create trigger trg_validar_recepcion before insert or update on recepcion_items
+  for each row execute function fn_validar_recepcion();
+
+-- ------------------------------------------------------------
+-- 11 · TRIGGER GENÉRICO DE AUDITORÍA
 -- ------------------------------------------------------------
 
 create or replace function fn_auditar() returns trigger
-language plpgsql security definer as $$
+language plpgsql security definer set search_path = public as $$
 declare v_cambios jsonb;
 begin
   if tg_op = 'UPDATE' then
@@ -842,7 +1073,8 @@ begin
     'cotizaciones','cotizacion_items','ordenes_pedido','op_items','oportunidades',
     'productos','materiales','existencias','solicitudes_compra','sc_items',
     'recepciones','recepcion_items','garantias','clientes','proveedores',
-    'empleados','vacaciones','evaluaciones','pyg_mensual','usuarios','permisos'
+    'empleados','vacaciones','evaluaciones','pyg_mensual','usuarios','permisos',
+    'facturas'
   ] loop
     execute format('create trigger trg_aud_%I after insert or update or delete on %I
                     for each row execute function fn_auditar()', t, t);
