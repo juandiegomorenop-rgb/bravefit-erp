@@ -128,18 +128,26 @@ call pr_politicas_modulo('producto_componentes',    'produccion');  -- BOM lo us
 -- Inventario: los SALDOS los mantiene solo el trigger del kardex (security
 -- definer) — ningún usuario tiene UPDATE directo sobre existencias, y el
 -- kardex y los despachos son inmutables (sin política de update/delete).
+-- existencias nacen SIEMPRE en cero: el saldo solo entra por el kardex
+-- (sin esto, un INSERT directo podría forjar inventario fantasma)
 create policy existencias_sel on existencias for select to authenticated
   using (fn_puede('produccion','ver'));
 create policy existencias_ins on existencias for insert to authenticated
-  with check (fn_puede('produccion','crear'));
+  with check (fn_puede('produccion','crear')
+              and cantidad_disponible = 0 and cantidad_reservada = 0);
+-- usuario_id = auth.uid(): la trazabilidad no admite suplantación de autoría
 create policy movinv_sel on movimientos_inventario for select to authenticated
   using (fn_puede('produccion','ver'));
 create policy movinv_ins on movimientos_inventario for insert to authenticated
-  with check (fn_puede('produccion','crear'));
+  with check (fn_puede('produccion','crear') and usuario_id = auth.uid());
 create policy despachos_sel on op_despachos for select to authenticated
   using (fn_puede('produccion','ver'));
 create policy despachos_ins on op_despachos for insert to authenticated
-  with check (fn_puede('produccion','crear'));
+  with check (fn_puede('produccion','crear') and usuario_id = auth.uid());
+-- reversa de un despacho errado: solo quien APRUEBA producción (Admin);
+-- el trigger 10.3 además la rechaza si la OP ya está entregada
+create policy despachos_del on op_despachos for delete to authenticated
+  using (fn_puede('produccion','aprobar'));
 
 -- Mercadeo
 call pr_politicas_modulo('campanas',           'mercadeo');
@@ -190,13 +198,18 @@ create policy facturas_ins on facturas for insert to authenticated
 create policy facturas_upd on facturas for update to authenticated
   using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
 
--- pagos: logística consulta "¿debe saldo?" antes de despachar; escribe ventas
+-- pagos: logística consulta "¿debe saldo?" antes de despachar; escribe ventas.
+-- Los usuarios solo crean/editan pagos fuente='manual' con su propia autoría:
+-- los de 'siigo'/'shopify' los escribe únicamente el sync (service_role) y
+-- ningún usuario puede fabricarlos ni alterarlos.
 create policy pagos_sel on pagos for select to authenticated
   using (fn_puede('ventas','ver') or fn_puede('produccion','ver'));
 create policy pagos_ins on pagos for insert to authenticated
-  with check (fn_puede('ventas','editar'));
+  with check (fn_puede('ventas','editar') and fuente = 'manual'
+              and usuario_id = auth.uid());
 create policy pagos_upd on pagos for update to authenticated
-  using (fn_puede('ventas','editar')) with check (fn_puede('ventas','editar'));
+  using (fn_puede('ventas','editar') and fuente = 'manual')
+  with check (fn_puede('ventas','editar') and fuente = 'manual');
 
 -- ------------------------------------------------------------
 -- RRHH con alcance fino (la diferencia Ops1 vs Ops2)

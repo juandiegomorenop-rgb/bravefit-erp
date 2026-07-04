@@ -1,5 +1,33 @@
 # Backlog de revisión — hallazgos pendientes de verificar
 
+## Resueltos 2026-07-04 (tercera tanda — revisión adversarial de los triggers)
+16 hallazgos confirmados por el segundo workflow, corregidos:
+- [x] Deadlocks del kardex: trigger a nivel STATEMENT con orden canónico por existencia_id.
+- [x] Promedio ponderado: saldo previo a costo 0 ya no diluye (costo entrante = nuevo promedio); 'ajuste' con costo fija costo inicial.
+- [x] fn_validar_entrega_op: cubre INSERT, etapas terminales (Instalado), limpia fecha al retroceder, lock de op_items contra carreras con reversas.
+- [x] fn_descontar_bom(op_id): descuento de BOM atómico e idempotente EN LA BD; mp_descontada_en solo se estampa por esa vía (candado GUC) y nunca se limpia.
+- [x] fn_aplicar_despacho: rechaza despachos sobre OP anulada y reversas sobre OP entregada; orden de locks OP→ítem.
+- [x] cantidad_entregada blindada por trigger (solo cambia vía op_despachos).
+- [x] RLS: existencias nacen en cero; usuario_id = auth.uid() en kardex/despachos/pagos; pagos solo fuente='manual' para usuarios; despachos_del para quien aprueba producción.
+- [x] fn_validar_recepcion security definer (el RLS del invocador la bypaseaba con NULL).
+- [x] Storage: migración 0003 con buckets privados (hojas-vida, cv-aspirantes, adjuntos-op) y políticas espejo del RLS.
+- [x] movimientos_inventario.garantia_id: kardex de garantías trazable (sustenta costo_resolucion).
+- [x] v_op_saldo: total vs pagado por OP para "¿debe saldo?" antes de despachar.
+
+## Decisiones de diseño (deliberadas, no bugs)
+- **Colores libres en ítems/BOM**: cotizacion_items.color y op_items.color son texto
+  libre A PROPÓSITO — el modelo ATO/MTO cobra recargo justamente por colores NO
+  estándar, así que un FK a `colores` los bloquearía. `colores` es la fuente del
+  dropdown de estándar en la UI; "no estándar" = no pertenece a la tabla.
+- **DECISIÓN PARA JUAN — bloqueo por saldo**: ¿la BD debe IMPEDIR marcar
+  Entregada una OP con saldo pendiente (v_op_saldo.pagado < total), o basta
+  con advertencia prominente en la UI y que un Admin pueda autorizar
+  excepciones? Recomendación: advertencia + confirmación explícita de Admin
+  (bloqueo duro genera fricción cuando un pago llegó pero no se ha registrado).
+- **Descuento de BOM en garantías**: las garantías reparan piezas puntuales, no
+  refabrican el producto completo → los consumos se registran como movimientos
+  manuales colgados de garantia_id (no hay fn_descontar_bom para garantías).
+
 La revisión adversarial multiagente (2026-07-04) confirmó 16 hallazgos que **ya
 fueron corregidos** en `0001_esquema.sql` / `0002_rls.sql` (ver commit). Estos
 otros quedaron **sin verificar** porque los agentes verificadores chocaron con

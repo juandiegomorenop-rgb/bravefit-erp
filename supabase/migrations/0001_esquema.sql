@@ -614,6 +614,13 @@ create index idx_garantias_abierta on garantias (abierta_en desc);
 create index idx_garantias_etapa on garantias (etapa_id);
 create index idx_garantias_op on garantias (op_id);
 
+-- Los movimientos de inventario de una garantía se cuelgan DE LA GARANTÍA
+-- (una OP puede tener varias GR-XXXX; op_id solo sería ambiguo). Esto
+-- sustenta costo_resolucion con el kardex real de la reparación.
+alter table movimientos_inventario
+  add column garantia_id uuid references garantias(id);
+create index idx_movinv_garantia on movimientos_inventario (garantia_id);
+
 -- ------------------------------------------------------------
 -- 6 · MERCADEO
 -- ------------------------------------------------------------
@@ -924,6 +931,19 @@ create view v_op_producto_principal with (security_invoker = true) as
     join productos p on p.id = oi.producto_id
    order by oi.op_id, p.es_rack desc, oi.precio_unit desc;
 
+-- Saldo por OP: total facturable vs pagos recibidos (propios o de su
+-- cotización). Logística consulta "¿debe saldo?" aquí antes de despachar.
+create view v_op_saldo with (security_invoker = true) as
+  select o.id as op_id, o.numero,
+         coalesce((select sum(oi.cantidad * oi.precio_unit)
+                     from op_items oi where oi.op_id = o.id), 0) as total,
+         coalesce((select sum(p.monto) from pagos p
+                    where p.op_id = o.id
+                       or (o.cotizacion_id is not null
+                           and p.cotizacion_id = o.cotizacion_id)), 0) as pagado
+    from ordenes_pedido o
+   where o.activo;
+
 -- Consumo mensual por material (tendencias + buffers)
 create view v_consumo_material_mensual with (security_invoker = true) as
   select e.material_id, date_trunc('month', m.en)::date as mes,
@@ -939,42 +959,58 @@ create view v_consumo_material_mensual with (security_invoker = true) as
 
 -- 10.1 · Kardex: aplicar movimiento al saldo + costo promedio ponderado.
 -- SECURITY DEFINER: el saldo lo mantiene la BD; el usuario solo necesita
--- permiso de INSERT sobre movimientos_inventario. FOR UPDATE serializa
--- movimientos concurrentes sobre la misma existencia (webhooks, Corte…).
+-- permiso de INSERT sobre movimientos_inventario.
+-- FOR EACH STATEMENT + orden canónico por existencia_id: dos transacciones
+-- concurrentes (webhooks, dos OPs entrando a Corte con materiales comunes)
+-- adquieren los locks EN EL MISMO ORDEN → sin deadlocks entre multi-fila.
 create or replace function fn_aplicar_movimiento() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
+  m record;
   v_saldo_previo numeric(12,3);
   v_material     uuid;
   v_costo_previo numeric(14,4);
 begin
-  select e.cantidad_disponible, e.material_id
-    into v_saldo_previo, v_material
-    from existencias e
-   where e.id = new.existencia_id
-     for update;
+  for m in select * from nuevos order by existencia_id, id loop
+    select e.cantidad_disponible, e.material_id
+      into v_saldo_previo, v_material
+      from existencias e
+     where e.id = m.existencia_id
+       for update;
+    if not found then
+      raise exception 'Existencia % no existe', m.existencia_id;
+    end if;
 
-  -- promedio ponderado: solo entradas con costo sobre materia prima
-  if v_material is not null and new.costo_unit is not null and new.cantidad > 0
-     and new.tipo in ('entrada_compra','devolucion') then
-    select costo_promedio into v_costo_previo
-      from materiales where id = v_material for update;
-    update materiales
-       set costo_promedio = round(
-             (greatest(v_saldo_previo, 0) * v_costo_previo + new.cantidad * new.costo_unit)
-             / (greatest(v_saldo_previo, 0) + new.cantidad), 4)
-     where id = v_material;
-  end if;
+    -- promedio ponderado: entradas con costo sobre materia prima.
+    -- 'ajuste' con costo permite fijar el costo en cargas iniciales.
+    -- Si el saldo previo no tiene costo (promedio 0), el costo entrante
+    -- ES el nuevo promedio: un saldo fantasma a costo 0 no diluye compras.
+    if v_material is not null and m.costo_unit is not null and m.cantidad > 0
+       and m.tipo in ('entrada_compra','devolucion','ajuste') then
+      select costo_promedio into v_costo_previo
+        from materiales where id = v_material for update;
+      update materiales
+         set costo_promedio = case
+               when v_saldo_previo <= 0 or coalesce(v_costo_previo, 0) = 0
+                 then m.costo_unit
+               else round(
+                 (v_saldo_previo * v_costo_previo + m.cantidad * m.costo_unit)
+                 / (v_saldo_previo + m.cantidad), 4)
+             end
+       where id = v_material;
+    end if;
 
-  update existencias
-     set cantidad_disponible = cantidad_disponible + new.cantidad
-   where id = new.existencia_id;
-  -- si queda negativo, el CHECK de existencias aborta TODA la transacción
-  return new;
+    update existencias
+       set cantidad_disponible = cantidad_disponible + m.cantidad
+     where id = m.existencia_id;
+    -- si queda negativo, el CHECK de existencias aborta TODA la transacción
+  end loop;
+  return null;
 end $$;
 
 create trigger trg_aplicar_movimiento after insert on movimientos_inventario
-  for each row execute function fn_aplicar_movimiento();
+  referencing new table as nuevos
+  for each statement execute function fn_aplicar_movimiento();
 
 -- 10.2 · Kardex y despachos inmutables (correcciones = ajuste/despacho nuevo)
 create or replace function fn_inmutable() returns trigger
@@ -989,18 +1025,38 @@ create trigger trg_despachos_inmutable before update on op_despachos
   for each row execute function fn_inmutable();
 
 -- 10.3 · Despachos → cantidad_entregada derivada (nunca editada a mano).
--- INSERT suma, DELETE (solo Admin/servidor) reversa. Los CHECK de op_items
--- (0 <= entregada <= cantidad) acotan ambos sentidos atómicamente.
+-- INSERT suma, DELETE (solo Admin, política despachos_del) reversa. Los CHECK
+-- de op_items (0 <= entregada <= cantidad) acotan ambos sentidos.
+-- Orden canónico de locks: PRIMERO la OP, LUEGO el ítem (igual que 10.4).
+-- El GUC transaccional 'bravefit.despacho' autoriza al trigger de 10.3b
+-- a modificar cantidad_entregada; nadie más puede tocarla.
 create or replace function fn_aplicar_despacho() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare v_op ordenes_pedido%rowtype;
 begin
+  select o.* into v_op
+    from ordenes_pedido o
+    join op_items oi on oi.op_id = o.id
+   where oi.id = coalesce(new.op_item_id, old.op_item_id)
+     for update of o;
+
   if tg_op = 'INSERT' then
+    if v_op.id is not null and (not v_op.activo or v_op.eliminado_en is not null) then
+      raise exception 'La OP % está anulada: no admite despachos', v_op.numero;
+    end if;
+    perform set_config('bravefit.despacho', '1', true);
     update op_items set cantidad_entregada = cantidad_entregada + new.cantidad
      where id = new.op_item_id;
+    perform set_config('bravefit.despacho', '', true);
     return new;
   else
+    if v_op.fecha_entregada is not null then
+      raise exception 'La OP % ya está entregada: la reversa del despacho no está permitida', v_op.numero;
+    end if;
+    perform set_config('bravefit.despacho', '1', true);
     update op_items set cantidad_entregada = cantidad_entregada - old.cantidad
      where id = old.op_item_id;
+    perform set_config('bravefit.despacho', '', true);
     return old;
   end if;
 end $$;
@@ -1008,21 +1064,71 @@ end $$;
 create trigger trg_aplicar_despacho after insert or delete on op_despachos
   for each row execute function fn_aplicar_despacho();
 
--- 10.4 · Una OP solo se marca Entregada con el 100% despachado.
--- Al entrar a la etapa de entrega con todo despachado, estampa la fecha sola.
+-- 10.3b · cantidad_entregada SOLO cambia vía despachos (candado GUC):
+-- ni PostgREST directo ni service_role pueden editarla a mano.
+create or replace function fn_proteger_entregada() returns trigger
+language plpgsql as $$
+begin
+  if new.cantidad_entregada is distinct from old.cantidad_entregada
+     and coalesce(current_setting('bravefit.despacho', true), '') <> '1' then
+    raise exception 'cantidad_entregada es derivada: registre el despacho en op_despachos';
+  end if;
+  return new;
+end $$;
+
+create trigger trg_opitems_entregada before update on op_items
+  for each row execute function fn_proteger_entregada();
+
+-- 10.4 · Una OP solo se marca Entregada/terminal con el 100% despachado.
+-- Cubre INSERT y UPDATE (una OP no puede NACER entregada), incluye etapas
+-- terminales (Instalado no se salta la validación), limpia fecha_entregada
+-- si la OP retrocede a producción, y protege mp_descontada_en.
 create or replace function fn_validar_entrega_op() returns trigger
 language plpgsql as $$
-declare v_es_entrega boolean;
+declare
+  v_etapa etapas_produccion%rowtype;
+  v_primer_entrega smallint;
 begin
-  select es_entrega into v_es_entrega
-    from etapas_produccion where id = new.etapa_id;
+  select * into v_etapa from etapas_produccion where id = new.etapa_id;
 
-  if v_es_entrega and new.fecha_entregada is null then
+  if tg_op = 'INSERT' then
+    if v_etapa.es_entrega or v_etapa.es_terminal or new.fecha_entregada is not null then
+      raise exception 'Una OP no puede crearse ya entregada o terminal: debe recorrer el flujo';
+    end if;
+    if new.mp_descontada_en is not null then
+      raise exception 'mp_descontada_en solo la estampa fn_descontar_bom';
+    end if;
+    return new;
+  end if;
+
+  -- la marca de descuento de BOM es de una sola escritura y solo vía función
+  if old.mp_descontada_en is not null
+     and new.mp_descontada_en is distinct from old.mp_descontada_en then
+    raise exception 'mp_descontada_en no se modifica ni se limpia una vez estampada';
+  end if;
+  if old.mp_descontada_en is null and new.mp_descontada_en is not null
+     and coalesce(current_setting('bravefit.bom', true), '') <> '1' then
+    raise exception 'mp_descontada_en solo la estampa fn_descontar_bom';
+  end if;
+
+  -- si retrocede a una etapa ANTERIOR a la entrega, deja de estar entregada
+  -- (Pendiente instalación/Instalado van DESPUÉS de Entregado y la conservan)
+  select min(orden) into v_primer_entrega from etapas_produccion where es_entrega;
+  if new.etapa_id is distinct from old.etapa_id
+     and not v_etapa.es_entrega and not v_etapa.es_terminal
+     and v_etapa.orden < coalesce(v_primer_entrega, 32767) then
+    new.fecha_entregada := null;
+  end if;
+
+  if (v_etapa.es_entrega or v_etapa.es_terminal) and new.fecha_entregada is null then
     new.fecha_entregada := current_date;
   end if;
 
   if (new.fecha_entregada is not null and old.fecha_entregada is null)
-     or (v_es_entrega and new.etapa_id is distinct from old.etapa_id) then
+     or ((v_etapa.es_entrega or v_etapa.es_terminal)
+         and new.etapa_id is distinct from old.etapa_id) then
+    -- lock de los ítems: serializa contra reversas de despacho concurrentes
+    perform 1 from op_items oi where oi.op_id = new.id for update;
     if not exists (select 1 from op_items oi where oi.op_id = new.id)
        or exists (select 1 from op_items oi
                    where oi.op_id = new.id and oi.cantidad_entregada < oi.cantidad) then
@@ -1032,8 +1138,55 @@ begin
   return new;
 end $$;
 
-create trigger trg_op_entrega before update on ordenes_pedido
+create trigger trg_op_entrega before insert or update on ordenes_pedido
   for each row execute function fn_validar_entrega_op();
+
+-- 10.4b · Descuento de BOM atómico e idempotente: ÚNICA vía para estampar
+-- mp_descontada_en. El UPDATE condicional reclama la marca (a prueba de dos
+-- usuarios moviendo la OP a Corte a la vez); si ya estaba, retorna false y
+-- NO descuenta de nuevo. El INSERT agrupa por existencia en orden canónico.
+create or replace function fn_descontar_bom(p_op_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  v_claimed   uuid;
+  v_faltantes text;
+begin
+  if auth.uid() is not null and not fn_puede('produccion','editar') then
+    raise exception 'Sin permiso para descontar materia prima';
+  end if;
+
+  perform set_config('bravefit.bom', '1', true);
+  update ordenes_pedido set mp_descontada_en = now()
+   where id = p_op_id and mp_descontada_en is null
+   returning id into v_claimed;
+  perform set_config('bravefit.bom', '', true);
+  if v_claimed is null then
+    return false;  -- ya descontada: idempotente
+  end if;
+
+  select string_agg(distinct m.nombre, ', ') into v_faltantes
+    from op_items oi
+    join producto_componentes pc on pc.producto_id = oi.producto_id
+                                and pc.material_id is not null
+    join materiales m on m.id = pc.material_id
+    left join existencias e on e.material_id = pc.material_id
+   where oi.op_id = p_op_id and e.id is null;
+  if v_faltantes is not null then
+    raise exception 'Materiales del BOM sin existencia registrada: %', v_faltantes;
+  end if;
+
+  insert into movimientos_inventario (existencia_id, tipo, cantidad, op_id, usuario_id, nota)
+  select e.id, 'salida_produccion', -sum(pc.cantidad * oi.cantidad), p_op_id, auth.uid(),
+         'Descuento BOM automático (entrada a Corte)'
+    from op_items oi
+    join producto_componentes pc on pc.producto_id = oi.producto_id
+                                and pc.material_id is not null
+    join existencias e on e.material_id = pc.material_id
+   where oi.op_id = p_op_id
+   group by e.id
+   order by e.id;
+  return true;
+end $$;
 
 -- 10.5 · CRM: no se puede Ganar (→ OP automática) sin cotización con ítems,
 -- y 'días en etapa' se marca solo al mover la ficha.
@@ -1067,11 +1220,16 @@ create trigger trg_oportunidad_movida before update on oportunidades
 
 -- 10.6 · Recepciones: la suma recibida por ítem de SC no supera lo pedido.
 -- FOR UPDATE sobre sc_items serializa recepciones concurrentes del mismo ítem.
+-- SECURITY DEFINER: con RLS del invocador, SELECT FOR UPDATE filtraría en
+-- silencio filas que el rol no puede editar (v_pedida NULL → sin validación).
 create or replace function fn_validar_recepcion() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 declare v_pedida numeric(12,3); v_previa numeric(12,3);
 begin
   select cantidad into v_pedida from sc_items where id = new.sc_item_id for update;
+  if v_pedida is null then
+    raise exception 'Ítem de solicitud de compra % no existe', new.sc_item_id;
+  end if;
   select coalesce(sum(cant_recibida), 0) into v_previa
     from recepcion_items
    where sc_item_id = new.sc_item_id and id <> new.id;
