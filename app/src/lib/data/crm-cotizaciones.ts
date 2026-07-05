@@ -21,6 +21,7 @@ import {
   getOpsRepository,
   PRODUCTOS,
   tsRel,
+  USUARIOS,
 } from "@/lib/data/ops";
 import type {
   Ciudad,
@@ -165,11 +166,8 @@ const ESTADOS: EstadoCotizacion[] = [
   { id: 5, nombre: "Anulada", orden: 5, activo: true },
 ];
 
-export const VENDEDORES: Usuario[] = [
-  { id: "u-01", rol_id: 1, nombre: "Juan Diego Moreno", email: "juanmoreno@bravefit.co", activo: true },
-  { id: "u-02", rol_id: 1, nombre: "María Fernández", email: "maria@bravefit.co", activo: true },
-  { id: "u-03", rol_id: 1, nombre: "Camilo Torres", email: "camilo@bravefit.co", activo: true },
-];
+// Fuente única en ops.ts (los vendedores SON los usuarios del equipo)
+export const VENDEDORES: Usuario[] = USUARIOS;
 
 // ---------------------------------------------------------------
 // MOCK — cotizaciones (numeración continúa la serie del Planner)

@@ -19,6 +19,7 @@ import type {
   OrdenPedido,
   OrigenOp,
   Producto,
+  Usuario,
 } from "@/lib/types/db";
 import {
   ordenarTarjetas,
@@ -110,6 +111,38 @@ export interface OpCrearInput {
   }>;
 }
 
+// ---- Garantías (comparten flujo y store con las OPs) -----------
+
+export interface GarantiaCard {
+  garantia: Garantia;
+  cliente: Cliente;
+  producto: Producto | null;
+  vendedor: Usuario | null;
+  op_numero: string;
+  etapa: EtapaProduccion;
+  /** Días desde apertura (hasta cierre si ya cerró). */
+  dias: number;
+}
+
+export interface GarantiaDetalle extends GarantiaCard {
+  op: OrdenPedido;
+  ciudad: Ciudad | null;
+}
+
+export interface GarantiaFiltros {
+  estado?: "abiertas" | "cerradas";
+  texto?: string;
+}
+
+export interface GarantiaCrearInput {
+  op_id: string;
+  producto_id: string | null;
+  problema: string;
+  detalle: string | null;
+  recogida: Garantia["recogida"];
+  vendedor_id: string | null;
+}
+
 export interface OpsRepository {
   listarOps(filtros?: FiltrosOps): Promise<OpCard[]>;
   obtenerOp(id: string): Promise<OpDetalle | null>;
@@ -122,6 +155,17 @@ export interface OpsRepository {
   agregarObservacion(op_id: string, texto: string): Promise<OpObservacion>;
   /** OP automática (CRM Ganado, webhooks): entra SIEMPRE a "En Cola". */
   crearOp(input: OpCrearInput): Promise<OrdenPedido>;
+  // Garantías: mismo flujo de etapas, prioridad ambulancia
+  listarGarantias(filtros?: GarantiaFiltros): Promise<GarantiaCard[]>;
+  obtenerGarantia(id: string): Promise<GarantiaDetalle | null>;
+  /** Nace en "En Cola" con el siguiente GR-XXXX; hereda cliente de la OP. */
+  crearGarantia(input: GarantiaCrearInput): Promise<Garantia>;
+  actualizarGarantia(
+    id: string,
+    patch: Partial<
+      Pick<Garantia, "recogida" | "costo_resolucion" | "detalle" | "vendedor_id">
+    >,
+  ): Promise<void>;
   listarEtapas(): Promise<EtapaProduccion[]>;
   listarOrigenes(): Promise<OrigenOp[]>;
   listarCiudades(): Promise<Ciudad[]>;
@@ -269,6 +313,13 @@ export const PRODUCTOS: Producto[] = [
   prod("p-10", "BF-AC-001", "Soportes J-Cups (par)", 3, 290_000),
   prod("p-11", "BF-MQ-001", "Prensa de piernas 45°", 6, 9_800_000, { imagen_url: "/productos/sistema-polea-bloques-rack.png" }),
   prod("p-12", "BF-MC-001", "Kit mancuernas 2,5–25 kg", 6, 4_600_000, { origen: "comercializado" }),
+];
+
+/** Usuarios del equipo (fuente única; crm-cotizaciones los re-exporta). */
+export const USUARIOS: Usuario[] = [
+  { id: "u-01", rol_id: 1, nombre: "Juan Diego Moreno", email: "juanmoreno@bravefit.co", activo: true },
+  { id: "u-02", rol_id: 1, nombre: "María Fernández", email: "maria@bravefit.co", activo: true },
+  { id: "u-03", rol_id: 1, nombre: "Camilo Torres", email: "camilo@bravefit.co", activo: true },
 ];
 
 /** Colores estándar (tabla colores del seed) — fuera de esta lista = ATO 8%. */
@@ -463,43 +514,51 @@ const ITEMS: OpItem[] = [
   itemSeed("it-15b", "op-15", "p-06", 2, 2),
 ];
 
+function garSeed(g: {
+  id: string;
+  numero: string;
+  op_id: string;
+  producto_id: string;
+  cliente_id: string;
+  vendedor_id: string;
+  problema: string;
+  detalle?: string;
+  recogida: Garantia["recogida"];
+  etapa_id: number;
+  costo?: number;
+  abierta: number; // días relativos
+  cerrada?: number;
+}): Garantia {
+  return {
+    id: g.id,
+    numero: g.numero,
+    op_id: g.op_id,
+    producto_id: g.producto_id,
+    cliente_id: g.cliente_id,
+    vendedor_id: g.vendedor_id,
+    problema: g.problema,
+    detalle: g.detalle ?? null,
+    recogida: g.recogida,
+    etapa_id: g.etapa_id,
+    costo_resolucion: g.costo ?? null,
+    abierta_en: tsRel(g.abierta, 11),
+    cerrada_en: g.cerrada === undefined ? null : tsRel(g.cerrada, 16),
+    activo: true,
+    eliminado_en: null,
+  };
+}
+
 const GARANTIAS: Garantia[] = [
-  {
-    id: "gr-01",
-    numero: "GR-0007",
-    op_id: "op-06",
-    producto_id: "p-05",
-    cliente_id: "c-06",
-    vendedor_id: null,
-    problema: "Tapizado del banco descosido",
-    detalle:
-      "El cliente reporta costura abierta en la esquina del tapizado a las 3 semanas de uso. Se recoge en Cali y se retapiza en planta.",
-    recogida: "bravefit_recoge",
-    etapa_id: 3,
-    costo_resolucion: 120_000,
-    abierta_en: tsRel(-5, 11),
-    cerrada_en: null,
-    activo: true,
-    eliminado_en: null,
-  },
-  {
-    id: "gr-02",
-    numero: "GR-0008",
-    op_id: "op-12",
-    producto_id: "p-06",
-    cliente_id: "c-12",
-    vendedor_id: null,
-    problema: "Pin de ajuste del respaldo no bloquea",
-    detalle:
-      "El pin del respaldo no asegura en la posición 3. El cliente envía el banco por transportadora; revisar mecanizado del pasador.",
-    recogida: "cliente_envia",
-    etapa_id: 1,
-    costo_resolucion: null,
-    abierta_en: tsRel(-2, 16),
-    cerrada_en: null,
-    activo: true,
-    eliminado_en: null,
-  },
+  // ---- abiertas (aparecen en el kanban con prioridad ambulancia) ----
+  garSeed({ id: "gr-01", numero: "GR-0007", op_id: "op-06", producto_id: "p-05", cliente_id: "c-06", vendedor_id: "u-01", problema: "Tapizado del banco descosido", detalle: "El cliente reporta costura abierta en la esquina del tapizado a las 3 semanas de uso. Se recoge en Cali y se retapiza en planta.", recogida: "bravefit_recoge", etapa_id: 3, costo: 120_000, abierta: -5 }),
+  garSeed({ id: "gr-02", numero: "GR-0008", op_id: "op-12", producto_id: "p-06", cliente_id: "c-12", vendedor_id: "u-02", problema: "Pin de ajuste del respaldo no bloquea", detalle: "El pin del respaldo no asegura en la posición 3. El cliente envía el banco por transportadora; revisar mecanizado del pasador.", recogida: "cliente_envia", etapa_id: 1, abierta: -2 }),
+  garSeed({ id: "gr-03", numero: "GR-0009", op_id: "op-15", producto_id: "p-04", cliente_id: "c-15", vendedor_id: "u-03", problema: "Pintura descascarada en soporte de pared", detalle: "Descascaramiento en la zona de anclaje. Se repinta el soporte; posible fricción con la platina.", recogida: "por_definir", etapa_id: 1, abierta: -1 }),
+  // ---- cerradas (histórico para KPIs de mes/año) ----
+  garSeed({ id: "gr-04", numero: "GR-0006", op_id: "op-06", producto_id: "p-05", cliente_id: "c-06", vendedor_id: "u-01", problema: "Tornillería incompleta en la entrega", recogida: "cliente_envia", etapa_id: 10, costo: 18_000, abierta: -24, cerrada: -20 }),
+  garSeed({ id: "gr-05", numero: "GR-0005", op_id: "op-12", producto_id: "p-12", cliente_id: "c-12", vendedor_id: "u-02", problema: "Mancuerna 15 kg con recubrimiento fisurado", recogida: "bravefit_recoge", etapa_id: 10, costo: 95_000, abierta: -55, cerrada: -47 }),
+  garSeed({ id: "gr-06", numero: "GR-0004", op_id: "op-15", producto_id: "p-06", cliente_id: "c-15", vendedor_id: "u-01", problema: "Ruido en el mecanismo de ajuste", recogida: "bravefit_recoge", etapa_id: 10, costo: 60_000, abierta: -95, cerrada: -88 }),
+  garSeed({ id: "gr-07", numero: "GR-0003", op_id: "op-06", producto_id: "p-05", cliente_id: "c-06", vendedor_id: "u-03", problema: "Nivelador de pata defectuoso", recogida: "cliente_envia", etapa_id: 10, costo: 25_000, abierta: -150, cerrada: -146 }),
+  garSeed({ id: "gr-08", numero: "GR-0002", op_id: "op-12", producto_id: "p-06", cliente_id: "c-12", vendedor_id: "u-02", problema: "Tapizado con arruga de fábrica", recogida: "bravefit_recoge", etapa_id: 10, costo: 110_000, abierta: -210, cerrada: -200 }),
 ];
 
 const OBSERVACIONES: OpObservacion[] = [
@@ -802,6 +861,112 @@ export class MockOpsRepository implements OpsRepository {
       en: op.creado_en,
     });
     return structuredClone(op);
+  }
+
+  private garantiaCard(g: Garantia): GarantiaCard {
+    const op = this.ops.find((o) => o.id === g.op_id)!;
+    const fin = g.cerrada_en ? new Date(g.cerrada_en) : new Date();
+    return {
+      garantia: structuredClone(g),
+      cliente: CLIENTES.find((c) => c.id === g.cliente_id)!,
+      producto: PRODUCTOS.find((p) => p.id === g.producto_id) ?? null,
+      vendedor: USUARIOS.find((u) => u.id === g.vendedor_id) ?? null,
+      op_numero: op?.numero ?? "—",
+      etapa: this.etapa(g.etapa_id),
+      dias: Math.max(
+        0,
+        Math.floor((fin.getTime() - new Date(g.abierta_en).getTime()) / 86_400_000),
+      ),
+    };
+  }
+
+  async listarGarantias(filtros: GarantiaFiltros = {}): Promise<GarantiaCard[]> {
+    const q = filtros.texto?.trim().toLowerCase();
+    return this.garantias
+      .filter((g) => g.activo)
+      .filter((g) =>
+        filtros.estado === "abiertas"
+          ? !g.cerrada_en
+          : filtros.estado === "cerradas"
+            ? !!g.cerrada_en
+            : true,
+      )
+      .map((g) => this.garantiaCard(g))
+      .filter((c) => {
+        if (!q) return true;
+        const blob = [
+          c.garantia.numero,
+          c.cliente.nombre,
+          c.producto?.nombre ?? "",
+          c.garantia.problema,
+          c.op_numero,
+          c.vendedor?.nombre ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return blob.includes(q);
+      })
+      .sort((a, b) => {
+        // abiertas primero (ambulancia), luego por apertura desc
+        const av = a.garantia.cerrada_en ? 1 : 0;
+        const bv = b.garantia.cerrada_en ? 1 : 0;
+        if (av !== bv) return av - bv;
+        return b.garantia.abierta_en.localeCompare(a.garantia.abierta_en);
+      });
+  }
+
+  async obtenerGarantia(id: string): Promise<GarantiaDetalle | null> {
+    const g = this.garantias.find((x) => x.id === id && x.activo);
+    if (!g) return null;
+    const op = this.ops.find((o) => o.id === g.op_id)!;
+    return structuredClone({
+      ...this.garantiaCard(g),
+      op,
+      ciudad: CIUDADES.find((c) => c.id === op.ciudad_id) ?? null,
+    });
+  }
+
+  async crearGarantia(input: GarantiaCrearInput): Promise<Garantia> {
+    const op = this.ops.find((o) => o.id === input.op_id && o.activo);
+    if (!op) throw new Error("Seleccione la OP de origen de la garantía");
+    if (!input.problema.trim()) throw new Error("Describa la falla reportada");
+    const maxNum = Math.max(
+      0,
+      ...this.garantias.map((g) => Number(g.numero.replace("GR-", "")) || 0),
+    );
+    const g: Garantia = {
+      id: `gr-${crypto.randomUUID().slice(0, 8)}`,
+      numero: `GR-${String(maxNum + 1).padStart(4, "0")}`,
+      op_id: op.id,
+      producto_id: input.producto_id,
+      cliente_id: op.cliente_id,
+      vendedor_id: input.vendedor_id,
+      problema: input.problema.trim(),
+      detalle: input.detalle,
+      recogida: input.recogida,
+      etapa_id: ETAPAS[0].id, // entra a Cola con prioridad ambulancia
+      costo_resolucion: null,
+      abierta_en: new Date().toISOString(),
+      cerrada_en: null,
+      activo: true,
+      eliminado_en: null,
+    };
+    this.garantias.push(g);
+    return structuredClone(g);
+  }
+
+  async actualizarGarantia(
+    id: string,
+    patch: Partial<
+      Pick<Garantia, "recogida" | "costo_resolucion" | "detalle" | "vendedor_id">
+    >,
+  ): Promise<void> {
+    const g = this.garantias.find((x) => x.id === id && x.activo);
+    if (!g) throw new Error(`Garantía ${id} no existe`);
+    if (patch.costo_resolucion !== undefined && patch.costo_resolucion !== null) {
+      if (patch.costo_resolucion < 0) throw new Error("El costo no puede ser negativo");
+    }
+    Object.assign(g, patch);
   }
 
   async agregarObservacion(op_id: string, texto: string): Promise<OpObservacion> {

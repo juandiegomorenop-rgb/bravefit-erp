@@ -1,12 +1,40 @@
-import { PaginaModulo } from "@/components/PaginaModulo";
+import { getOpsRepository, type GarantiaFiltros } from "@/lib/data/ops";
+import { USUARIOS } from "@/lib/data/ops";
+import { GarantiasClient } from "./GarantiasClient";
 
 export const metadata = { title: "Garantías" };
 
-export default function Page() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const primero = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v[0] : v;
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const repo = getOpsRepository();
+  const [cards, ops] = await Promise.all([
+    repo.listarGarantias(),
+    repo.listarOps(),
+  ]);
+
+  const estadoParam = primero(sp.estado);
   return (
-    <PaginaModulo
-      titulo="Garantías"
-      subtitulo="GR-XXXX con prioridad tipo ambulancia y mismo flujo de etapas que las O.P."
+    <GarantiasClient
+      cards={cards}
+      // una garantía nace de una OP (normalmente ya entregada): solo tipo 'op'
+      opsParaGarantia={ops.filter((o) => o.tipo === "op")}
+      usuarios={USUARIOS}
+      filtrosIniciales={{
+        estado:
+          estadoParam === "abiertas" || estadoParam === "cerradas"
+            ? (estadoParam as GarantiaFiltros["estado"])
+            : undefined,
+        texto: primero(sp.q) ?? "",
+      }}
     />
   );
 }
