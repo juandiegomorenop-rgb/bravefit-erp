@@ -37,15 +37,49 @@ function iniciales(n: string) {
 export function CarteleraClient({ publicaciones }: Props) {
   const router = useRouter();
   const [filtro, setFiltro] = useState<Publicacion["tipo"] | "todas">("todas");
+  const [texto, setTexto] = useState("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const filtradas = useMemo(
-    () =>
-      filtro === "todas"
-        ? publicaciones
-        : publicaciones.filter((p) => p.publicacion.tipo === filtro),
-    [publicaciones, filtro],
-  );
+  // fecha relevante para filtrar: la del evento si lo es, si no la de publicación
+  const fechaRelevante = (p: PublicacionCard) =>
+    (p.publicacion.evento_fecha ?? p.publicacion.creado_en).slice(0, 10);
+
+  const filtradas = useMemo(() => {
+    const q = texto.trim().toLowerCase();
+    return publicaciones.filter((p) => {
+      if (filtro !== "todas" && p.publicacion.tipo !== filtro) return false;
+      const f = fechaRelevante(p);
+      if (desde && f < desde) return false;
+      if (hasta && f > hasta) return false;
+      if (q) {
+        const blob = [
+          p.publicacion.titulo ?? "",
+          p.publicacion.cuerpo,
+          p.autor.nombre,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!blob.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [publicaciones, filtro, texto, desde, hasta]);
+
+  const hayFiltroFecha = desde || hasta || texto;
+
+  /** Atajo: fija desde/hasta al mes calendario indicado (offset desde hoy). */
+  function mesRelativo(offset: number) {
+    const base = new Date();
+    base.setMonth(base.getMonth() + offset, 1);
+    const y = base.getFullYear();
+    const m = base.getMonth();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDesde(iso(new Date(y, m, 1)));
+    setHasta(iso(new Date(y, m + 1, 0)));
+  }
 
   return (
     <div className="mx-auto max-w-[760px]">
@@ -63,7 +97,7 @@ export function CarteleraClient({ publicaciones }: Props) {
       <Compositor onListo={() => router.refresh()} onError={setError} />
 
       {/* Filtro por tipo */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         {(["todas", "noticia", "evento", "importante"] as const).map((t) => (
           <button
             key={t}
@@ -80,6 +114,76 @@ export function CarteleraClient({ publicaciones }: Props) {
         ))}
       </div>
 
+      {/* Búsqueda + rango de fechas */}
+      <div className="mb-4 flex flex-wrap items-end gap-2.5 rounded-card border border-borde bg-card px-3.5 py-3">
+        <input
+          type="search"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Buscar (ej: comité, seguridad…)"
+          className="min-w-[180px] flex-1 rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+        />
+        <label className="flex flex-col gap-1 text-[10.5px] font-bold text-neutro">
+          DESDE
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[10.5px] font-bold text-neutro">
+          HASTA
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+          />
+        </label>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => mesRelativo(0)}
+            className="rounded-pill border border-borde px-3 py-2 text-[12px] font-semibold hover:border-dorado"
+          >
+            Este mes
+          </button>
+          <button
+            type="button"
+            onClick={() => mesRelativo(-1)}
+            className="rounded-pill border border-borde px-3 py-2 text-[12px] font-semibold hover:border-dorado"
+          >
+            Mes pasado
+          </button>
+          {hayFiltroFecha && (
+            <button
+              type="button"
+              onClick={() => {
+                setTexto("");
+                setDesde("");
+                setHasta("");
+              }}
+              className="rounded-pill border border-borde px-3 py-2 text-[12px] font-semibold text-neutro hover:border-neutro"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-3 text-[12.5px] text-neutro">
+        <b className="text-carbon">{filtradas.length}</b>{" "}
+        {filtradas.length === 1 ? "publicación" : "publicaciones"}
+        {(desde || hasta) && (
+          <>
+            {" "}
+            entre <b className="text-carbon">{desde || "el inicio"}</b> y{" "}
+            <b className="text-carbon">{hasta || "hoy"}</b>
+          </>
+        )}
+      </div>
+
       <div className="space-y-4">
         {filtradas.map((p) => (
           <TarjetaPublicacion
@@ -91,7 +195,7 @@ export function CarteleraClient({ publicaciones }: Props) {
         ))}
         {filtradas.length === 0 && (
           <p className="rounded-card border border-borde bg-card px-4 py-10 text-center text-neutro">
-            No hay publicaciones de este tipo todavía.
+            No hay publicaciones con estos filtros.
           </p>
         )}
       </div>
