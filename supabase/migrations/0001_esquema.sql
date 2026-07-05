@@ -776,23 +776,40 @@ create table aplicaciones (
   creado_en  timestamptz not null default now()
 );
 
--- Cartelera: todos publican
+-- Cartelera: todos publican, comentan y reaccionan (incluye imágenes)
 create table publicaciones (
   id         uuid primary key default gen_random_uuid(),
   autor_id   uuid not null references usuarios(id),
+  tipo       text not null default 'noticia'
+             check (tipo in ('noticia','evento','importante')),
   titulo     text,
   cuerpo     text not null,
-  importante boolean not null default false,
-  fijada     boolean not null default false,
+  imagenes   jsonb not null default '[]'::jsonb,  -- URLs en Storage (bucket cartelera)
+  evento_fecha timestamptz,                        -- solo tipo='evento'
+  evento_lugar text,
+  importante boolean not null default false,       -- resaltar (comité, urgente)
+  fijada     boolean not null default false,       -- se ancla arriba
   activo     boolean not null default true,
   eliminado_en timestamptz,
   creado_en  timestamptz not null default now()
 );
+create index idx_publicaciones_creado on publicaciones (creado_en desc);
+
+create table publicacion_comentarios (
+  id             uuid primary key default gen_random_uuid(),
+  publicacion_id uuid not null references publicaciones(id) on delete cascade,
+  autor_id       uuid not null references usuarios(id),
+  cuerpo         text not null,
+  imagen_url     text,                             -- imagen opcional en el comentario
+  activo         boolean not null default true,
+  creado_en      timestamptz not null default now()
+);
+create index idx_comentarios_publicacion on publicacion_comentarios (publicacion_id, creado_en);
 
 create table publicacion_reacciones (
   publicacion_id uuid not null references publicaciones(id) on delete cascade,
   usuario_id     uuid not null references usuarios(id) on delete cascade,
-  tipo           text not null default 'like',
+  tipo           text not null default 'like',     -- like, celebra, importante, idea
   en             timestamptz not null default now(),
   primary key (publicacion_id, usuario_id, tipo)
 );

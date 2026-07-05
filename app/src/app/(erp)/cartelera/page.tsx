@@ -1,12 +1,9 @@
-import { PaginaModulo } from "@/components/PaginaModulo";
+import { getCarteleraRepository } from "@/lib/data/cartelera";
+import { CarteleraClient } from "./CarteleraClient";
 
 export const metadata = { title: "Cartelera" };
 
-export default function Page() {
-  return (
-    <PaginaModulo
-      titulo="Cartelera"
-      subtitulo="Muro interno: todos pueden publicar. Posts importantes, reacciones y próximos eventos."
-    />
-  );
+export default async function Page() {
+  const publicaciones = await getCarteleraRepository().listar();
+  return <CarteleraClient publicaciones={publicaciones} />;
 }

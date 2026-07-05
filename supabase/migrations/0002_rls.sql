@@ -276,6 +276,15 @@ create policy publicaciones_upd on publicaciones for update to authenticated
   using (autor_id = auth.uid() or fn_puede('nucleo','editar'))
   with check (autor_id = auth.uid() or fn_puede('nucleo','editar'));
 
+-- comentarios: todos ven y comentan; cada quien edita/borra el suyo; Admin modera
+create policy comentarios_sel on publicacion_comentarios for select to authenticated
+  using (true);
+create policy comentarios_ins on publicacion_comentarios for insert to authenticated
+  with check (autor_id = auth.uid());
+create policy comentarios_upd on publicacion_comentarios for update to authenticated
+  using (autor_id = auth.uid() or fn_puede('nucleo','editar'))
+  with check (autor_id = auth.uid() or fn_puede('nucleo','editar'));
+
 create policy reacciones_sel on publicacion_reacciones for select to authenticated using (true);
 create policy reacciones_ins on publicacion_reacciones for insert to authenticated
   with check (usuario_id = auth.uid());

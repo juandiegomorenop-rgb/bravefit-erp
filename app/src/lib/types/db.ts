@@ -335,6 +335,41 @@ export interface Aplicacion {
   creado_en: string;
 }
 
+// ---- Cartelera (comunicación interna) ---------------------------
+
+export interface Publicacion {
+  id: string;
+  autor_id: string;
+  tipo: "noticia" | "evento" | "importante";
+  titulo: string | null;
+  cuerpo: string;
+  imagenes: string[]; // URLs en Storage (bucket cartelera)
+  evento_fecha: string | null; // solo tipo='evento'
+  evento_lugar: string | null;
+  importante: boolean;
+  fijada: boolean;
+  activo: boolean;
+  eliminado_en: string | null;
+  creado_en: string;
+}
+
+export interface PublicacionComentario {
+  id: string;
+  publicacion_id: string;
+  autor_id: string;
+  cuerpo: string;
+  imagen_url: string | null;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface PublicacionReaccion {
+  publicacion_id: string;
+  usuario_id: string;
+  tipo: string; // like, celebra, importante, idea
+  en: string;
+}
+
 // ---- Inventario y compras ---------------------------------------
 
 export interface TipoMaterial {

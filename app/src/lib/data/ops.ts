@@ -315,11 +315,17 @@ export const PRODUCTOS: Producto[] = [
   prod("p-12", "BF-MC-001", "Kit mancuernas 2,5–25 kg", 6, 4_600_000, { origen: "comercializado" }),
 ];
 
-/** Usuarios del equipo (fuente única; crm-cotizaciones los re-exporta). */
+/**
+ * Los 5 usuarios con login (fuente única). rol_id: 1=Administrador,
+ * 2=Operaciones 1, 3=Operaciones 2. crm-cotizaciones re-exporta los que
+ * venden (admins) como VENDEDORES.
+ */
 export const USUARIOS: Usuario[] = [
   { id: "u-01", rol_id: 1, nombre: "Juan Diego Moreno", email: "juanmoreno@bravefit.co", activo: true },
   { id: "u-02", rol_id: 1, nombre: "María Fernández", email: "maria@bravefit.co", activo: true },
   { id: "u-03", rol_id: 1, nombre: "Camilo Torres", email: "camilo@bravefit.co", activo: true },
+  { id: "u-04", rol_id: 2, nombre: "Jorge Betancur", email: "jorge@bravefit.co", activo: true },
+  { id: "u-05", rol_id: 3, nombre: "Wilson Pérez", email: "wilson@bravefit.co", activo: true },
 ];
 
 /** Colores estándar (tabla colores del seed) — fuera de esta lista = ATO 8%. */

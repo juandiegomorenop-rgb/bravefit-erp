@@ -10,7 +10,8 @@ insert into storage.buckets (id, name, public) values
   ('hojas-vida',   'hojas-vida',   false),  -- PDFs de empleados_confidencial
   ('cv-aspirantes','cv-aspirantes',false),  -- CVs de aplicaciones (reclutamiento)
   ('catalogos',    'catalogos',    true ),  -- portadas e imágenes de catálogo (público)
-  ('adjuntos-op',  'adjuntos-op',  false)   -- fotos/planos adjuntos a OPs y garantías
+  ('adjuntos-op',  'adjuntos-op',  false),  -- fotos/planos adjuntos a OPs y garantías
+  ('cartelera',    'cartelera',    false)   -- imágenes de publicaciones y comentarios
 on conflict (id) do nothing;
 
 -- hojas de vida: solo RRHH completo (Admin)
@@ -46,3 +47,11 @@ create policy adjop_ins on storage.objects for insert to authenticated
   with check (bucket_id = 'adjuntos-op' and fn_puede('produccion','crear'));
 create policy adjop_del on storage.objects for delete to authenticated
   using (bucket_id = 'adjuntos-op' and fn_puede('produccion','editar'));
+
+-- cartelera: todo el equipo lee y sube (comunicación interna); borra el dueño
+create policy cartelera_sel on storage.objects for select to authenticated
+  using (bucket_id = 'cartelera');
+create policy cartelera_ins on storage.objects for insert to authenticated
+  with check (bucket_id = 'cartelera' and owner = auth.uid());
+create policy cartelera_del on storage.objects for delete to authenticated
+  using (bucket_id = 'cartelera' and (owner = auth.uid() or fn_puede('nucleo','editar')));

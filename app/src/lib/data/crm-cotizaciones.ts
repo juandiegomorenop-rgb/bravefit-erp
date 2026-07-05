@@ -166,8 +166,8 @@ const ESTADOS: EstadoCotizacion[] = [
   { id: 5, nombre: "Anulada", orden: 5, activo: true },
 ];
 
-// Fuente única en ops.ts (los vendedores SON los usuarios del equipo)
-export const VENDEDORES: Usuario[] = USUARIOS;
+// Los vendedores son los usuarios Administradores (venden); Ops1/Ops2 no
+export const VENDEDORES: Usuario[] = USUARIOS.filter((u) => u.rol_id === 1);
 
 // ---------------------------------------------------------------
 // MOCK — cotizaciones (numeración continúa la serie del Planner)
