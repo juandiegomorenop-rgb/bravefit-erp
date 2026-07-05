@@ -47,7 +47,7 @@ export const NAV: NavItem[] = [
   },
   { label: "Mercadeo", href: "/mercadeo", modulo: "mercadeo" },
   {
-    label: "Recursos Humanos",
+    label: "RRHH",
     href: "/rrhh/empleados",
     modulo: "rrhh",
     children: [

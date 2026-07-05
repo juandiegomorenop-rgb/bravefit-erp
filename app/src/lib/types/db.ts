@@ -255,6 +255,73 @@ export interface Oportunidad {
   creado_en: string;
 }
 
+// ---- RRHH --------------------------------------------------------
+
+/** Ficha BÁSICA (lo que ven Ops1/Ops2 de los técnicos). */
+export interface Empleado {
+  id: string;
+  nombre: string;
+  cedula: string;
+  cargo: string | null;
+  area: string | null; // 'planta', 'administración'…
+  es_tecnico: boolean; // clave para permisos Ops1/Ops2
+  fecha_ingreso: string | null;
+  activo: boolean;
+  eliminado_en: string | null;
+}
+
+/** Datos sensibles: SOLO rrhh (Admin) o el propio empleado (RLS propio). */
+export interface EmpleadoConfidencial {
+  empleado_id: string;
+  tipo_contrato: string | null;
+  salario_base: number | null;
+  eps: string | null;
+  arl: string | null;
+  hoja_vida_url: string | null;
+}
+
+export interface Vacacion {
+  id: string;
+  empleado_id: string;
+  desde: string;
+  hasta: string; // regreso calculado con hábiles + festivos
+  dias_habiles: number;
+  estado: "solicitada" | "aprobada" | "rechazada" | "disfrutada";
+  aprobada_por: string | null; // solo Admin aprueba
+  notas: string | null;
+  creado_en: string;
+}
+
+export interface Evaluacion {
+  id: string;
+  empleado_id: string;
+  ciclo: string; // '2026-1'
+  puntaje: number | null; // 0–5
+  criterios: { nombre: string; puntaje: number }[];
+  estado: "pendiente" | "en_curso" | "completada";
+  evaluador_id: string | null;
+}
+
+export interface Vacante {
+  id: string;
+  cargo: string;
+  area: string | null;
+  estado: "abierta" | "pausada" | "cerrada";
+  publicada_en: string | null;
+  activo: boolean;
+  eliminado_en: string | null;
+}
+
+export interface Aplicacion {
+  id: string;
+  vacante_id: string;
+  nombre: string;
+  contacto: string | null;
+  etapa: "aplico" | "entrevista" | "finalista" | "contratado" | "descartado";
+  cv_url: string | null;
+  creado_en: string;
+}
+
 // ---- Inventario y compras ---------------------------------------
 
 export interface TipoMaterial {

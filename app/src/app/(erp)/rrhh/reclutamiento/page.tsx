@@ -1,12 +1,9 @@
-import { PaginaModulo } from "@/components/PaginaModulo";
+import { getRrhhRepository } from "@/lib/data/rrhh";
+import { ReclutamientoClient } from "./ReclutamientoClient";
 
 export const metadata = { title: "Reclutamiento" };
 
-export default function Page() {
-  return (
-    <PaginaModulo
-      titulo="Reclutamiento"
-      subtitulo="Vacantes con embudo Aplicaron → Entrevista → Finalistas → Contratado."
-    />
-  );
+export default async function Page() {
+  const vacantes = await getRrhhRepository().listarVacantes();
+  return <ReclutamientoClient vacantes={vacantes} />;
 }
