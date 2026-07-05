@@ -183,6 +183,7 @@ export interface Cotizacion {
   descuento_pct: number; // 0–50, solo con pago anticipado completo
   pago_anticipado_completo: boolean;
   valida_hasta: string; // creado + 15 días
+  tiempo_entrega: string | null; // 'Fabricados: 45 días hábiles · …'
   origen: "manual" | "chat" | "planner";
   notas: string | null;
   activo: boolean;
@@ -208,6 +209,7 @@ export interface CotizacionItem {
   aplica_iva: boolean; // transporte: elegible sin IVA
   cantidad: number;
   precio_unit: number; // CON IVA si aplica_iva (incluye cm extra + recargos)
+  descuento_pct: number; // por línea: lista tachada → % DESC → subtotal
   alto_override_cm: number | null;
   fondo_override_cm: number | null;
   color: string | null;

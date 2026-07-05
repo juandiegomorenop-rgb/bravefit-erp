@@ -29,9 +29,11 @@ export interface CotizacionItemConProducto extends CotizacionItem {
 }
 
 export interface TotalesCotizacion {
-  bruto: number; // Σ cantidad·precio antes de descuento (CON IVA donde aplique)
-  descuentoPct: number; // efectivo (0 si no hay pago anticipado completo)
-  descuentoMonto: number;
+  bruto: number; // Σ cantidad·precio DE LISTA (sin ningún descuento)
+  descuentoPct: number; // % global efectivo (0 si no hay pago anticipado completo)
+  descuentoItems: number; // Σ descuentos por línea (formato aprobado)
+  descuentoGlobal: number; // descuento por pago anticipado (sobre la base)
+  descuentoMonto: number; // descuentoItems + descuentoGlobal
   subtotal: number; // sin IVA (incluye ítems exentos a valor pleno)
   iva: number;
   total: number; // lo que paga el cliente
@@ -41,6 +43,16 @@ export interface TotalesCotizacion {
   saldo: number; // total - pagoInicial (se paga ANTES de la entrega)
   unidades: number;
   lineas: number;
+}
+
+/** Total de la línea CON su descuento por línea aplicado. */
+export function totalLinea(i: Pick<CotizacionItem, "cantidad" | "precio_unit" | "descuento_pct">): number {
+  return Math.round(i.cantidad * i.precio_unit * (1 - i.descuento_pct / 100));
+}
+
+/** Total de la línea a precio de lista (sin descuento). */
+export function totalLineaLista(i: Pick<CotizacionItem, "cantidad" | "precio_unit">): number {
+  return Math.round(i.cantidad * i.precio_unit);
 }
 
 /** Grupo de pago de un ítem: PP (propio) o PC (comercializado). */
@@ -74,19 +86,22 @@ export function calcularTotales(
   items: CotizacionItemConProducto[],
   cot: Pick<Cotizacion, "descuento_pct" | "pago_anticipado_completo">,
 ): TotalesCotizacion {
-  const linea = (i: CotizacionItem) => Math.round(i.cantidad * i.precio_unit);
-  const bruto = items.reduce((a, i) => a + linea(i), 0);
+  const bruto = items.reduce((a, i) => a + totalLineaLista(i), 0);
+  const base = items.reduce((a, i) => a + totalLinea(i), 0); // con desc. por línea
+  const descuentoItems = bruto - base;
 
-  // descuento solo con pago anticipado completo (regla del Planner)
+  // descuento global solo con pago anticipado completo (regla del Planner)
   const descuentoPct = cot.pago_anticipado_completo ? cot.descuento_pct : 0;
-  const descuentoMonto = Math.round((bruto * descuentoPct) / 100);
-  const factor = bruto > 0 ? (bruto - descuentoMonto) / bruto : 1;
+  const descuentoGlobal = Math.round((base * descuentoPct) / 100);
+  const factor = base > 0 ? (base - descuentoGlobal) / base : 1;
 
   const conIva = Math.round(
-    items.filter((i) => i.aplica_iva).reduce((a, i) => a + linea(i), 0) * factor,
+    items.filter((i) => i.aplica_iva).reduce((a, i) => a + totalLinea(i), 0) *
+      factor,
   );
   const sinIva = Math.round(
-    items.filter((i) => !i.aplica_iva).reduce((a, i) => a + linea(i), 0) * factor,
+    items.filter((i) => !i.aplica_iva).reduce((a, i) => a + totalLinea(i), 0) *
+      factor,
   );
   const baseGravada = Math.round(conIva / (1 + IVA_RATE));
   const iva = conIva - baseGravada;
@@ -98,7 +113,7 @@ export function calcularTotales(
   const totalPP = Math.round(
     items
       .filter((i) => grupoDeItem(i, hayPropios) === "PP")
-      .reduce((a, i) => a + linea(i), 0) * factor,
+      .reduce((a, i) => a + totalLinea(i), 0) * factor,
   );
   const totalPC = total - totalPP;
 
@@ -109,7 +124,9 @@ export function calcularTotales(
   return {
     bruto,
     descuentoPct,
-    descuentoMonto,
+    descuentoItems,
+    descuentoGlobal,
+    descuentoMonto: descuentoItems + descuentoGlobal,
     subtotal: baseGravada + sinIva,
     iva,
     total,
@@ -120,6 +137,38 @@ export function calcularTotales(
     unidades: items.reduce((a, i) => a + i.cantidad, 0),
     lineas: items.length,
   };
+}
+
+/**
+ * Lista de productos de un grupo de pago para los bullets de TÉRMINOS DE
+ * PAGO ("…correspondiente a $X de los productos: Rack PF10, Barra ×2…").
+ */
+export function listaProductosGrupo(
+  items: CotizacionItemConProducto[],
+  grupo: "PP" | "PC",
+): string {
+  const hayPropios = items.some(
+    (i) => i.producto && i.producto.origen === "propio",
+  );
+  return items
+    .filter((i) => grupoDeItem(i, hayPropios) === grupo)
+    .map((i) => {
+      const nombre = i.producto?.nombre ?? i.descripcion ?? "Ítem";
+      return i.cantidad > 1 ? `${nombre} ×${i.cantidad}` : nombre;
+    })
+    .join(", ");
+}
+
+/** Nota dinámica del recuadro PAGO INICIAL (formato de la plantilla). */
+export function notaPagoInicial(
+  hayPP: boolean,
+  hayPC: boolean,
+  pagoAnticipadoCompleto: boolean,
+): string {
+  if (pagoAnticipadoCompleto) return "Pago del 100% anticipado";
+  if (hayPP && hayPC) return "Anticipo de fabricación + pago total de comercializados";
+  if (hayPP) return "Anticipo del 60% para iniciar fabricación";
+  return "Pago del 100% de productos comercializados";
 }
 
 /**

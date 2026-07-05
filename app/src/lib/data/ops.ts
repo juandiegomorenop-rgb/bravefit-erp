@@ -257,18 +257,30 @@ function prod(
 }
 
 export const PRODUCTOS: Producto[] = [
-  prod("p-01", "BF-RK-001", "Rack PF5", 1, 4_190_000, { es_rack: true, clasificacion: "MTO", colores_disponibles: ["Negro mate", "Blanco", "Rojo"], color_default: "Negro mate", alto_cm: 230 }),
-  prod("p-02", "BF-RK-002", "Rack PF5 Pro", 1, 5_890_000, { es_rack: true, clasificacion: "MTO", alto_cm: 245 }),
+  prod("p-01", "BF-RK-001", "Rack PF5", 1, 4_190_000, { es_rack: true, clasificacion: "MTO", colores_disponibles: ["Negro mate", "Blanco", "Rojo"], color_default: "Negro mate", alto_cm: 230, imagen_url: "/productos/rack-pf5-fijo.png" }),
+  prod("p-02", "BF-RK-002", "Rack PF5 Pro", 1, 5_890_000, { es_rack: true, clasificacion: "MTO", alto_cm: 245, imagen_url: "/productos/rack-pf5-fijo.png" }),
   prod("p-03", "BF-RG-001", "Rig Cross 4 estaciones", 2, 14_500_000, { es_rack: true, clasificacion: "MTO" }),
-  prod("p-04", "BF-RK-003", "Rack de pared PF3", 1, 2_790_000, { es_rack: true, clasificacion: "ATO" }),
-  prod("p-05", "BF-BN-001", "Banco plano BF", 3, 850_000),
-  prod("p-06", "BF-BN-002", "Banco ajustable BF Pro", 3, 1_490_000),
-  prod("p-07", "BF-BR-001", "Barra olímpica 20 kg", 4, 1_150_000, { origen: "comercializado" }),
-  prod("p-08", "BF-DS-001", "Set discos bumper 100 kg", 5, 3_200_000, { origen: "comercializado" }),
-  prod("p-09", "BF-RK-004", "Jaula de potencia PF7", 1, 7_490_000, { es_rack: true, clasificacion: "MTO" }),
-  prod("p-10", "BF-AC-001", "Soportes J-Cups (par)", 7, 290_000),
-  prod("p-11", "BF-MQ-001", "Prensa de piernas 45°", 6, 9_800_000),
-  prod("p-12", "BF-MC-001", "Kit mancuernas 2,5–25 kg", 5, 4_600_000, { origen: "comercializado" }),
+  prod("p-04", "BF-RK-003", "Rack de pared PF3", 1, 2_790_000, { es_rack: true, clasificacion: "ATO", imagen_url: "/productos/rack-pf5-fijo.png" }),
+  prod("p-05", "BF-BN-001", "Banco plano BF", 6, 850_000, { imagen_url: "/productos/banco-plano.png" }),
+  prod("p-06", "BF-BN-002", "Banco ajustable BF Pro", 6, 1_490_000, { imagen_url: "/productos/banco-reclinable-001.png" }),
+  prod("p-07", "BF-BR-001", "Barra olímpica 20 kg", 6, 1_150_000, { origen: "comercializado", imagen_url: "/productos/barra-olimpica-001.png" }),
+  prod("p-08", "BF-DS-001", "Set discos bumper 100 kg", 6, 3_200_000, { origen: "comercializado" }),
+  prod("p-09", "BF-RK-004", "Jaula de potencia PF7", 1, 7_490_000, { es_rack: true, clasificacion: "MTO", imagen_url: "/productos/rack-pf5-fijo.png" }),
+  prod("p-10", "BF-AC-001", "Soportes J-Cups (par)", 3, 290_000),
+  prod("p-11", "BF-MQ-001", "Prensa de piernas 45°", 6, 9_800_000, { imagen_url: "/productos/sistema-polea-bloques-rack.png" }),
+  prod("p-12", "BF-MC-001", "Kit mancuernas 2,5–25 kg", 6, 4_600_000, { origen: "comercializado" }),
+];
+
+/** Categorías 1:1 con seed.sql (y Shopify). */
+export const CATEGORIAS: { id: number; nombre: string; orden: number }[] = [
+  { id: 1, nombre: "Racks", orden: 1 },
+  { id: 2, nombre: "Rigs", orden: 2 },
+  { id: 3, nombre: "Accesorios", orden: 3 },
+  { id: 4, nombre: "Outdoor", orden: 4 },
+  { id: 5, nombre: "Hogar", orden: 5 },
+  { id: 6, nombre: "Fuerza", orden: 6 },
+  { id: 7, nombre: "Acondicionamiento", orden: 7 },
+  { id: 8, nombre: "Almacenamiento", orden: 8 },
 ];
 
 function cli(

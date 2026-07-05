@@ -328,6 +328,7 @@ create table cotizaciones (
   descuento_pct numeric(5,2) not null default 0 check (descuento_pct between 0 and 50),
   pago_anticipado_completo boolean not null default false,
   valida_hasta  date not null,                     -- creado + 15 días (default en app)
+  tiempo_entrega text,                             -- 'Fabricados: 45 días hábiles · Comercializados: 3 a 7 días hábiles'
   origen        text not null default 'manual' check (origen in ('manual','chat','planner')),
   -- la factura Siigo vive en la tabla facturas (una cotización puede tener varias)
   notas         text,
@@ -350,6 +351,9 @@ create table cotizacion_items (
   aplica_iva    boolean not null default true,     -- transporte: elegible sin IVA
   cantidad      numeric(12,3) not null check (cantidad > 0),
   precio_unit   numeric(14,2) not null check (precio_unit >= 0), -- CON IVA si aplica_iva
+  -- Formato aprobado de cotización: descuento POR LÍNEA (precio de lista
+  -- tachado → columna % DESC → subtotal con descuento)
+  descuento_pct numeric(5,2) not null default 0 check (descuento_pct between 0 and 100),
   alto_override_cm  numeric(8,2),
   fondo_override_cm numeric(8,2),
   color         text,

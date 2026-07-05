@@ -152,6 +152,7 @@ interface CotSeed {
   no_facturar?: boolean;
   descuento_pct?: number;
   pago_anticipado_completo?: boolean;
+  tiempo_entrega?: string;
   origen?: "manual" | "chat" | "planner";
   notas?: string;
 }
@@ -168,6 +169,7 @@ function cotSeed(s: CotSeed): Cotizacion {
     descuento_pct: s.descuento_pct ?? 0,
     pago_anticipado_completo: s.pago_anticipado_completo ?? false,
     valida_hasta: fechaRel(s.creada + 15), // regla: creación + 15 días
+    tiempo_entrega: s.tiempo_entrega ?? null,
     origen: s.origen ?? "manual",
     notas: s.notas ?? null,
     activo: true,
@@ -177,17 +179,17 @@ function cotSeed(s: CotSeed): Cotizacion {
 }
 
 const COTIZACIONES: Cotizacion[] = [
-  cotSeed({ id: "q-01", numero: "BFP-0106", cliente_id: "c-01", vendedor_id: "u-01", segmento: "B2B", estado_id: 2, creada: -5, notas: "Segunda sede El Poblado. Incluye transporte a obra." }),
-  cotSeed({ id: "q-02", numero: "BFP-0107", cliente_id: "c-05", vendedor_id: "u-02", segmento: "B2B", estado_id: 3, creada: -20, pago_anticipado_completo: true, descuento_pct: 5, notas: "Cliente pagó 100% anticipado — descuento 5% aplicado." }),
-  cotSeed({ id: "q-03", numero: "BFP-0108", cliente_id: "c-03", vendedor_id: "u-01", segmento: "B2C", estado_id: 1, creada: -2, origen: "planner", notas: "Diseño hecho en el Planner. Rack en dorado (color no estándar)." }),
-  cotSeed({ id: "q-04", numero: "BFP-0109", cliente_id: "c-04", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -18, notas: "Gimnasio del hotel, piso 12." }),
+  cotSeed({ id: "q-01", numero: "BFP-0106", cliente_id: "c-01", vendedor_id: "u-01", segmento: "B2B", estado_id: 2, creada: -5, tiempo_entrega: "Fabricados: 45 días hábiles", notas: "Segunda sede El Poblado. Incluye transporte a obra. El cliente ya cuenta con piso de caucho." }),
+  cotSeed({ id: "q-02", numero: "BFP-0107", cliente_id: "c-05", vendedor_id: "u-02", segmento: "B2B", estado_id: 3, creada: -20, pago_anticipado_completo: true, descuento_pct: 5, tiempo_entrega: "Fabricados: 45 días hábiles · Comercializados: 3 a 7 días hábiles", notas: "Cliente pagó 100% anticipado — descuento 5% aplicado." }),
+  cotSeed({ id: "q-03", numero: "BFP-0108", cliente_id: "c-03", vendedor_id: "u-01", segmento: "B2C", estado_id: 1, creada: -2, origen: "planner", tiempo_entrega: "30 días hábiles", notas: "Diseño hecho en el Planner. Rack en dorado (color no estándar)." }),
+  cotSeed({ id: "q-04", numero: "BFP-0109", cliente_id: "c-04", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -18, tiempo_entrega: "Fabricados: 45 días hábiles", notas: "Gimnasio del hotel, piso 12. Descuento del 10% en jaulas por volumen." }),
   cotSeed({ id: "q-05", numero: "BFP-0110", cliente_id: "c-08", vendedor_id: "u-02", segmento: "B2B", estado_id: 4, creada: -40 }),
   cotSeed({ id: "q-06", numero: "BFP-0111", cliente_id: "c-10", vendedor_id: "u-01", segmento: "B2C", estado_id: 3, creada: -9, no_facturar: true, notas: "Venta mostrador — no facturar en Siigo." }),
-  cotSeed({ id: "q-07", numero: "BFP-0112", cliente_id: "c-02", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -12, notas: "Ampliación del box. Rig anclado a losa." }),
+  cotSeed({ id: "q-07", numero: "BFP-0112", cliente_id: "c-02", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -12, tiempo_entrega: "Fabricados: 45 días hábiles · Comercializados: 3 a 7 días hábiles", notas: "Ampliación del box. Rig anclado a losa." }),
   cotSeed({ id: "q-08", numero: "BFP-0113", cliente_id: "c-13", vendedor_id: "u-02", segmento: "B2B", estado_id: 1, creada: -5, notas: "Pendiente definir equipos con el administrador del edificio." }),
   cotSeed({ id: "q-09", numero: "BFP-0114", cliente_id: "c-09", vendedor_id: "u-01", segmento: "B2B", estado_id: 5, creada: -30, notas: "Anulada: el cliente pospuso el proyecto para 2027." }),
   cotSeed({ id: "q-10", numero: "BFP-0115", cliente_id: "c-15", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -8 }),
-  cotSeed({ id: "q-11", numero: "BFP-0116", cliente_id: "c-14", vendedor_id: "u-01", segmento: "B2C", estado_id: 3, creada: -3, origen: "chat", notas: "Solicitada por el chat del ERP." }),
+  cotSeed({ id: "q-11", numero: "BFP-0116", cliente_id: "c-14", vendedor_id: "u-01", segmento: "B2C", estado_id: 3, creada: -3, origen: "chat", tiempo_entrega: "Comercializados: 3 a 7 días hábiles", notas: "Solicitada por el chat del ERP." }),
 ];
 
 function cotItem(
@@ -207,6 +209,7 @@ function cotItem(
     aplica_iva: true,
     cantidad,
     precio_unit: producto?.precio_lista ?? 0,
+    descuento_pct: 0,
     alto_override_cm: null,
     fondo_override_cm: null,
     color: null,
@@ -233,8 +236,9 @@ const COT_ITEMS: CotizacionItem[] = [
       { recargo_id: 1, nombre: "Color no estándar (ATO)", tipo: "pct", valor: 8, monto: 341_600 },
     ],
   }),
-  // q-04: Hotel Dann — jaulas + prensa + bancos ajustables
-  cotItem("qi-04a", "q-04", "p-09", 2),
+  // q-04: Hotel Dann — jaulas con 10% DESC por volumen (formato: lista
+  // tachada → % DESC → subtotal) + prensa + bancos ajustables
+  cotItem("qi-04a", "q-04", "p-09", 2, { descuento_pct: 10 }),
   cotItem("qi-04b", "q-04", "p-11", 1),
   cotItem("qi-04c", "q-04", "p-06", 4),
   // q-05: Bodyfit 80 — racks de pared (vencida)
@@ -429,7 +433,8 @@ export class MockCrmRepository implements CrmRepository {
         .map((i) => ({
           producto_id: i.producto_id!,
           cantidad: i.cantidad,
-          precio_unit: i.precio_unit,
+          // la OP hereda el precio CON el descuento de línea ya aplicado
+          precio_unit: Math.round(i.precio_unit * (1 - i.descuento_pct / 100)),
           color: i.color,
           alto_override_cm: i.alto_override_cm,
           fondo_override_cm: i.fondo_override_cm,
