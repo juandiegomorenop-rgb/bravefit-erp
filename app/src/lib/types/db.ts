@@ -241,6 +241,19 @@ export interface ProductoDimension {
   precio_por_cm_extra: number; // CON IVA
 }
 
+/** Pedido entrante de Shopify (webhook). Pagado → OP automática. */
+export interface PedidoWeb {
+  id: string;
+  shopify_order_id: string; // idempotencia del webhook
+  shopify_numero: string; // "#1024"
+  cliente_id: string | null; // match/creación por email
+  estado_pago: "pagado" | "pendiente" | "reembolsado";
+  estado_entrega: "sin_entregar" | "parcial" | "entregado";
+  total: number;
+  op_id: string | null; // OP generada (null hasta convertir)
+  recibido_en: string;
+}
+
 export interface Oportunidad {
   id: string;
   cliente_id: string;
