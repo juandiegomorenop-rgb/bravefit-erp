@@ -629,29 +629,197 @@ create index idx_movinv_garantia on movimientos_inventario (garantia_id);
 -- 6 · MERCADEO
 -- ------------------------------------------------------------
 
-create table campanas (
-  id         uuid primary key default gen_random_uuid(),
-  plataforma text not null check (plataforma in ('meta','google','tiktok','otro')),
-  nombre     text not null,
-  id_externo text,
-  inicio     date,
-  fin        date,
-  activo     boolean not null default true,
-  eliminado_en timestamptz,
-  check (fin is null or inicio is null or fin >= inicio)
+-- MODELO GENÉRICO POR TIPO, no por plataforma (spec Mercadeo v4):
+-- la plataforma es un campo (canal_id), no una tabla nueva. Las métricas
+-- son SERIE DE TIEMPO (una fila por día) → filtros 7/30/90 días sin
+-- reprocesar. Campos específicos de plataforma van en atributos_extra jsonb.
+
+-- 6.1 · Catálogo de canales (tabla pequeña y fija)
+create table canales (
+  id               smallint generated always as identity primary key,
+  nombre           text not null unique,        -- Instagram, Meta Ads, Google Ads…
+  tipo             text not null check (tipo in ('organico','pauta','mensajeria')),
+  estado           text not null default 'planeado'
+                   check (estado in ('activo','planeado','inactivo')),
+  fecha_activacion date
 );
 
-create table campana_metricas (
-  id         bigint generated always as identity primary key,
+create table cuentas_conectadas (
+  id             uuid primary key default gen_random_uuid(),
+  canal_id       smallint not null references canales(id),
+  nombre_cuenta  text not null,                 -- @bravefit, cuenta Meta Ads…
+  id_externo     text,                          -- IG Business Account ID, Ad Account ID
+  access_token_ref text,                        -- REFERENCIA al secreto, NUNCA el token en claro
+  token_expira   timestamptz,                   -- alertar renovación antes de caducar
+  estado_conexion text not null default 'ok'
+                 check (estado_conexion in ('ok','token_vencido','permiso_revocado','en_revision')),
+  activo         boolean not null default true
+);
+
+-- 6.2 · Contenido orgánico (genérico, cualquier canal orgánico)
+create table contenido (
+  id                 uuid primary key default gen_random_uuid(),
+  cuenta_id          uuid not null references cuentas_conectadas(id),
+  id_externo         text,
+  tipo_formato       text not null check (tipo_formato in ('reel','carrusel','estatico','story','video')),
+  categoria_producto text,                       -- Racks, Fuerza… (catálogo Bravefit)
+  fecha_publicacion  timestamptz,
+  url_publica        text,
+  miniatura_url      text,
+  segmento           text check (segmento in ('B2B','B2C','ambos')),
+  cumple_tono_marca  boolean,                    -- check manual opcional
+  titulo             text,                       -- descripción interna
+  activo             boolean not null default true
+);
+create index idx_contenido_cuenta on contenido (cuenta_id);
+create index idx_contenido_fecha on contenido (fecha_publicacion desc);
+
+-- 6.3 · Métricas diarias de contenido (corazón del Top-3 filtrable)
+create table contenido_metricas_diarias (
+  id               bigint generated always as identity primary key,
+  contenido_id     uuid not null references contenido(id) on delete cascade,
+  fecha            date not null,
+  alcance          integer not null default 0,
+  alcance_no_seguidores integer not null default 0,  -- tasa de descubrimiento
+  impresiones      integer not null default 0,
+  likes            integer not null default 0,
+  comentarios      integer not null default 0,
+  compartidos      integer not null default 0,
+  guardados        integer not null default 0,
+  clics_perfil     integer not null default 0,
+  clics_whatsapp   integer not null default 0,       -- conversión real en orgánico
+  retencion_video_pct numeric(5,2),                  -- solo video/reel
+  atributos_extra  jsonb not null default '{}'::jsonb,
+  unique (contenido_id, fecha)
+  -- tasa_interaccion y engagement_score: se calculan en consulta (sección 5)
+);
+create index idx_contmet_fecha on contenido_metricas_diarias (fecha);
+
+-- 6.4 · Pauta: campaña → conjunto → anuncio (Meta/Google/TikTok, mismo modelo)
+create table campanas (
+  id                uuid primary key default gen_random_uuid(),
+  canal_id          smallint not null references canales(id),
+  cuenta_id         uuid references cuentas_conectadas(id),
+  id_externo        text,
+  nombre            text not null,
+  objetivo          text check (objetivo in ('trafico','mensajes','conversion','alcance','leads')),
+  presupuesto_diario numeric(14,2),
+  fecha_inicio      date,
+  fecha_fin         date,
+  segmento          text check (segmento in ('B2B','B2C','ambos')),
+  utm_campaign      text,                        -- = nombre normalizado (sección 6)
+  activo            boolean not null default true,
+  eliminado_en      timestamptz,
+  check (fecha_fin is null or fecha_inicio is null or fecha_fin >= fecha_inicio)
+);
+create index idx_campanas_canal on campanas (canal_id);
+
+create table conjuntos_anuncios (
+  id         uuid primary key default gen_random_uuid(),
   campana_id uuid not null references campanas(id) on delete cascade,
-  fecha      date not null,
-  inversion  numeric(14,2) not null default 0,
-  alcance    integer not null default 0,
-  clics      integer not null default 0,
-  leads      integer not null default 0,
-  ingresos   numeric(14,2) not null default 0,  -- atribuidos (manual o plataforma)
-  unique (campana_id, fecha)
-  -- CPL = inversion/leads · ROAS = ingresos/inversion: en consulta, nunca almacenados
+  id_externo text,
+  nombre     text not null,
+  activo     boolean not null default true
+);
+create index idx_conjuntos_campana on conjuntos_anuncios (campana_id);
+
+create table anuncios (
+  id            uuid primary key default gen_random_uuid(),
+  conjunto_id   uuid not null references conjuntos_anuncios(id) on delete cascade,
+  contenido_id  uuid references contenido(id),   -- si el creativo es un post orgánico
+  id_externo    text,
+  nombre        text,
+  tipo_creativo text,
+  angulo_mensaje text,                            -- 'precio','durabilidad','antes/después'…
+  activo        boolean not null default true
+);
+create index idx_anuncios_conjunto on anuncios (conjunto_id);
+create index idx_anuncios_contenido on anuncios (contenido_id);
+
+-- 6.5 · Métricas diarias de pauta (serie de tiempo)
+create table pauta_metricas_diarias (
+  id                bigint generated always as identity primary key,
+  anuncio_id        uuid not null references anuncios(id) on delete cascade,
+  fecha             date not null,
+  impresiones       integer not null default 0,
+  clics             integer not null default 0,
+  clics_salida      integer not null default 0,   -- outbound ≠ link click
+  gasto             numeric(14,2) not null default 0,
+  frecuencia        numeric(8,2),
+  resultados        integer not null default 0,    -- según objetivo (mensajes, leads…)
+  costo_por_resultado numeric(14,2),
+  atributos_extra   jsonb not null default '{}'::jsonb,  -- ej. hook_rate (video)
+  unique (anuncio_id, fecha)
+);
+create index idx_pautamet_fecha on pauta_metricas_diarias (fecha);
+
+-- 6.6 · LEADS: puente marketing ↔ ventas (la tabla más importante).
+-- Convierte "costo por clic" en CAC y ROAS reales al enlazar con cotizaciones.
+create table leads (
+  id             uuid primary key default gen_random_uuid(),
+  fecha_creacion timestamptz not null default now(),
+  canal_id       smallint references canales(id),
+  campana_id     uuid references campanas(id),
+  contenido_id   uuid references contenido(id),
+  cliente_id     uuid references clientes(id),
+  cotizacion_id  uuid references cotizaciones(id),  -- → módulo cotizaciones
+  utm_source     text,
+  utm_medium     text,
+  utm_campaign   text,
+  utm_content    text,
+  segmento       text check (segmento in ('B2B','B2C')),
+  estado         text not null default 'nuevo'
+                 check (estado in ('nuevo','cotizado','cerrado_ganado','cerrado_perdido')),
+  valor_cierre   numeric(14,2),                    -- ticket real si cerró
+  margen_producto_pct numeric(5,2)
+);
+create index idx_leads_canal on leads (canal_id);
+create index idx_leads_campana on leads (campana_id);
+create index idx_leads_estado on leads (estado);
+create index idx_leads_fecha on leads (fecha_creacion desc);
+
+-- 6.7 · Bitácora A/B de aprendizajes creativos
+create table pruebas_creativas (
+  id            uuid primary key default gen_random_uuid(),
+  fecha_inicio  date,
+  fecha_fin     date,
+  hipotesis     text not null,
+  variantes     jsonb not null default '[]'::jsonb,  -- IDs de anuncios/contenidos
+  resultado     text,
+  se_aplico     boolean not null default false
+);
+
+-- 6.8 · WhatsApp (Fase 4 — el modelo ya las soporta; monitorear calidad)
+create table whatsapp_plantillas (
+  id                  uuid primary key default gen_random_uuid(),
+  nombre              text not null,
+  categoria           text check (categoria in ('marketing','utility','authentication')),
+  estado_aprobacion   text not null default 'en_revision'
+                      check (estado_aprobacion in ('aprobada','rechazada','en_revision')),
+  fecha_envio_revision date,
+  cuerpo              text
+);
+
+create table whatsapp_campanas_masivas (
+  id                    uuid primary key default gen_random_uuid(),
+  fecha_envio           timestamptz not null default now(),
+  plantilla_id          uuid references whatsapp_plantillas(id),
+  categoria_plantilla   text check (categoria_plantilla in ('marketing','utility','authentication')),
+  segmento_destinatarios text,
+  enviados              integer not null default 0,
+  entregados            integer not null default 0,
+  leidos                integer not null default 0,
+  respondidos           integer not null default 0,
+  optout                integer not null default 0,   -- crítico para la calidad
+  costo_total           numeric(14,2) not null default 0
+);
+
+create table whatsapp_cuenta_salud (               -- una fila por día
+  fecha                date primary key,
+  quality_rating       text check (quality_rating in ('alta','media','baja')),
+  tier_mensajeria      integer,                     -- límite conversaciones/día
+  plantillas_aprobadas integer not null default 0,
+  plantillas_rechazadas integer not null default 0
 );
 
 create table encuestas (
@@ -672,18 +840,8 @@ create table encuesta_respuestas (
   en          timestamptz not null default now()
 );
 create index idx_encresp_op on encuesta_respuestas (op_id);
-
-create table redes_metricas (
-  id            bigint generated always as identity primary key,
-  plataforma    text not null,
-  fecha         date not null,
-  visualizaciones integer not null default 0,
-  engagement    numeric(8,4) not null default 0,
-  seguidores    integer,
-  post_top_url  text,
-  post_top_nota text,
-  unique (plataforma, fecha)
-);
+-- (redes_metricas legacy eliminada: contenido + contenido_metricas_diarias
+--  cubren visualizaciones/engagement/top-post con más detalle)
 
 -- ------------------------------------------------------------
 -- 7 · RECURSOS HUMANOS Y CARTELERA

@@ -149,12 +149,22 @@ create policy despachos_ins on op_despachos for insert to authenticated
 create policy despachos_del on op_despachos for delete to authenticated
   using (fn_puede('produccion','aprobar'));
 
--- Mercadeo
-call pr_politicas_modulo('campanas',           'mercadeo');
-call pr_politicas_modulo('campana_metricas',   'mercadeo');
-call pr_politicas_modulo('encuestas',          'mercadeo');
-call pr_politicas_modulo('encuesta_respuestas','mercadeo');
-call pr_politicas_modulo('redes_metricas',     'mercadeo');
+-- Mercadeo (modelo genérico: canales, contenido orgánico, pauta, leads, WhatsApp)
+call pr_politicas_modulo('canales',                    'mercadeo');
+call pr_politicas_modulo('cuentas_conectadas',         'mercadeo');
+call pr_politicas_modulo('contenido',                  'mercadeo');
+call pr_politicas_modulo('contenido_metricas_diarias', 'mercadeo');
+call pr_politicas_modulo('campanas',                   'mercadeo');
+call pr_politicas_modulo('conjuntos_anuncios',         'mercadeo');
+call pr_politicas_modulo('anuncios',                   'mercadeo');
+call pr_politicas_modulo('pauta_metricas_diarias',     'mercadeo');
+call pr_politicas_modulo('leads',                      'mercadeo');
+call pr_politicas_modulo('pruebas_creativas',          'mercadeo');
+call pr_politicas_modulo('whatsapp_plantillas',        'mercadeo');
+call pr_politicas_modulo('whatsapp_campanas_masivas',  'mercadeo');
+call pr_politicas_modulo('whatsapp_cuenta_salud',      'mercadeo');
+call pr_politicas_modulo('encuestas',                  'mercadeo');
+call pr_politicas_modulo('encuesta_respuestas',        'mercadeo');
 
 -- Finanzas (PyG manual y nivel de servicio)
 call pr_politicas_modulo('pyg_mensual',            'finanzas');
