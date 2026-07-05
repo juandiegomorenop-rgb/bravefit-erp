@@ -255,6 +255,107 @@ export interface Oportunidad {
   creado_en: string;
 }
 
+// ---- Inventario y compras ---------------------------------------
+
+export interface TipoMaterial {
+  id: number;
+  nombre: string; // Tubería, Platinería, Cojinería, Tornillería…
+}
+
+export interface Material {
+  id: string;
+  nombre: string;
+  tipo_material_id: number;
+  unidad_id: number;
+  costo_promedio: number; // promedio ponderado (lo mantiene el kardex)
+  buffer_min: number; // Simple Solutions: reposición por consumo
+  buffer_max: number;
+  activo: boolean;
+  eliminado_en: string | null;
+}
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  nit: string | null;
+  contacto: string | null;
+  telefono: string | null;
+  email: string | null;
+  activo: boolean;
+}
+
+export interface Existencia {
+  id: string;
+  producto_id: string | null;
+  material_id: string | null;
+  tipo: "terminado" | "materia_prima" | "en_proceso";
+  cantidad_disponible: number;
+  cantidad_reservada: number;
+}
+
+export interface MovimientoInventario {
+  id: number;
+  existencia_id: string;
+  tipo:
+    | "entrada_compra"
+    | "salida_produccion"
+    | "entrada_produccion"
+    | "salida_venta"
+    | "ajuste"
+    | "devolucion"
+    | "entrada_garantia"
+    | "salida_garantia";
+  cantidad: number; // entradas > 0, salidas < 0 (lo garantiza la BD)
+  costo_unit: number | null; // obligatorio en compras
+  op_id: string | null;
+  recepcion_id: string | null;
+  usuario_id: string | null;
+  nota: string | null;
+  en: string;
+}
+
+export interface SolicitudCompra {
+  id: string;
+  numero: string; // SC-NNN
+  tipo_material_id: number; // 1 renglón por TIPO de material
+  proveedor_id: string | null;
+  solicitante_id: string;
+  estado: "pendiente" | "en_cotizacion" | "comprado" | "rechazada";
+  valor_estimado: number | null; // lo digita el comprador al cotizar
+  fecha_entrega: string | null; // se habilita al pasar a comprado
+  op_id: string | null; // si nace de una OP comercializada
+  notas: string | null;
+  activo: boolean;
+  eliminado_en: string | null;
+  creado_en: string;
+}
+
+export interface ScItem {
+  id: string;
+  sc_id: string;
+  material_id: string | null;
+  descripcion: string | null; // libre si el material aún no existe
+  cantidad: number;
+}
+
+export interface Recepcion {
+  id: string;
+  sc_id: string;
+  usuario_id: string;
+  fecha: string;
+  cerrada: boolean; // cierra cuando no quedan faltantes
+}
+
+export interface RecepcionItem {
+  id: string;
+  recepcion_id: string;
+  sc_item_id: string;
+  cant_recibida: number;
+  cant_faltante: number;
+  nota: string | null;
+  faltante_resuelto: boolean; // seguimiento hasta cierre
+}
+
 // ---- Garantías (prioridad ambulancia) ---------------------------
 
 export interface Garantia {

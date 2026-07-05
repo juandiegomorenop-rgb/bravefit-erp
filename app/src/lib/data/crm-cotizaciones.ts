@@ -165,7 +165,7 @@ const ESTADOS: EstadoCotizacion[] = [
   { id: 5, nombre: "Anulada", orden: 5, activo: true },
 ];
 
-const VENDEDORES: Usuario[] = [
+export const VENDEDORES: Usuario[] = [
   { id: "u-01", rol_id: 1, nombre: "Juan Diego Moreno", email: "juanmoreno@bravefit.co", activo: true },
   { id: "u-02", rol_id: 1, nombre: "María Fernández", email: "maria@bravefit.co", activo: true },
   { id: "u-03", rol_id: 1, nombre: "Camilo Torres", email: "camilo@bravefit.co", activo: true },

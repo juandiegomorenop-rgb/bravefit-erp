@@ -1,12 +1,43 @@
-import { PaginaModulo } from "@/components/PaginaModulo";
+import { getInventarioRepository } from "@/lib/data/inventario";
+import { TIPOS_MATERIAL } from "@/lib/data/materiales-mock";
+import { InventariosClient } from "./InventariosClient";
 
 export const metadata = { title: "Inventarios" };
 
-export default function Page() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const primero = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v[0] : v;
+
+/**
+ * Server component: carga existencias MP/PT y la serie de compras
+ * (hoy mock, mañana Supabase) y delega filtros, tablas y tendencia
+ * al client component. Una sola bodega: sin columna de bodega.
+ */
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const repo = getInventarioRepository();
+  const [filasMP, filasPT, compras] = await Promise.all([
+    repo.listarExistenciasMP(),
+    repo.listarExistenciasPT(),
+    repo.comprasMensuales(8),
+  ]);
+
   return (
-    <PaginaModulo
-      titulo="Inventarios"
-      subtitulo="Kardex, buffers de reposición por consumo (Simple Solutions) y tendencias por referencia."
+    <InventariosClient
+      filasMP={filasMP}
+      filasPT={filasPT}
+      compras={compras}
+      tipos={TIPOS_MATERIAL}
+      filtrosIniciales={{
+        tipo_material_id: Number(primero(sp.tipo)) || undefined,
+        texto: primero(sp.q) ?? "",
+        solo_bajo_buffer: primero(sp.bajo) === "1",
+      }}
     />
   );
 }
