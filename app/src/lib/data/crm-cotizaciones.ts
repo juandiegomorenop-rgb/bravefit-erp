@@ -1,0 +1,534 @@
+/**
+ * Data layer de Ventas (CRM + Cotizaciones) — INTERCAMBIABLE.
+ *
+ * Igual patrón que ops.ts: la UI solo conoce las interfaces y los
+ * factories. CRM y Cotizaciones comparten un store en memoria (una
+ * oportunidad apunta a su cotización), y al GANAR una oportunidad se
+ * crea la OP en el repositorio de Órdenes: aparece de inmediato en el
+ * kanban de Producción (réplica de fn_validar_ganada + OP automática).
+ */
+
+import {
+  calcularTotales,
+  estaVencida,
+  type CotizacionItemConProducto,
+  type TotalesCotizacion,
+} from "@/lib/cotizacion-logic";
+import {
+  CIUDADES,
+  CLIENTES,
+  fechaRel,
+  getOpsRepository,
+  PRODUCTOS,
+  tsRel,
+} from "@/lib/data/ops";
+import type {
+  Ciudad,
+  Cliente,
+  Cotizacion,
+  CotizacionItem,
+  EstadoCotizacion,
+  EtapaCrm,
+  Oportunidad,
+  Usuario,
+} from "@/lib/types/db";
+
+// ---------------------------------------------------------------
+// Tipos enriquecidos (joins) que consume la UI
+// ---------------------------------------------------------------
+
+export interface OportunidadCard {
+  oportunidad: Oportunidad;
+  cliente: Cliente;
+  vendedor: Usuario;
+  /** Resumen de la cotización vinculada (null si aún no hay). */
+  cotizacion: {
+    id: string;
+    numero: string;
+    estado: string;
+    total: number;
+    tiene_items: boolean;
+  } | null;
+  /** Valor a mostrar: total de la cotización o valor_estimado. */
+  valor: number;
+}
+
+export interface ResultadoMoverCrm {
+  /** Presente solo cuando la etapa destino es_ganada: la OP generada. */
+  opCreada?: { id: string; numero: string };
+}
+
+export interface FiltrosCrm {
+  vendedor_id?: string;
+  texto?: string;
+}
+
+export interface CrmRepository {
+  listarOportunidades(filtros?: FiltrosCrm): Promise<OportunidadCard[]>;
+  /**
+   * Mueve la ficha de etapa. Si la etapa destino es_ganada, EXIGE
+   * cotización con ítems (si no, lanza Error con mensaje claro) y crea
+   * la OP automática en "En Cola" con origen 'cotizacion'.
+   */
+  moverEtapa(oportunidad_id: string, etapa_id: number): Promise<ResultadoMoverCrm>;
+  listarEtapas(): Promise<EtapaCrm[]>;
+  listarVendedores(): Promise<Usuario[]>;
+}
+
+export interface CotizacionCard {
+  cotizacion: Cotizacion;
+  cliente: Cliente;
+  vendedor: Usuario;
+  estado: EstadoCotizacion;
+  total: number;
+  vencida: boolean;
+}
+
+export interface CotizacionDetalle {
+  cotizacion: Cotizacion;
+  cliente: Cliente;
+  ciudad: Ciudad | null;
+  vendedor: Usuario;
+  estado: EstadoCotizacion;
+  items: CotizacionItemConProducto[];
+  totales: TotalesCotizacion;
+  vencida: boolean;
+  /** Oportunidad CRM vinculada, si existe. */
+  oportunidad_id: string | null;
+}
+
+export interface FiltrosCotizaciones {
+  estado_id?: number;
+  vendedor_id?: string;
+  segmento?: "B2B" | "B2C";
+  texto?: string;
+}
+
+export interface CotizacionesRepository {
+  listar(filtros?: FiltrosCotizaciones): Promise<CotizacionCard[]>;
+  obtener(id: string): Promise<CotizacionDetalle | null>;
+  listarEstados(): Promise<EstadoCotizacion[]>;
+  listarVendedores(): Promise<Usuario[]>;
+}
+
+// ===============================================================
+// MOCK — catálogos espejo de seed.sql
+// ===============================================================
+
+const ETAPAS_CRM: EtapaCrm[] = [
+  { id: 1, nombre: "En conversaciones", orden: 1, color: "#5a5a5a", es_ganada: false, es_perdida: false, activo: true },
+  { id: 2, nombre: "Elaborando Cotización y/o Render", orden: 2, color: "#a06d10", es_ganada: false, es_perdida: false, activo: true },
+  { id: 3, nombre: "Cotizado", orden: 3, color: "#3b5bb5", es_ganada: false, es_perdida: false, activo: true },
+  { id: 4, nombre: "Ganado", orden: 4, color: "#1a7f4e", es_ganada: true, es_perdida: false, activo: true },
+  { id: 5, nombre: "Perdido", orden: 5, color: "#c2410c", es_ganada: false, es_perdida: true, activo: true },
+];
+
+const ESTADOS: EstadoCotizacion[] = [
+  { id: 1, nombre: "Borrador", orden: 1, activo: true },
+  { id: 2, nombre: "Enviada", orden: 2, activo: true },
+  { id: 3, nombre: "Aprobada", orden: 3, activo: true },
+  { id: 4, nombre: "Vencida", orden: 4, activo: true },
+  { id: 5, nombre: "Anulada", orden: 5, activo: true },
+];
+
+const VENDEDORES: Usuario[] = [
+  { id: "u-01", rol_id: 1, nombre: "Juan Diego Moreno", email: "juanmoreno@bravefit.co", activo: true },
+  { id: "u-02", rol_id: 1, nombre: "María Fernández", email: "maria@bravefit.co", activo: true },
+  { id: "u-03", rol_id: 1, nombre: "Camilo Torres", email: "camilo@bravefit.co", activo: true },
+];
+
+// ---------------------------------------------------------------
+// MOCK — cotizaciones (numeración continúa la serie del Planner)
+// ---------------------------------------------------------------
+
+interface CotSeed {
+  id: string;
+  numero: string;
+  cliente_id: string;
+  vendedor_id: string;
+  segmento: "B2B" | "B2C";
+  estado_id: number;
+  creada: number; // días relativos a hoy
+  no_facturar?: boolean;
+  descuento_pct?: number;
+  pago_anticipado_completo?: boolean;
+  origen?: "manual" | "chat" | "planner";
+  notas?: string;
+}
+
+function cotSeed(s: CotSeed): Cotizacion {
+  return {
+    id: s.id,
+    numero: s.numero,
+    cliente_id: s.cliente_id,
+    vendedor_id: s.vendedor_id,
+    segmento: s.segmento,
+    estado_id: s.estado_id,
+    no_facturar: s.no_facturar ?? false,
+    descuento_pct: s.descuento_pct ?? 0,
+    pago_anticipado_completo: s.pago_anticipado_completo ?? false,
+    valida_hasta: fechaRel(s.creada + 15), // regla: creación + 15 días
+    origen: s.origen ?? "manual",
+    notas: s.notas ?? null,
+    activo: true,
+    eliminado_en: null,
+    creado_en: tsRel(s.creada, 10),
+  };
+}
+
+const COTIZACIONES: Cotizacion[] = [
+  cotSeed({ id: "q-01", numero: "BFP-0106", cliente_id: "c-01", vendedor_id: "u-01", segmento: "B2B", estado_id: 2, creada: -5, notas: "Segunda sede El Poblado. Incluye transporte a obra." }),
+  cotSeed({ id: "q-02", numero: "BFP-0107", cliente_id: "c-05", vendedor_id: "u-02", segmento: "B2B", estado_id: 3, creada: -20, pago_anticipado_completo: true, descuento_pct: 5, notas: "Cliente pagó 100% anticipado — descuento 5% aplicado." }),
+  cotSeed({ id: "q-03", numero: "BFP-0108", cliente_id: "c-03", vendedor_id: "u-01", segmento: "B2C", estado_id: 1, creada: -2, origen: "planner", notas: "Diseño hecho en el Planner. Rack en dorado (color no estándar)." }),
+  cotSeed({ id: "q-04", numero: "BFP-0109", cliente_id: "c-04", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -18, notas: "Gimnasio del hotel, piso 12." }),
+  cotSeed({ id: "q-05", numero: "BFP-0110", cliente_id: "c-08", vendedor_id: "u-02", segmento: "B2B", estado_id: 4, creada: -40 }),
+  cotSeed({ id: "q-06", numero: "BFP-0111", cliente_id: "c-10", vendedor_id: "u-01", segmento: "B2C", estado_id: 3, creada: -9, no_facturar: true, notas: "Venta mostrador — no facturar en Siigo." }),
+  cotSeed({ id: "q-07", numero: "BFP-0112", cliente_id: "c-02", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -12, notas: "Ampliación del box. Rig anclado a losa." }),
+  cotSeed({ id: "q-08", numero: "BFP-0113", cliente_id: "c-13", vendedor_id: "u-02", segmento: "B2B", estado_id: 1, creada: -5, notas: "Pendiente definir equipos con el administrador del edificio." }),
+  cotSeed({ id: "q-09", numero: "BFP-0114", cliente_id: "c-09", vendedor_id: "u-01", segmento: "B2B", estado_id: 5, creada: -30, notas: "Anulada: el cliente pospuso el proyecto para 2027." }),
+  cotSeed({ id: "q-10", numero: "BFP-0115", cliente_id: "c-15", vendedor_id: "u-03", segmento: "B2B", estado_id: 2, creada: -8 }),
+  cotSeed({ id: "q-11", numero: "BFP-0116", cliente_id: "c-14", vendedor_id: "u-01", segmento: "B2C", estado_id: 3, creada: -3, origen: "chat", notas: "Solicitada por el chat del ERP." }),
+];
+
+function cotItem(
+  id: string,
+  cotizacion_id: string,
+  producto_id: string | null,
+  cantidad: number,
+  extra: Partial<CotizacionItem> = {},
+): CotizacionItem {
+  const producto = PRODUCTOS.find((p) => p.id === producto_id);
+  return {
+    id,
+    cotizacion_id,
+    producto_id,
+    descripcion: null,
+    es_transporte: false,
+    aplica_iva: true,
+    cantidad,
+    precio_unit: producto?.precio_lista ?? 0,
+    alto_override_cm: null,
+    fondo_override_cm: null,
+    color: null,
+    recargos: [],
+    ...extra,
+  };
+}
+
+const COT_ITEMS: CotizacionItem[] = [
+  // q-01: SmartFit — racks Pro + bancos + transporte SIN IVA
+  cotItem("qi-01a", "q-01", "p-02", 4),
+  cotItem("qi-01b", "q-01", "p-05", 8),
+  cotItem("qi-01c", "q-01", null, 1, { descripcion: "Transporte Medellín — El Poblado (a obra)", es_transporte: true, aplica_iva: false, precio_unit: 450_000 }),
+  // q-02: Gym House — rig (PP) + discos (PC), pago anticipado con 5%
+  cotItem("qi-02a", "q-02", "p-03", 1),
+  cotItem("qi-02b", "q-02", "p-08", 2),
+  // q-03: Laura — Rack PF5 alto 250 (default 230: +20cm×$4.000) + color dorado (ATO 8%)
+  cotItem("qi-03a", "q-03", "p-01", 1, {
+    alto_override_cm: 250,
+    color: "Dorado",
+    precio_unit: 4_611_600, // 4.190.000 + 80.000 (cm extra) + 8% ATO (341.600)
+    recargos: [
+      { recargo_id: null, nombre: "Alto 250 cm (+20 cm × $4.000)", tipo: "fijo", valor: 80_000, monto: 80_000 },
+      { recargo_id: 1, nombre: "Color no estándar (ATO)", tipo: "pct", valor: 8, monto: 341_600 },
+    ],
+  }),
+  // q-04: Hotel Dann — jaulas + prensa + bancos ajustables
+  cotItem("qi-04a", "q-04", "p-09", 2),
+  cotItem("qi-04b", "q-04", "p-11", 1),
+  cotItem("qi-04c", "q-04", "p-06", 4),
+  // q-05: Bodyfit 80 — racks de pared (vencida)
+  cotItem("qi-05a", "q-05", "p-04", 6),
+  // q-06: Marcela — banco ajustable (no facturar)
+  cotItem("qi-06a", "q-06", "p-06", 1),
+  // q-07: CrossFit Jungle — rig + discos + kit mancuernas + transporte CON IVA
+  cotItem("qi-07a", "q-07", "p-03", 1),
+  cotItem("qi-07b", "q-07", "p-08", 3),
+  cotItem("qi-07c", "q-07", "p-12", 1),
+  cotItem("qi-07d", "q-07", null, 1, { descripcion: "Transporte Envigado + izaje", es_transporte: true, aplica_iva: true, precio_unit: 380_000 }),
+  // q-08: Torre GNB — BORRADOR SIN ÍTEMS (demo de la regla de Ganado)
+  // q-09: CrossFit La Ceja — jaula (anulada)
+  cotItem("qi-09a", "q-09", "p-09", 1),
+  // q-10: Studio Pilates — racks de pared + bancos
+  cotItem("qi-10a", "q-10", "p-04", 2),
+  cotItem("qi-10b", "q-10", "p-05", 4),
+  // q-11: Pedro — SOLO comercializados (PC 100% anticipado)
+  cotItem("qi-11a", "q-11", "p-07", 1),
+  cotItem("qi-11b", "q-11", "p-08", 1),
+];
+
+// ---------------------------------------------------------------
+// MOCK — oportunidades CRM
+// ---------------------------------------------------------------
+
+interface OppSeed {
+  id: string;
+  cliente_id: string;
+  vendedor_id: string;
+  etapa_id: number;
+  cotizacion_id?: string;
+  valor_estimado?: number;
+  creada: number;
+  movida: number;
+  notas?: string;
+}
+
+function oppSeed(s: OppSeed): Oportunidad {
+  return {
+    id: s.id,
+    cliente_id: s.cliente_id,
+    cotizacion_id: s.cotizacion_id ?? null,
+    etapa_id: s.etapa_id,
+    vendedor_id: s.vendedor_id,
+    valor_estimado: s.valor_estimado ?? null,
+    notas: s.notas ?? null,
+    movida_en: tsRel(s.movida, 11),
+    activo: true,
+    eliminado_en: null,
+    creado_en: tsRel(s.creada, 9),
+  };
+}
+
+const OPORTUNIDADES: Oportunidad[] = [
+  oppSeed({ id: "o-01", cliente_id: "c-07", vendedor_id: "u-01", etapa_id: 1, valor_estimado: 12_000_000, creada: -3, movida: -3, notas: "Coliseo del colegio: 2 racks de pared + zona funcional." }),
+  oppSeed({ id: "o-02", cliente_id: "c-11", vendedor_id: "u-03", etapa_id: 1, valor_estimado: 45_000_000, creada: -8, movida: -8, notas: "Dotación completa para el gimnasio del coliseo." }),
+  oppSeed({ id: "o-03", cliente_id: "c-06", vendedor_id: "u-02", etapa_id: 1, valor_estimado: 3_500_000, creada: -1, movida: -1 }),
+  oppSeed({ id: "o-04", cliente_id: "c-12", vendedor_id: "u-02", etapa_id: 2, valor_estimado: 18_000_000, creada: -10, movida: -6, notas: "Esperando render del área outdoor." }),
+  oppSeed({ id: "o-05", cliente_id: "c-03", vendedor_id: "u-01", etapa_id: 2, cotizacion_id: "q-03", creada: -4, movida: -2, notas: "Rack dorado del Planner — falta confirmar medidas del techo." }),
+  oppSeed({ id: "o-06", cliente_id: "c-13", vendedor_id: "u-02", etapa_id: 2, cotizacion_id: "q-08", valor_estimado: 25_000_000, creada: -7, movida: -5, notas: "Cotización en borrador: definir equipos con el administrador." }),
+  oppSeed({ id: "o-07", cliente_id: "c-01", vendedor_id: "u-01", etapa_id: 3, cotizacion_id: "q-01", creada: -6, movida: -4 }),
+  oppSeed({ id: "o-08", cliente_id: "c-02", vendedor_id: "u-03", etapa_id: 3, cotizacion_id: "q-07", creada: -14, movida: -12, notas: "Revisan presupuesto con los socios." }),
+  oppSeed({ id: "o-09", cliente_id: "c-15", vendedor_id: "u-03", etapa_id: 3, cotizacion_id: "q-10", creada: -22, movida: -20, notas: "Sin respuesta hace 3 semanas — hacer seguimiento." }),
+  oppSeed({ id: "o-10", cliente_id: "c-05", vendedor_id: "u-02", etapa_id: 4, cotizacion_id: "q-02", creada: -25, movida: -15, notas: "Pagó 100% anticipado. OP generada." }),
+  oppSeed({ id: "o-11", cliente_id: "c-14", vendedor_id: "u-01", etapa_id: 4, cotizacion_id: "q-11", creada: -5, movida: -2 }),
+  oppSeed({ id: "o-12", cliente_id: "c-04", vendedor_id: "u-03", etapa_id: 5, cotizacion_id: "q-04", creada: -20, movida: -1, notas: "Eligieron proveedor importado por precio." }),
+];
+
+// ---------------------------------------------------------------
+// Store compartido CRM ↔ Cotizaciones (una sola verdad en memoria)
+// ---------------------------------------------------------------
+
+interface VentasStore {
+  cotizaciones: Cotizacion[];
+  items: CotizacionItem[];
+  oportunidades: Oportunidad[];
+}
+
+const globalVentas = globalThis as unknown as {
+  __ventasStore?: VentasStore;
+  __crmRepositorio?: CrmRepository;
+  __cotRepositorio?: CotizacionesRepository;
+};
+
+function getStore(): VentasStore {
+  globalVentas.__ventasStore ??= {
+    cotizaciones: structuredClone(COTIZACIONES),
+    items: structuredClone(COT_ITEMS),
+    oportunidades: structuredClone(OPORTUNIDADES),
+  };
+  return globalVentas.__ventasStore;
+}
+
+function itemsDeCotizacion(store: VentasStore, cotizacion_id: string): CotizacionItemConProducto[] {
+  return store.items
+    .filter((i) => i.cotizacion_id === cotizacion_id)
+    .map((i) => ({
+      ...i,
+      producto: PRODUCTOS.find((p) => p.id === i.producto_id) ?? null,
+    }));
+}
+
+function totalDeCotizacion(store: VentasStore, cot: Cotizacion): number {
+  return calcularTotales(itemsDeCotizacion(store, cot.id), cot).total;
+}
+
+// ---------------------------------------------------------------
+// Implementaciones mock
+// ---------------------------------------------------------------
+
+export class MockCrmRepository implements CrmRepository {
+  private get store() {
+    return getStore();
+  }
+
+  private card(o: Oportunidad): OportunidadCard {
+    const cot = o.cotizacion_id
+      ? this.store.cotizaciones.find((c) => c.id === o.cotizacion_id)
+      : undefined;
+    const items = cot ? itemsDeCotizacion(this.store, cot.id) : [];
+    const total = cot ? calcularTotales(items, cot).total : 0;
+    return {
+      oportunidad: structuredClone(o),
+      cliente: CLIENTES.find((c) => c.id === o.cliente_id)!,
+      vendedor: VENDEDORES.find((v) => v.id === o.vendedor_id)!,
+      cotizacion: cot
+        ? {
+            id: cot.id,
+            numero: cot.numero,
+            estado: ESTADOS.find((e) => e.id === cot.estado_id)!.nombre,
+            total,
+            tiene_items: items.length > 0,
+          }
+        : null,
+      valor: cot && items.length > 0 ? total : (o.valor_estimado ?? 0),
+    };
+  }
+
+  async listarOportunidades(filtros: FiltrosCrm = {}): Promise<OportunidadCard[]> {
+    const q = filtros.texto?.trim().toLowerCase();
+    return this.store.oportunidades
+      .filter((o) => o.activo)
+      .map((o) => this.card(o))
+      .filter((c) => {
+        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id) return false;
+        if (q) {
+          const blob = [c.cliente.nombre, c.cotizacion?.numero ?? "", c.oportunidad.notas ?? ""]
+            .join(" ")
+            .toLowerCase();
+          if (!blob.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.valor - a.valor);
+  }
+
+  async moverEtapa(oportunidad_id: string, etapa_id: number): Promise<ResultadoMoverCrm> {
+    const o = this.store.oportunidades.find((x) => x.id === oportunidad_id);
+    if (!o) throw new Error(`Oportunidad ${oportunidad_id} no existe`);
+    const etapa = ETAPAS_CRM.find((e) => e.id === etapa_id);
+    if (!etapa) throw new Error(`Etapa CRM ${etapa_id} no existe`);
+
+    if (!etapa.es_ganada) {
+      o.etapa_id = etapa_id;
+      o.movida_en = new Date().toISOString();
+      return {};
+    }
+
+    // Réplica de fn_validar_ganada: Ganado exige cotización con ítems
+    const cot = o.cotizacion_id
+      ? this.store.cotizaciones.find((c) => c.id === o.cotizacion_id)
+      : undefined;
+    const items = cot ? itemsDeCotizacion(this.store, cot.id) : [];
+    if (!cot || items.length === 0) {
+      throw new Error(
+        "Para ganar la oportunidad necesita una cotización con ítems. " +
+          (cot ? `La ${cot.numero} está vacía.` : "Aún no tiene cotización."),
+      );
+    }
+
+    const cliente = CLIENTES.find((c) => c.id === o.cliente_id)!;
+    const op = await getOpsRepository().crearOp({
+      cliente_id: o.cliente_id,
+      ciudad_id: cliente.ciudad_id,
+      segmento: cot.segmento,
+      origen_clave: "cotizacion",
+      cotizacion_id: cot.id,
+      notas: `OP generada automáticamente al ganar la oportunidad (cotización ${cot.numero}).`,
+      items: items
+        .filter((i) => i.producto_id !== null)
+        .map((i) => ({
+          producto_id: i.producto_id!,
+          cantidad: i.cantidad,
+          precio_unit: i.precio_unit,
+          color: i.color,
+          alto_override_cm: i.alto_override_cm,
+          fondo_override_cm: i.fondo_override_cm,
+        })),
+    });
+
+    o.etapa_id = etapa_id;
+    o.movida_en = new Date().toISOString();
+    cot.estado_id = ESTADOS.find((e) => e.nombre === "Aprobada")!.id;
+    return { opCreada: { id: op.id, numero: op.numero } };
+  }
+
+  async listarEtapas(): Promise<EtapaCrm[]> {
+    return [...ETAPAS_CRM].sort((a, b) => a.orden - b.orden);
+  }
+
+  async listarVendedores(): Promise<Usuario[]> {
+    return [...VENDEDORES];
+  }
+}
+
+export class MockCotizacionesRepository implements CotizacionesRepository {
+  private get store() {
+    return getStore();
+  }
+
+  private card(cot: Cotizacion): CotizacionCard {
+    const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
+    return {
+      cotizacion: structuredClone(cot),
+      cliente: CLIENTES.find((c) => c.id === cot.cliente_id)!,
+      vendedor: VENDEDORES.find((v) => v.id === cot.vendedor_id)!,
+      estado,
+      total: totalDeCotizacion(this.store, cot),
+      vencida: estaVencida(cot, estado.nombre),
+    };
+  }
+
+  async listar(filtros: FiltrosCotizaciones = {}): Promise<CotizacionCard[]> {
+    const q = filtros.texto?.trim().toLowerCase();
+    return this.store.cotizaciones
+      .filter((c) => c.activo)
+      .map((c) => this.card(c))
+      .filter((c) => {
+        if (filtros.estado_id !== undefined && c.estado.id !== filtros.estado_id)
+          return false;
+        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id) return false;
+        if (filtros.segmento && c.cotizacion.segmento !== filtros.segmento)
+          return false;
+        if (q) {
+          const blob = [c.cotizacion.numero, c.cliente.nombre, c.vendedor.nombre]
+            .join(" ")
+            .toLowerCase();
+          if (!blob.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.cotizacion.creado_en.localeCompare(a.cotizacion.creado_en));
+  }
+
+  async obtener(id: string): Promise<CotizacionDetalle | null> {
+    const cot = this.store.cotizaciones.find((c) => c.id === id && c.activo);
+    if (!cot) return null;
+    const cliente = CLIENTES.find((c) => c.id === cot.cliente_id)!;
+    const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
+    const items = itemsDeCotizacion(this.store, cot.id);
+    return structuredClone({
+      cotizacion: cot,
+      cliente,
+      ciudad: CIUDADES.find((c) => c.id === cliente.ciudad_id) ?? null,
+      vendedor: VENDEDORES.find((v) => v.id === cot.vendedor_id)!,
+      estado,
+      items,
+      totales: calcularTotales(items, cot),
+      vencida: estaVencida(cot, estado.nombre),
+      oportunidad_id:
+        this.store.oportunidades.find((o) => o.cotizacion_id === cot.id)?.id ?? null,
+    });
+  }
+
+  async listarEstados(): Promise<EstadoCotizacion[]> {
+    return [...ESTADOS].sort((a, b) => a.orden - b.orden);
+  }
+
+  async listarVendedores(): Promise<Usuario[]> {
+    return [...VENDEDORES];
+  }
+}
+
+// ---------------------------------------------------------------
+// Factories — ÚNICO punto de swap a Supabase
+// ---------------------------------------------------------------
+
+export function getCrmRepository(): CrmRepository {
+  globalVentas.__crmRepositorio ??= new MockCrmRepository();
+  return globalVentas.__crmRepositorio;
+}
+
+export function getCotizacionesRepository(): CotizacionesRepository {
+  globalVentas.__cotRepositorio ??= new MockCotizacionesRepository();
+  return globalVentas.__cotRepositorio;
+}

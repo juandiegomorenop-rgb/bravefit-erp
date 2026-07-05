@@ -92,6 +92,24 @@ export interface FiltrosOps {
 // Interfaz del repositorio
 // ---------------------------------------------------------------
 
+export interface OpCrearInput {
+  cliente_id: string;
+  ciudad_id: number | null;
+  segmento: "B2B" | "B2C";
+  origen_clave: string; // 'cotizacion' | 'shopify' | 'whatsapp' | 'planner'
+  cotizacion_id: string | null;
+  requiere_instalacion?: boolean;
+  notas?: string;
+  items: Array<{
+    producto_id: string;
+    cantidad: number;
+    precio_unit: number;
+    color?: string | null;
+    alto_override_cm?: number | null;
+    fondo_override_cm?: number | null;
+  }>;
+}
+
 export interface OpsRepository {
   listarOps(filtros?: FiltrosOps): Promise<OpCard[]>;
   obtenerOp(id: string): Promise<OpDetalle | null>;
@@ -102,6 +120,8 @@ export interface OpsRepository {
     nota?: string,
   ): Promise<void>;
   agregarObservacion(op_id: string, texto: string): Promise<OpObservacion>;
+  /** OP automática (CRM Ganado, webhooks): entra SIEMPRE a "En Cola". */
+  crearOp(input: OpCrearInput): Promise<OrdenPedido>;
   listarEtapas(): Promise<EtapaProduccion[]>;
   listarOrigenes(): Promise<OrigenOp[]>;
   listarCiudades(): Promise<Ciudad[]>;
@@ -151,7 +171,7 @@ export function aplicarFiltros(
 // ===============================================================
 
 /** Fecha "YYYY-MM-DD" relativa a hoy (mock siempre vigente). */
-function fechaRel(dias: number): string {
+export function fechaRel(dias: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -160,7 +180,7 @@ function fechaRel(dias: number): string {
 }
 
 /** Timestamp ISO relativo a hoy, a las `hora` local. */
-function tsRel(dias: number, hora = 9, minuto = 0): string {
+export function tsRel(dias: number, hora = 9, minuto = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   d.setHours(hora, minuto, 0, 0);
@@ -191,7 +211,7 @@ const ORIGENES: OrigenOp[] = [
   { id: 4, clave: "planner", nombre: "Planner", activo: true },
 ];
 
-const CIUDADES: Ciudad[] = [
+export const CIUDADES: Ciudad[] = [
   { id: 1, nombre: "Medellín", departamento: "Antioquia" },
   { id: 2, nombre: "Bogotá", departamento: "Bogotá D.C." },
   { id: 3, nombre: "Cali", departamento: "Valle del Cauca" },
@@ -236,7 +256,7 @@ function prod(
   };
 }
 
-const PRODUCTOS: Producto[] = [
+export const PRODUCTOS: Producto[] = [
   prod("p-01", "BF-RK-001", "Rack PF5", 1, 4_190_000, { es_rack: true, clasificacion: "MTO", colores_disponibles: ["Negro mate", "Blanco", "Rojo"], color_default: "Negro mate", alto_cm: 230 }),
   prod("p-02", "BF-RK-002", "Rack PF5 Pro", 1, 5_890_000, { es_rack: true, clasificacion: "MTO", alto_cm: 245 }),
   prod("p-03", "BF-RG-001", "Rig Cross 4 estaciones", 2, 14_500_000, { es_rack: true, clasificacion: "MTO" }),
@@ -277,7 +297,7 @@ function cli(
   };
 }
 
-const CLIENTES: Cliente[] = [
+export const CLIENTES: Cliente[] = [
   cli("c-01", "SmartFit Poblado", "empresa", 1, "604 444 1010", "Cl. 10 #43E-25, El Poblado"),
   cli("c-02", "CrossFit Jungle", "empresa", 4, "604 331 2244", "Cra. 43A #38 Sur-102"),
   cli("c-03", "Laura Gómez", "persona", 1, "301 555 7788", "Cra. 78 #45-12, Laureles"),
@@ -688,6 +708,68 @@ export class MockOpsRepository implements OpsRepository {
       nota: nota ?? null,
       en: new Date().toISOString(),
     });
+  }
+
+  async crearOp(input: OpCrearInput): Promise<OrdenPedido> {
+    const origen = ORIGENES.find((o) => o.clave === input.origen_clave);
+    if (!origen) throw new Error(`Origen '${input.origen_clave}' no existe`);
+    if (input.items.length === 0) {
+      throw new Error("Una OP no puede crearse sin ítems");
+    }
+    const maxNum = Math.max(
+      1000,
+      ...this.ops.map((o) => Number(o.numero.replace("OP-", "")) || 0),
+    );
+    const id = `op-${crypto.randomUUID().slice(0, 8)}`;
+    // comercializados puros: entran a Cola esperando proveedor
+    const soloComercializados = input.items.every(
+      (i) => PRODUCTOS.find((p) => p.id === i.producto_id)?.origen === "comercializado",
+    );
+    const op: OrdenPedido = {
+      id,
+      numero: `OP-${maxNum + 1}`,
+      cliente_id: input.cliente_id,
+      ciudad_id: input.ciudad_id,
+      segmento: input.segmento,
+      origen_id: origen.id,
+      cotizacion_id: input.cotizacion_id,
+      pedido_web_id: null,
+      etapa_id: ETAPAS[0].id, // SIEMPRE En Cola
+      esperando_proveedor: soloComercializados,
+      requiere_instalacion: input.requiere_instalacion ?? false,
+      direccion_entrega:
+        CLIENTES.find((c) => c.id === input.cliente_id)?.direccion ?? null,
+      fecha_entrega_pactada: null,
+      fecha_entregada: null,
+      mp_descontada_en: null,
+      notas: input.notas ?? null,
+      activo: true,
+      eliminado_en: null,
+      creado_en: new Date().toISOString(),
+    };
+    this.ops.push(op);
+    input.items.forEach((it, i) => {
+      this.items.push({
+        id: `${id}-it${i}`,
+        op_id: id,
+        producto_id: it.producto_id,
+        cantidad: it.cantidad,
+        cantidad_entregada: 0,
+        precio_unit: it.precio_unit,
+        alto_override_cm: it.alto_override_cm ?? null,
+        fondo_override_cm: it.fondo_override_cm ?? null,
+        color: it.color ?? null,
+      });
+    });
+    this.historial.push({
+      id: Math.max(0, ...this.historial.map((h) => h.id)) + 1,
+      op_id: id,
+      etapa_id: ETAPAS[0].id,
+      usuario_id: null,
+      nota: input.notas ?? "OP creada",
+      en: op.creado_en,
+    });
+    return structuredClone(op);
   }
 
   async agregarObservacion(op_id: string, texto: string): Promise<OpObservacion> {

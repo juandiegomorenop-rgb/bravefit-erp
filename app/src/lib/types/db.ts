@@ -144,6 +144,90 @@ export interface OpObservacion {
   en: string;
 }
 
+// ---- Ventas: CRM y cotizaciones ---------------------------------
+
+export interface EtapaCrm {
+  id: number;
+  nombre: string; // En conversaciones … Ganado / Perdido
+  orden: number;
+  color: string | null;
+  es_ganada: boolean; // dispara OP automática
+  es_perdida: boolean;
+  activo: boolean;
+}
+
+export interface EstadoCotizacion {
+  id: number;
+  nombre: string; // Borrador, Enviada, Aprobada, Vencida, Anulada
+  orden: number;
+  activo: boolean;
+}
+
+/** usuarios (Supabase Auth es la fuente de identidad). */
+export interface Usuario {
+  id: string;
+  rol_id: number;
+  nombre: string;
+  email: string;
+  activo: boolean;
+}
+
+export interface Cotizacion {
+  id: string;
+  numero: string; // BFP-NNNN (serie del planner)
+  cliente_id: string;
+  vendedor_id: string;
+  segmento: "B2B" | "B2C"; // OBLIGATORIO al crear
+  estado_id: number;
+  no_facturar: boolean; // NO va a Siigo, SÍ suma a ventas
+  descuento_pct: number; // 0–50, solo con pago anticipado completo
+  pago_anticipado_completo: boolean;
+  valida_hasta: string; // creado + 15 días
+  origen: "manual" | "chat" | "planner";
+  notas: string | null;
+  activo: boolean;
+  eliminado_en: string | null;
+  creado_en: string;
+}
+
+/** Forma del jsonb cotizacion_items.recargos. */
+export interface RecargoAplicado {
+  recargo_id: number | null;
+  nombre: string; // 'Color no estándar (ATO)'…
+  tipo: "pct" | "fijo";
+  valor: number; // % (0-100) o COP fijo
+  monto: number; // COP resultante por unidad
+}
+
+export interface CotizacionItem {
+  id: string;
+  cotizacion_id: string;
+  producto_id: string | null;
+  descripcion: string | null; // ítems libres (ej. transporte)
+  es_transporte: boolean;
+  aplica_iva: boolean; // transporte: elegible sin IVA
+  cantidad: number;
+  precio_unit: number; // CON IVA si aplica_iva (incluye cm extra + recargos)
+  alto_override_cm: number | null;
+  fondo_override_cm: number | null;
+  color: string | null;
+  recargos: RecargoAplicado[];
+}
+
+export interface Oportunidad {
+  id: string;
+  cliente_id: string;
+  cotizacion_id: string | null;
+  etapa_id: number;
+  vendedor_id: string;
+  valor_estimado: number | null;
+  notas: string | null;
+  movida_en: string; // trigger al cambiar de etapa → "días en etapa"
+  activo: boolean;
+  eliminado_en: string | null;
+  creado_en: string;
+}
+
 // ---- Garantías (prioridad ambulancia) ---------------------------
 
 export interface Garantia {
