@@ -14,6 +14,7 @@ import { CATEGORIAS } from "@/lib/data/ops";
 import { formatCOP, formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 import { BadgeEstadoCotizacion } from "../badges";
+import { AccionesBorrador } from "./AccionesBorrador";
 
 export const metadata = { title: "Cotización" };
 
@@ -77,7 +78,10 @@ export default async function Page({
             </span>
           </div>
         </div>
-        <BotonImprimir />
+        <span className="flex flex-wrap items-center gap-2.5">
+          {estado.nombre === "Borrador" && <AccionesBorrador id={cot.id} />}
+          <BotonImprimir />
+        </span>
       </div>
 
       {/* ===================== DOCUMENTO (plantilla Bravefit) ===================== */}

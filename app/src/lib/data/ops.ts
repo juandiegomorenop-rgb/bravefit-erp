@@ -271,6 +271,26 @@ export const PRODUCTOS: Producto[] = [
   prod("p-12", "BF-MC-001", "Kit mancuernas 2,5–25 kg", 6, 4_600_000, { origen: "comercializado" }),
 ];
 
+/** Colores estándar (tabla colores del seed) — fuera de esta lista = ATO 8%. */
+export const COLORES_ESTANDAR = [
+  "Negro",
+  "Rojo",
+  "Azul",
+  "Blanco",
+  "Gris",
+  "Verde militar",
+] as const;
+
+/** Dimensiones variables por producto (espejo de producto_dimensiones). */
+export const PRODUCTO_DIMENSIONES: import("@/lib/types/db").ProductoDimension[] = [
+  { id: "pd-01a", producto_id: "p-01", eje: "alto", min_cm: 150, max_cm: 300, default_cm: 230, precio_por_cm_extra: 4000 },
+  { id: "pd-01f", producto_id: "p-01", eje: "fondo", min_cm: 50, max_cm: 150, default_cm: 50, precio_por_cm_extra: 4000 },
+  { id: "pd-02a", producto_id: "p-02", eje: "alto", min_cm: 180, max_cm: 300, default_cm: 245, precio_por_cm_extra: 4500 },
+  { id: "pd-04a", producto_id: "p-04", eje: "alto", min_cm: 150, max_cm: 280, default_cm: 220, precio_por_cm_extra: 3500 },
+  { id: "pd-09a", producto_id: "p-09", eje: "alto", min_cm: 200, max_cm: 280, default_cm: 235, precio_por_cm_extra: 5000 },
+  { id: "pd-09f", producto_id: "p-09", eje: "fondo", min_cm: 120, max_cm: 180, default_cm: 140, precio_por_cm_extra: 5000 },
+];
+
 /** Categorías 1:1 con seed.sql (y Shopify). */
 export const CATEGORIAS: { id: number; nombre: string; orden: number }[] = [
   { id: 1, nombre: "Racks", orden: 1 },

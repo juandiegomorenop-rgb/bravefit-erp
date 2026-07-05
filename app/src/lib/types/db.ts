@@ -80,6 +80,20 @@ export interface Producto {
   creado_en: string;
 }
 
+/** producto_componentes: BOM / despiece heredado del planner. */
+export interface ProductoComponente {
+  id: string;
+  producto_id: string;
+  material_id: string | null; // null si es descriptivo
+  categoria: string; // columna, union_perforada, j_lock, barra_pull_up, tornillo…
+  descripcion: string;
+  cantidad: number;
+  longitud_cm: number | null;
+  color: string | null;
+  color_sigue_rack: boolean;
+  visible_cliente: boolean; // false = solo producción
+}
+
 // ---- Producción y logística ------------------------------------
 
 export interface OrdenPedido {
@@ -214,6 +228,17 @@ export interface CotizacionItem {
   fondo_override_cm: number | null;
   color: string | null;
   recargos: RecargoAplicado[];
+}
+
+/** producto_dimensiones: rango pedible + sobreprecio por cm (planner). */
+export interface ProductoDimension {
+  id: string;
+  producto_id: string;
+  eje: "alto" | "fondo";
+  min_cm: number;
+  max_cm: number;
+  default_cm: number;
+  precio_por_cm_extra: number; // CON IVA
 }
 
 export interface Oportunidad {

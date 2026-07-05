@@ -104,9 +104,43 @@ export interface FiltrosCotizaciones {
   texto?: string;
 }
 
+/** Ítem del editor (sin ids: el repo los asigna). */
+export interface CotizacionItemInput {
+  producto_id: string | null;
+  descripcion: string | null;
+  es_transporte: boolean;
+  aplica_iva: boolean;
+  cantidad: number;
+  precio_unit: number;
+  descuento_pct: number;
+  alto_override_cm: number | null;
+  fondo_override_cm: number | null;
+  color: string | null;
+  recargos: CotizacionItem["recargos"];
+}
+
+export interface CotizacionInput {
+  cliente_id: string;
+  vendedor_id: string;
+  segmento: "B2B" | "B2C";
+  no_facturar: boolean;
+  pago_anticipado_completo: boolean;
+  descuento_pct: number; // global, solo con pago anticipado
+  tiempo_entrega: string | null;
+  notas: string | null;
+  items: CotizacionItemInput[];
+}
+
 export interface CotizacionesRepository {
   listar(filtros?: FiltrosCotizaciones): Promise<CotizacionCard[]>;
   obtener(id: string): Promise<CotizacionDetalle | null>;
+  /** Crea en estado Borrador con el siguiente número BFP de la serie. */
+  crear(input: CotizacionInput): Promise<{ id: string; numero: string }>;
+  /** Solo borradores: reemplaza cabecera e ítems completos. */
+  actualizar(id: string, input: CotizacionInput): Promise<void>;
+  /** Borrador → Enviada (el documento queda listo para el cliente). */
+  marcarEnviada(id: string): Promise<void>;
+  listarClientes(): Promise<Cliente[]>;
   listarEstados(): Promise<EstadoCotizacion[]>;
   listarVendedores(): Promise<Usuario[]>;
 }
@@ -513,6 +547,125 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
       oportunidad_id:
         this.store.oportunidades.find((o) => o.cotizacion_id === cot.id)?.id ?? null,
     });
+  }
+
+  async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
+    this.validarInput(input);
+    const maxNum = Math.max(
+      105,
+      ...this.store.cotizaciones.map(
+        (c) => Number(c.numero.replace("BFP-", "")) || 0,
+      ),
+    );
+    const id = `q-${crypto.randomUUID().slice(0, 8)}`;
+    const numero = `BFP-${String(maxNum + 1).padStart(4, "0")}`;
+    const hoy = new Date();
+    const valida = new Date(hoy);
+    valida.setDate(valida.getDate() + 15); // regla: creación + 15 días
+    this.store.cotizaciones.push({
+      id,
+      numero,
+      cliente_id: input.cliente_id,
+      vendedor_id: input.vendedor_id,
+      segmento: input.segmento,
+      estado_id: ESTADOS.find((e) => e.nombre === "Borrador")!.id,
+      no_facturar: input.no_facturar,
+      descuento_pct: input.descuento_pct,
+      pago_anticipado_completo: input.pago_anticipado_completo,
+      valida_hasta: valida.toISOString().slice(0, 10),
+      tiempo_entrega: input.tiempo_entrega,
+      origen: "manual",
+      notas: input.notas,
+      activo: true,
+      eliminado_en: null,
+      creado_en: hoy.toISOString(),
+    });
+    this.reemplazarItems(id, input.items);
+    return { id, numero };
+  }
+
+  async actualizar(id: string, input: CotizacionInput): Promise<void> {
+    this.validarInput(input);
+    const cot = this.store.cotizaciones.find((c) => c.id === id && c.activo);
+    if (!cot) throw new Error(`Cotización ${id} no existe`);
+    const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
+    if (estado.nombre !== "Borrador") {
+      throw new Error(
+        `Solo los borradores se editan; la ${cot.numero} está ${estado.nombre}. Duplíquela para re-cotizar.`,
+      );
+    }
+    Object.assign(cot, {
+      cliente_id: input.cliente_id,
+      vendedor_id: input.vendedor_id,
+      segmento: input.segmento,
+      no_facturar: input.no_facturar,
+      pago_anticipado_completo: input.pago_anticipado_completo,
+      descuento_pct: input.descuento_pct,
+      tiempo_entrega: input.tiempo_entrega,
+      notas: input.notas,
+    });
+    this.reemplazarItems(id, input.items);
+  }
+
+  async marcarEnviada(id: string): Promise<void> {
+    const cot = this.store.cotizaciones.find((c) => c.id === id && c.activo);
+    if (!cot) throw new Error(`Cotización ${id} no existe`);
+    const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
+    if (estado.nombre !== "Borrador") {
+      throw new Error(`La ${cot.numero} ya está ${estado.nombre}`);
+    }
+    if (!this.store.items.some((i) => i.cotizacion_id === id)) {
+      throw new Error("No se puede enviar una cotización sin ítems");
+    }
+    cot.estado_id = ESTADOS.find((e) => e.nombre === "Enviada")!.id;
+  }
+
+  private validarInput(input: CotizacionInput): void {
+    if (!input.cliente_id) throw new Error("Seleccione el cliente");
+    if (!input.vendedor_id) throw new Error("Seleccione el vendedor");
+    if (input.segmento !== "B2B" && input.segmento !== "B2C") {
+      throw new Error("El segmento B2B/B2C es obligatorio");
+    }
+    if (input.descuento_pct < 0 || input.descuento_pct > 50) {
+      throw new Error("El descuento global va de 0 a 50%");
+    }
+    for (const it of input.items) {
+      if (!it.producto_id && !it.descripcion?.trim()) {
+        throw new Error("Todo ítem libre necesita descripción");
+      }
+      if (it.cantidad <= 0) throw new Error("Las cantidades deben ser mayores a 0");
+      if (it.precio_unit < 0) throw new Error("Los precios no pueden ser negativos");
+      if (it.descuento_pct < 0 || it.descuento_pct > 100) {
+        throw new Error("El descuento por línea va de 0 a 100%");
+      }
+    }
+  }
+
+  private reemplazarItems(cotizacion_id: string, items: CotizacionItemInput[]): void {
+    this.store.items = this.store.items.filter(
+      (i) => i.cotizacion_id !== cotizacion_id,
+    );
+    items.forEach((it, n) => {
+      this.store.items.push({
+        id: `${cotizacion_id}-it${n}-${crypto.randomUUID().slice(0, 4)}`,
+        cotizacion_id,
+        producto_id: it.producto_id,
+        descripcion: it.descripcion,
+        es_transporte: it.es_transporte,
+        aplica_iva: it.aplica_iva,
+        cantidad: it.cantidad,
+        precio_unit: it.precio_unit,
+        descuento_pct: it.descuento_pct,
+        alto_override_cm: it.alto_override_cm,
+        fondo_override_cm: it.fondo_override_cm,
+        color: it.color,
+        recargos: it.recargos,
+      });
+    });
+  }
+
+  async listarClientes(): Promise<Cliente[]> {
+    return [...CLIENTES].sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
 
   async listarEstados(): Promise<EstadoCotizacion[]> {

@@ -69,6 +69,12 @@ export function CotizacionesClient({
             Cotizaciones
           </h1>
         </div>
+        <a
+          href="/ventas/cotizaciones/nueva"
+          className="rounded-pill bg-carbon px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-black"
+        >
+          + Nueva cotización
+        </a>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
