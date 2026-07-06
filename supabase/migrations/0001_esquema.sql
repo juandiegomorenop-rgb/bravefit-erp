@@ -299,6 +299,8 @@ create index idx_bom_producto on producto_componentes (producto_id);
 create table catalogos (
   id          uuid primary key default gen_random_uuid(),
   nombre      text not null,
+  descripcion text,
+  categoria   text,                     -- 'General','Racks','Cardio','Lista de precios'…
   portada_url text,
   publicado   boolean not null default false,
   activo      boolean not null default true,
@@ -312,6 +314,22 @@ create table catalogo_productos (
   orden       smallint not null default 0,
   primary key (catalogo_id, producto_id)
 );
+
+-- Versiones de archivo de cada catálogo: los vendedores SIEMPRE consumen la
+-- versión de mayor número (la actual); las anteriores quedan como historial.
+create table catalogo_versiones (
+  id             uuid primary key default gen_random_uuid(),
+  catalogo_id    uuid not null references catalogos(id) on delete cascade,
+  version        smallint not null,               -- 1,2,3… correlativo por catálogo
+  archivo_url    text not null,                   -- ruta en el bucket 'catalogos'
+  archivo_nombre text not null,                   -- nombre original del PDF
+  tamano_bytes   bigint,
+  notas          text,                            -- p. ej. "Actualización de precios julio"
+  subido_por     uuid references usuarios(id),
+  subido_en      timestamptz not null default now(),
+  unique (catalogo_id, version)
+);
+create index idx_catver_catalogo on catalogo_versiones (catalogo_id, version desc);
 
 -- ------------------------------------------------------------
 -- 4 · VENTAS: cotizaciones, CRM, Shopify

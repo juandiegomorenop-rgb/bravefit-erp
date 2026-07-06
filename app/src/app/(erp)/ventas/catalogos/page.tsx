@@ -1,12 +1,14 @@
-import { PaginaModulo } from "@/components/PaginaModulo";
+import { getCatalogosRepository } from "@/lib/data/catalogos";
+import { PERMISOS_ADMIN } from "@/lib/permisos";
+import { CatalogosClient } from "./CatalogosClient";
 
 export const metadata = { title: "Catálogos" };
 
-export default function Page() {
-  return (
-    <PaginaModulo
-      titulo="Catálogos"
-      subtitulo="Catálogos compartibles por categoría con portada y exportación a PDF."
-    />
-  );
+export default async function Page() {
+  const catalogos = await getCatalogosRepository().listar();
+  // TODO fase 1: permisos reales del rol; hoy Admin puede subir/editar.
+  const puedeEditar =
+    PERMISOS_ADMIN.find((p) => p.modulo === "ventas")?.puede_editar ?? false;
+
+  return <CatalogosClient catalogos={catalogos} puedeEditar={puedeEditar} />;
 }

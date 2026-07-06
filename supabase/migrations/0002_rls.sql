@@ -110,6 +110,7 @@ call pr_politicas_modulo('pedidos_web',             'ventas');
 call pr_politicas_modulo('shopify_metricas_diarias','ventas');
 call pr_politicas_modulo('catalogos',               'ventas');
 call pr_politicas_modulo('catalogo_productos',      'ventas');
+call pr_politicas_modulo('catalogo_versiones',      'ventas');
 
 -- Producción y Logística
 call pr_politicas_modulo('ordenes_pedido',          'produccion');

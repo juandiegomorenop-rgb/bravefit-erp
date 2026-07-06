@@ -491,3 +491,29 @@ export interface Garantia {
   activo: boolean;
   eliminado_en: string | null;
 }
+
+// ---- Catálogos de venta (documentos versionados) ----------------
+
+export interface Catalogo {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  categoria: string | null; // 'General','Racks','Cardio','Lista de precios'…
+  portada_url: string | null;
+  publicado: boolean;
+  activo: boolean;
+  eliminado_en: string | null;
+  creado_en: string;
+}
+
+export interface CatalogoVersion {
+  id: string;
+  catalogo_id: string;
+  version: number; // correlativo por catálogo; la mayor = versión ACTUAL
+  archivo_url: string;
+  archivo_nombre: string;
+  tamano_bytes: number | null;
+  notas: string | null;
+  subido_por: string | null;
+  subido_en: string;
+}
