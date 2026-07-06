@@ -50,6 +50,7 @@ export interface OpCard {
   cliente: Cliente;
   ciudad: Ciudad | null;
   origen: OrigenOp;
+  vendedor: Usuario | null; // vendedor real de la OP/garantía (null = sin vendedor, p. ej. Shopify)
   segmento: "B2B" | "B2C" | null;
   requiere_instalacion: boolean;
   esperando_proveedor: boolean;
@@ -73,6 +74,7 @@ export interface OpDetalle {
   cliente: Cliente;
   ciudad: Ciudad | null;
   origen: OrigenOp;
+  vendedor: Usuario | null; // vendedor real de la OP (null = Shopify/sin asignar)
   etapa: EtapaProduccion;
   items: OpItemConProducto[];
   historial: HistorialEtapaDetalle[]; // ascendente por fecha
@@ -99,6 +101,7 @@ export interface OpCrearInput {
   segmento: "B2B" | "B2C";
   origen_clave: string; // 'cotizacion' | 'shopify' | 'whatsapp' | 'planner'
   cotizacion_id: string | null;
+  vendedor_id?: string | null; // vendedor real (de la cotización); Shopify → null
   requiere_instalacion?: boolean;
   notas?: string;
   items: Array<{
@@ -418,6 +421,19 @@ interface OpSeed {
   pactada: number | null;
   entregada?: number;
   notas?: string;
+  vendedor_id?: string | null;
+}
+
+/** Comerciales (Admins) que atienden ventas. */
+const COMERCIALES = USUARIOS.filter((u) => u.rol_id === 1);
+
+/** Vendedor real de una OP semilla: Shopify (origen 2) no tiene; el resto se
+ *  reparte de forma estable entre los comerciales por el número del id. */
+function vendedorSeed(s: OpSeed): string | null {
+  if (s.vendedor_id !== undefined) return s.vendedor_id;
+  if (s.origen_id === 2) return null; // e-commerce = Tienda online
+  const n = parseInt(s.id.replace(/\D/g, ""), 10) || 0;
+  return COMERCIALES.length ? COMERCIALES[n % COMERCIALES.length].id : null;
 }
 
 function opSeed(s: OpSeed): OrdenPedido {
@@ -431,6 +447,7 @@ function opSeed(s: OpSeed): OrdenPedido {
     origen_id: s.origen_id,
     cotizacion_id: s.origen_id === 1 ? `cot-${s.id}` : null,
     pedido_web_id: s.origen_id === 2 ? `pw-${s.id}` : null,
+    vendedor_id: vendedorSeed(s),
     etapa_id: s.etapa_id,
     esperando_proveedor: s.esperando_proveedor ?? false,
     requiere_instalacion: s.instalacion ?? false,
@@ -664,6 +681,7 @@ export class MockOpsRepository implements OpsRepository {
       cliente: CLIENTES.find((c) => c.id === op.cliente_id)!,
       ciudad: CIUDADES.find((c) => c.id === op.ciudad_id) ?? null,
       origen: ORIGENES.find((o) => o.id === op.origen_id)!,
+      vendedor: USUARIOS.find((u) => u.id === op.vendedor_id) ?? null,
       segmento: op.segmento,
       requiere_instalacion: op.requiere_instalacion,
       esperando_proveedor: op.esperando_proveedor,
@@ -687,6 +705,7 @@ export class MockOpsRepository implements OpsRepository {
       cliente: CLIENTES.find((c) => c.id === g.cliente_id)!,
       ciudad: CIUDADES.find((c) => c.id === op.ciudad_id) ?? null,
       origen: ORIGENES.find((o) => o.id === op.origen_id)!,
+      vendedor: USUARIOS.find((u) => u.id === g.vendedor_id) ?? null,
       segmento: op.segmento,
       requiere_instalacion: false,
       esperando_proveedor: false,
@@ -736,6 +755,7 @@ export class MockOpsRepository implements OpsRepository {
       cliente: CLIENTES.find((c) => c.id === op.cliente_id)!,
       ciudad: CIUDADES.find((c) => c.id === op.ciudad_id) ?? null,
       origen: ORIGENES.find((o) => o.id === op.origen_id)!,
+      vendedor: USUARIOS.find((u) => u.id === op.vendedor_id) ?? null,
       etapa: this.etapa(op.etapa_id),
       items,
       historial: this.historial
@@ -831,6 +851,7 @@ export class MockOpsRepository implements OpsRepository {
       origen_id: origen.id,
       cotizacion_id: input.cotizacion_id,
       pedido_web_id: null,
+      vendedor_id: input.vendedor_id ?? null,
       etapa_id: ETAPAS[0].id, // SIEMPRE En Cola
       esperando_proveedor: soloComercializados,
       requiere_instalacion: input.requiere_instalacion ?? false,

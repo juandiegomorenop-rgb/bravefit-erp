@@ -105,6 +105,7 @@ export interface OrdenPedido {
   origen_id: number;
   cotizacion_id: string | null;
   pedido_web_id: string | null;
+  vendedor_id: string | null; // vendedor real: heredado de la cotización o fijado por el origen (Shopify → null)
   etapa_id: number;
   esperando_proveedor: boolean; // sub-estado en Cola (comercializados)
   requiere_instalacion: boolean;

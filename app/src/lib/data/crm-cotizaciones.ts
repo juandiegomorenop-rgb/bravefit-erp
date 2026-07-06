@@ -459,6 +459,7 @@ export class MockCrmRepository implements CrmRepository {
       segmento: cot.segmento,
       origen_clave: "cotizacion",
       cotizacion_id: cot.id,
+      vendedor_id: cot.vendedor_id, // vendedor REAL heredado de la cotización
       notas: `OP generada automáticamente al ganar la oportunidad (cotización ${cot.numero}).`,
       items: items
         .filter((i) => i.producto_id !== null)

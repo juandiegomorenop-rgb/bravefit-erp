@@ -418,6 +418,7 @@ create table ordenes_pedido (
   origen_id     smallint not null references origenes_op(id),
   cotizacion_id uuid references cotizaciones(id),
   pedido_web_id uuid references pedidos_web(id),
+  vendedor_id   uuid references usuarios(id),        -- vendedor real: heredado de la cotización o fijado por el origen (Shopify → null)
   etapa_id      smallint not null references etapas_produccion(id),
   esperando_proveedor boolean not null default false, -- sub-estado en Cola (comercializados)
   requiere_instalacion boolean not null default false,

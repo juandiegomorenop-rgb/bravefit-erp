@@ -42,7 +42,7 @@ export default async function Page({ params }: { params: Params }) {
   ]);
   if (!detalle) notFound();
 
-  const { op, cliente, ciudad, origen, items, historial, despachos, observaciones, garantias } =
+  const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
     detalle;
   const sem = semaforo(op.fecha_entrega_pactada, op.fecha_entregada);
   const total = totalOp(items);
@@ -279,6 +279,10 @@ export default async function Page({ params }: { params: Params }) {
             <Dato
               label={cliente.tipo === "empresa" ? "NIT" : "Cédula"}
               valor={cliente.nit_cedula ?? "—"}
+            />
+            <Dato
+              label="Vendedor"
+              valor={vendedor?.nombre ?? (origen.clave === "shopify" ? "Tienda online" : "Sin asignar")}
             />
             <Dato
               label="Ciudad"

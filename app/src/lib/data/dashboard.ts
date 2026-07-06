@@ -274,12 +274,14 @@ export class MockDashboardRepository implements DashboardRepository {
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 6);
 
-    // por vendedor: derivado de las cotizaciones vinculadas no está en OpCard;
-    // aproximamos con el origen 'cotizacion' y repartimos — simplificado:
+    // por vendedor REAL (op.vendedor, heredado de la cotización); las OPs sin
+    // vendedor (Shopify) se agrupan como "Tienda online".
     const por_vendedor = acumular(
-      opsDelRango
-        .filter((c) => c.origen.clave === "cotizacion")
-        .map((c) => ["Equipo comercial", valorOp(c)]),
+      opsDelRango.map((c) => [
+        c.vendedor?.nombre ??
+          (c.origen.clave === "shopify" ? "Tienda online" : "Sin asignar"),
+        valorOp(c),
+      ]),
     );
 
     // --- Producción ---

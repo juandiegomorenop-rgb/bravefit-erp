@@ -127,7 +127,8 @@ export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
           <Kpi titulo="Ticket promedio" valor={formatCOP(kpis.ventas.ticket_promedio)} />
           <Kpi titulo="Valor ganado (mkt)" valor={formatCOP(kpis.mercadeo.valor_ganado)} />
         </div>
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          <Ranking titulo="Por vendedor" items={kpis.ventas.por_vendedor} formato="cop" />
           <Ranking titulo="Por canal" items={kpis.ventas.por_canal} formato="cop" />
           <Ranking titulo="Por ciudad" items={kpis.ventas.por_ciudad} formato="cop" />
           <RankingProd titulo="Top productos" items={kpis.ventas.top_productos} />

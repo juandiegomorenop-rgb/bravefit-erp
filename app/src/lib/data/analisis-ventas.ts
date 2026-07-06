@@ -8,9 +8,8 @@
  * filtrar y agrupar por cualquiera de forma coherente (los filtros de segmento
  * y propio/comercializado recomponen los totales por OP sin doble conteo).
  *
- * El vendedor NO existe en la OP (el dashboard lo aproxima); aquí se deriva de
- * forma determinista: canal Shopify → "Tienda online"; el resto se reparte
- * entre los comerciales (Admins) por hash del id de OP. Es mock estable.
+ * El vendedor es el REAL de la OP (`op.vendedor`, heredado de la cotización);
+ * las OPs sin vendedor (Shopify) se agrupan como "Tienda online".
  *
  * Swap a Supabase = implementar SupabaseAnalisisRepository sobre `v_ventas`
  * (o las líneas de OP) y cambiar UNA línea del factory.
@@ -18,7 +17,6 @@
 
 import {
   CATEGORIAS,
-  USUARIOS,
   getOpsRepository,
   type OpCard,
 } from "@/lib/data/ops";
@@ -102,23 +100,12 @@ interface LineaVenta {
 }
 
 const MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const COMERCIALES = USUARIOS.filter((u) => u.rol_id === 1);
 const CAT_NOMBRE = new Map(CATEGORIAS.map((c) => [c.id, c.nombre]));
 
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/** Vendedor determinista: Shopify = Tienda online; el resto reparte comerciales. */
+/** Vendedor REAL de la OP; las OPs sin vendedor (Shopify) → "Tienda online". */
 function vendedorDe(op: OpCard): string {
-  if (op.origen.clave === "shopify") return "Tienda online";
-  if (COMERCIALES.length === 0) return "Equipo comercial";
-  return COMERCIALES[hashStr(op.op_id) % COMERCIALES.length].nombre;
+  if (op.vendedor) return op.vendedor.nombre;
+  return op.origen.clave === "shopify" ? "Tienda online" : "Sin asignar";
 }
 
 function aplanar(cards: OpCard[]): LineaVenta[] {

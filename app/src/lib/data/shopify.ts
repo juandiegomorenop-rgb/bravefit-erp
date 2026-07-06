@@ -270,6 +270,7 @@ export class MockShopifyRepository implements ShopifyRepository {
       segmento: "B2C", // e-commerce = consumidor final
       origen_clave: "shopify",
       cotizacion_id: null,
+      vendedor_id: null, // e-commerce sin vendedor → Tienda online
       notas: `OP generada automáticamente desde el pedido Shopify ${p.shopify_numero}.`,
       items: items.map((i) => ({
         producto_id: i.producto_id,
