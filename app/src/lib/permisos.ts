@@ -12,7 +12,8 @@ export type Modulo =
   | "produccion"
   | "mercadeo"
   | "rrhh"
-  | "cartelera";
+  | "cartelera"
+  | "chat";
 
 export interface Permiso {
   modulo: Modulo;
@@ -31,6 +32,7 @@ export const MODULOS: Modulo[] = [
   "mercadeo",
   "rrhh",
   "cartelera",
+  "chat",
 ];
 
 /** Permisos de Administrador (todo visible). Útil como fallback del esqueleto

@@ -1,3 +1,4 @@
+import { ChatClaude } from "@/components/ChatClaude";
 import { Header } from "@/components/Header";
 import { NAV } from "@/lib/nav";
 import { filtrarNav, PERMISOS_ADMIN } from "@/lib/permisos";
@@ -20,12 +21,15 @@ export default async function ErpLayout({
   }
 
   // TODO fase 1: cargar permisos reales del rol desde la tabla `permisos`.
-  const nav = filtrarNav(NAV, PERMISOS_ADMIN);
+  const permisos = PERMISOS_ADMIN;
+  const nav = filtrarNav(NAV, permisos);
+  const modulosVisibles = permisos.filter((p) => p.puede_ver).map((p) => p.modulo);
 
   return (
     <>
       <Header nav={nav} email={email} />
       <main className="flex-1">{children}</main>
+      <ChatClaude modulos={modulosVisibles} />
     </>
   );
 }
