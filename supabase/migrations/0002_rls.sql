@@ -317,6 +317,12 @@ create policy chatmsg_all on chat_mensajes for all to authenticated
   with check (exists (select 1 from chat_conversaciones c
                   where c.id = conversacion_id and c.usuario_id = auth.uid()));
 
+-- uso del chat: cada quien solo ve/inserta lo suyo (base del límite de tasa)
+create policy chat_uso_sel on chat_uso for select to authenticated
+  using (usuario_id = auth.uid());
+create policy chat_uso_ins on chat_uso for insert to authenticated
+  with check (usuario_id = auth.uid());
+
 -- ------------------------------------------------------------
 -- integracion_eventos: SIN política para authenticated
 -- → solo service_role (workers del servidor) puede tocarla.

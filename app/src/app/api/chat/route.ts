@@ -8,6 +8,7 @@ import {
   toolDefs,
 } from "@/lib/data/chat";
 import { MODULOS, type Modulo } from "@/lib/permisos";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Chat de Claude embebido — ejecuta SIEMPRE en el servidor.
@@ -24,8 +25,14 @@ import { MODULOS, type Modulo } from "@/lib/permisos";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODELO = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
+// Modelo del chat. Sonnet 5: rápido y económico para consultas internas.
+// Para cambiarlo, edita esta línea (no depende de variables de Vercel).
+const MODELO = "claude-sonnet-5";
 const MAX_ITERACIONES = 6;
+
+// Límite de uso por usuario (control de costo del chat con Claude).
+const LIMITE_CONSULTAS = 30;
+const VENTANA_MINUTOS = 10;
 
 interface MensajeCliente {
   role: "user" | "assistant";
@@ -53,6 +60,39 @@ export async function POST(req: Request) {
   }
   const modulos = normalizarModulos(body.modulos);
   const ultima = mensajes[mensajes.length - 1];
+
+  // ---- Identificar usuario (por su sesión, no por el cliente) y
+  //      aplicar el límite de uso. Global: se cuenta en Supabase, así
+  //      funciona entre instancias serverless de Vercel. --------------
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ ok: false, error: "Sesión no válida." }, { status: 401 });
+      }
+      const desde = new Date(Date.now() - VENTANA_MINUTOS * 60_000).toISOString();
+      const { count } = await supabase
+        .from("chat_uso")
+        .select("*", { count: "exact", head: true })
+        .eq("usuario_id", user.id)
+        .gte("en", desde);
+      if ((count ?? 0) >= LIMITE_CONSULTAS) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Alcanzaste el límite de ${LIMITE_CONSULTAS} consultas en ${VENTANA_MINUTOS} minutos. Espera un momento y vuelve a intentar.`,
+          },
+          { status: 429 },
+        );
+      }
+      await supabase.from("chat_uso").insert({ usuario_id: user.id });
+    } catch {
+      // Si Supabase falla, no bloqueamos el chat por el límite; seguimos.
+    }
+  }
 
   // ---- Modo demo: sin API key ---------------------------------
   if (!process.env.ANTHROPIC_API_KEY) {

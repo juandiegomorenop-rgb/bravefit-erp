@@ -1104,6 +1104,15 @@ create table chat_mensajes (
   en              timestamptz not null default now()
 );
 
+-- Uso del chat: una fila por consulta, para el límite de tasa por usuario
+-- (control de costo del chat con Claude). Se cuenta por ventana de tiempo.
+create table chat_uso (
+  id         bigint generated always as identity primary key,
+  usuario_id uuid not null references usuarios(id) on delete cascade,
+  en         timestamptz not null default now()
+);
+create index idx_chat_uso_user_en on chat_uso (usuario_id, en desc);
+
 -- ------------------------------------------------------------
 -- 9 · VISTAS DE APOYO
 -- ------------------------------------------------------------
