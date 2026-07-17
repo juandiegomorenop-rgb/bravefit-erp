@@ -1,11 +1,10 @@
 -- ============================================================
 -- CARGA INICIAL DE PLATINAS — conteo físico del 16-jul-2026
 -- ============================================================
--- VERSIÓN FINAL — solo referencias con conteo CONFIRMADO por Juan.
--- Quedan FUERA (entran luego, cuando Juan pase los números escritos):
---   P062 · Platina almacenador 3 barras
---   P065–P072 (en L smith, basculante mancuernas, gancho smith,
---   rack pad, X carro integrado, porta discos, target doble)
+-- VERSIÓN FINAL COMPLETA — las 68 referencias con conteo confirmado
+-- por Juan (P062 y P065–P072 confirmados por escrito el 16-jul).
+-- Si ya se ejecutó la versión anterior (60 refs), correr esta de nuevo
+-- solo agrega las 8 que faltaban: es idempotente.
 --
 -- Qué hace (idempotente — correrlo dos veces no duplica nada):
 --   1. Crea cada platina en `materiales` (tipo Platinería, unidad und,
@@ -95,8 +94,16 @@ begin
       ('P059 · Platina unión dap bar',                                  2),
       ('P060 · Platina pull up dap bar',                                0),
       ('P061 · Platina doble tapa polea',                               7),
+      ('P062 · Platina almacenador 3 barras',                           9),
       ('P063 · Platina almacenador 5 barras',                           9),
-      ('P064 · Almacenador de agarres',                                 0)
+      ('P064 · Almacenador de agarres',                                 0),
+      ('P065 · Platinas en L para guías smith tradicional',             0),
+      ('P066 · Platinas basculante almacenador de mancuernas',         24),
+      ('P067 · Platina gancho smith',                                  12),
+      ('P069 · Platina rack pad',                                       5),
+      ('P070 · Platina X para carro integrado',                         0),
+      ('P071 · Platina porta discos sistema de poleas',                 0),
+      ('P072 · Platina target doble',                                  30)
     ) as t(nombre, cantidad)
   loop
     -- 1 · Material (idempotente vía unique (nombre, tipo_material_id))
@@ -131,7 +138,7 @@ begin
   end loop;
 end $$;
 
--- Verificación rápida tras ejecutar: debe devolver 60 filas con su saldo.
+-- Verificación rápida tras ejecutar: debe devolver 68 filas con su saldo.
 select m.nombre, e.cantidad_disponible
   from materiales m
   join existencias e on e.material_id = m.id and e.tipo = 'materia_prima'
