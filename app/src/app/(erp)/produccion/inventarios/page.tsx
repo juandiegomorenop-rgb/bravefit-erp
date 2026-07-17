@@ -1,4 +1,4 @@
-import { getInventarioRepository } from "@/lib/data/inventario";
+import { getInventarioRepository } from "@/lib/data/inventario-server";
 import { TIPOS_MATERIAL } from "@/lib/data/materiales-mock";
 import { InventariosClient } from "./InventariosClient";
 

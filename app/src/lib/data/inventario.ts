@@ -1,11 +1,12 @@
 /**
- * Data layer de Inventarios (UNA sola bodega) — INTERCAMBIABLE.
+ * Data layer de Inventarios (UNA sola bodega) — núcleo COMPARTIBLE.
  *
- * La UI solo conoce la interfaz `InventarioRepository` y el factory
- * `getInventarioRepository()`. Hoy el factory devuelve
- * `MockInventarioRepository` (existencias + kardex en memoria,
- * generados con fechas relativas a hoy); el swap a Supabase será
- * implementar `SupabaseInventarioRepository` y cambiar UNA línea.
+ * Este módulo es seguro de importar desde componentes cliente: contiene
+ * SOLO tipos, funciones puras (estadoBuffer, filtros) y el mock. El
+ * repositorio real vive en `inventario-server.ts` (server-only, importa
+ * el cliente Supabase) y el factory `getInventarioRepository()` también.
+ * La UI de servidor toma el factory de ese módulo; la de cliente importa
+ * de aquí solo lo puro.
  *
  * Reglas replicadas de la BD (0001_esquema.sql · sección 10):
  *   · kardex inmutable: toda corrección es un movimiento 'ajuste' nuevo
@@ -486,20 +487,6 @@ export class MockInventarioRepository implements InventarioRepository {
   }
 }
 
-// ---------------------------------------------------------------
-// Factory — ÚNICO punto de swap a Supabase
-// ---------------------------------------------------------------
-
-const globalRepo = globalThis as unknown as {
-  __inventarioRepositorio?: InventarioRepository;
-};
-
-/**
- * Devuelve el repositorio de inventarios. Hoy: mock en memoria
- * (singleton por runtime, sobrevive HMR). Mañana:
- * `return new SupabaseInventarioRepository(...)`.
- */
-export function getInventarioRepository(): InventarioRepository {
-  globalRepo.__inventarioRepositorio ??= new MockInventarioRepository();
-  return globalRepo.__inventarioRepositorio;
-}
+// El factory `getInventarioRepository()` vive en `inventario-server.ts`
+// (server-only): devuelve el repositorio Supabase real. Este módulo no
+// importa el cliente Supabase para poder usarse desde el navegador.

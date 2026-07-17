@@ -22,10 +22,8 @@ import {
 } from "@/lib/data/crm-cotizaciones";
 import { getDashboardRepository } from "@/lib/data/dashboard";
 import { getEntregasRepository } from "@/lib/data/entregas";
-import {
-  estadoBuffer,
-  getInventarioRepository,
-} from "@/lib/data/inventario";
+import { estadoBuffer } from "@/lib/data/inventario";
+import { getInventarioRepository } from "@/lib/data/inventario-server";
 import { getOpsRepository } from "@/lib/data/ops";
 import { getRrhhRepository } from "@/lib/data/rrhh";
 import type { RangoFechas } from "@/lib/data/mercadeo";

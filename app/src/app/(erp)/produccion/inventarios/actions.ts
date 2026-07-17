@@ -1,6 +1,6 @@
 "use server";
 
-import { getInventarioRepository } from "@/lib/data/inventario";
+import { getInventarioRepository } from "@/lib/data/inventario-server";
 
 /**
  * Registrar ajuste de inventario — SERVER action: el kardex vive en el

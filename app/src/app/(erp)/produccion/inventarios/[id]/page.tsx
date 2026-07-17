@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   estadoBuffer,
-  getInventarioRepository,
   TIPO_MOVIMIENTO_LABEL,
   UNIDAD_LABEL,
 } from "@/lib/data/inventario";
+import { getInventarioRepository } from "@/lib/data/inventario-server";
 import { MATERIALES } from "@/lib/data/materiales-mock";
 import { formatCOP, formatFechaHora } from "@/lib/formato";
 import type { MovimientoInventario } from "@/lib/types/db";
