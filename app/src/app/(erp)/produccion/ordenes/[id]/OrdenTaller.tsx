@@ -3,6 +3,18 @@ import type { OpDetalle } from "@/lib/data/ops";
 import { formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 
+/** Contraste del texto del chip según luminancia del fondo (fórmula del
+ *  template del planner): claro → texto carbón, oscuro → texto blanco. */
+function fgPara(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return "#FFFFFF";
+  const n = parseInt(m[1], 16);
+  const lum =
+    (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) /
+    255;
+  return lum < 0.5 ? "#FFFFFF" : "#0E0E0E";
+}
+
 /**
  * Vista IMPRIMIBLE de la O.P. con el formato del taller (espejo del template
  * del planner). Documento interno: encabezado + banner + 3 tarjetas logísticas
@@ -15,11 +27,14 @@ import { parseFechaLocal } from "@/lib/ops-logic";
 export function OrdenTaller({
   detalle,
   bom,
+  colores = [],
 }: {
   detalle: OpDetalle;
   bom: Map<string, ComponenteBom[]>;
+  colores?: { nombre: string; hex: string }[];
 }) {
   const { op, cliente, ciudad, items } = detalle;
+  const paleta = new Map(colores.map((c) => [c.nombre.toLowerCase(), c.hex]));
 
   const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0);
   const hoy = new Date();
@@ -127,12 +142,23 @@ export function OrdenTaller({
       <SectionHeader>Fabricación por equipo</SectionHeader>
       <div className="flex flex-col gap-3">
         {racks.map((it) => (
-          <Ficha key={it.id} it={it} comps={bom.get(it.producto_id) ?? []} grande />
+          <Ficha
+            key={it.id}
+            it={it}
+            comps={bom.get(it.producto_id) ?? []}
+            paleta={paleta}
+            grande
+          />
         ))}
         {otros.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {otros.map((it) => (
-              <Ficha key={it.id} it={it} comps={bom.get(it.producto_id) ?? []} />
+              <Ficha
+                key={it.id}
+                it={it}
+                comps={bom.get(it.producto_id) ?? []}
+                paleta={paleta}
+              />
             ))}
           </div>
         )}
@@ -216,6 +242,17 @@ function Bloque({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
+function Attr({ label, valor }: { label: string; valor: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[.5px] text-neutro">
+        {label}
+      </span>
+      <b>{valor}</b>
+    </span>
+  );
+}
+
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-4 mb-2 border-b border-carbon pb-1 text-[12px] font-bold uppercase tracking-[.6px]">
@@ -227,18 +264,20 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 function Ficha({
   it,
   comps,
+  paleta,
   grande = false,
 }: {
   it: OpDetalle["items"][number];
   comps: ComponenteBom[];
+  paleta: Map<string, string>;
   grande?: boolean;
 }) {
   const p = it.producto;
-  const dims = [
-    p.ancho_cm ? `Largo ${p.ancho_cm} cm` : null,
-    p.profundidad_cm ? `Fondo ${p.profundidad_cm} cm` : null,
-    p.alto_cm ? `Alto ${p.alto_cm} cm` : null,
-  ].filter(Boolean);
+  // color pedido en la OP; si no, el color por defecto del producto
+  const colorLabel = it.color ?? p.color_default;
+  const hex = colorLabel ? paleta.get(colorLabel.toLowerCase()) : undefined;
+  const alto = it.alto_override_cm ?? p.alto_cm;
+  const fondo = it.fondo_override_cm ?? p.profundidad_cm;
   return (
     <div className="flex gap-3 rounded-card border border-borde p-3">
       <div
@@ -260,10 +299,30 @@ function Ficha({
             {it.cantidad} und
           </span>
         </div>
-        <div className="text-[11px] text-neutro">
-          {p.sku}
-          {it.color ? ` · ${it.color}` : ""}
-          {dims.length ? ` · ${dims.join(" · ")}` : ""}
+        <div className="text-[11px] text-neutro">{p.sku}</div>
+
+        {/* Atributos estilo planner: LARGO/FONDO/ALTO + chip de COLOR pintado */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+          {p.ancho_cm ? <Attr label="LARGO" valor={`${p.ancho_cm} cm`} /> : null}
+          {fondo ? <Attr label="FONDO" valor={`${fondo} cm`} /> : null}
+          {alto ? <Attr label="ALTO" valor={`${alto} cm`} /> : null}
+          {colorLabel && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-[.5px] text-neutro">
+                Color
+              </span>
+              <span
+                className="rounded-pill px-2 py-0.5 text-[10.5px] font-bold"
+                style={{
+                  background: hex ?? "#EDEBE6",
+                  color: hex ? fgPara(hex) : "#0E0E0E",
+                  border: "1px solid rgba(0,0,0,0.15)",
+                }}
+              >
+                {colorLabel}
+              </span>
+            </span>
+          )}
         </div>
 
         {comps.length > 0 ? (

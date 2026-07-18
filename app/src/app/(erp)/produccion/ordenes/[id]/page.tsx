@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { bomDeProductos, getOpsRepository } from "@/lib/data/ops-server";
+import { bomDeProductos, getOpsRepository, listarColores } from "@/lib/data/ops-server";
 import {
   formatCOP,
   formatFecha,
@@ -43,8 +43,11 @@ export default async function Page({ params }: { params: Params }) {
   ]);
   if (!detalle) notFound();
 
-  // Despiece (BOM) de los productos de la OP → alimenta el formato de taller.
-  const bom = await bomDeProductos(detalle.items.map((i) => i.producto_id));
+  // Despiece (BOM) + paleta de colores → alimentan el formato de taller.
+  const [bom, colores] = await Promise.all([
+    bomDeProductos(detalle.items.map((i) => i.producto_id)),
+    listarColores(),
+  ]);
 
   const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
     detalle;
@@ -356,7 +359,7 @@ export default async function Page({ params }: { params: Params }) {
           <span className="font-normal text-neutro">· así sale al imprimir</span>
         </h2>
       </div>
-      <OrdenTaller detalle={detalle} bom={bom} />
+      <OrdenTaller detalle={detalle} bom={bom} colores={colores} />
     </>
   );
 }

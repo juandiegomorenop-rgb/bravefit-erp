@@ -824,6 +824,15 @@ export async function bomDeProductos(
   return map;
 }
 
+/** Paleta estándar de colores (tabla `colores`) — chips pintados en el
+ *  formato de taller, como en el PDF del planner. */
+export async function listarColores(): Promise<{ nombre: string; hex: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("colores").select("nombre, hex");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((c: any) => ({ nombre: c.nombre, hex: c.hex }));
+}
+
 // ---------------------------------------------------------------
 // Factory server-only. Stateless (cliente por request) → singleton OK.
 // ---------------------------------------------------------------
