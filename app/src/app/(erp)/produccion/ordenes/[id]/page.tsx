@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { bomDeProductos, getOpsRepository, listarColores } from "@/lib/data/ops-server";
+import {
+  bomDeProductos,
+  documentosDeOp,
+  getOpsRepository,
+  listarColores,
+} from "@/lib/data/ops-server";
 import {
   formatCOP,
   formatFecha,
@@ -43,10 +48,12 @@ export default async function Page({ params }: { params: Params }) {
   ]);
   if (!detalle) notFound();
 
-  // Despiece (BOM) + paleta de colores → alimentan el formato de taller.
-  const [bom, colores] = await Promise.all([
+  // Despiece (BOM) + paleta + documentos de referencia → alimentan el
+  // Formato Imprimible OP y la tarjeta Documentos.
+  const [bom, colores, docs] = await Promise.all([
     bomDeProductos(detalle.items.map((i) => i.producto_id)),
     listarColores(),
+    documentosDeOp(detalle.op),
   ]);
 
   const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
@@ -156,70 +163,19 @@ export default async function Page({ params }: { params: Params }) {
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* Columna principal */}
         <div className="flex flex-col gap-4">
-          {/* Ítems */}
-          <div className="overflow-hidden rounded-card border border-borde bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#f0efec] text-[11.5px] font-semibold tracking-[.4px] text-neutro">
-                    <th className="px-5 py-3 font-semibold">PRODUCTO</th>
-                    <th className="px-3 py-3 text-right font-semibold">CANT.</th>
-                    <th className="px-3 py-3 text-right font-semibold">ENTREGADO</th>
-                    <th className="px-3 py-3 text-right font-semibold">PRECIO UNIT.</th>
-                    <th className="px-5 py-3 text-right font-semibold">SUBTOTAL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it) => (
-                    <tr key={it.id} className="border-b border-[#f6f5f2] last:border-b-0">
-                      <td className="px-5 py-3">
-                        <b>{it.producto.nombre}</b>
-                        <div className="text-[11.5px] text-neutro">
-                          {it.producto.sku}
-                          {it.color ? ` · ${it.color}` : ""}
-                          {it.alto_override_cm ? ` · alto ${it.alto_override_cm} cm` : ""}
-                          {it.fondo_override_cm ? ` · fondo ${it.fondo_override_cm} cm` : ""}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-right">{it.cantidad}</td>
-                      <td className="px-3 py-3 text-right">
-                        <span
-                          className={`font-bold ${
-                            it.cantidad_entregada >= it.cantidad
-                              ? "text-verde"
-                              : it.cantidad_entregada > 0
-                                ? "text-dorado-oscuro"
-                                : "text-neutro"
-                          }`}
-                        >
-                          {it.cantidad_entregada}/{it.cantidad}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right text-neutro">
-                        {formatCOP(it.precio_unit)}
-                      </td>
-                      <td className="px-5 py-3 text-right font-bold">
-                        {formatCOP(it.cantidad * it.precio_unit)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between bg-dorado-suave px-5 py-3.5 text-[14px]">
-              <b>
-                Total O.P.{" "}
-                <span className="ml-2 rounded-pill bg-card px-2.5 py-0.5 text-[11.5px] font-bold text-neutro">
+          {/* Despachos (los productos viven en el Formato Imprimible OP) */}
+          <div className="rounded-card border border-borde bg-card px-5 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-[14px] font-bold">
+                Despachos{" "}
+                <span className="ml-1 rounded-pill bg-neutro-bg px-2.5 py-0.5 text-[11.5px] font-bold text-neutro">
                   {progreso}% entregado
                 </span>
+              </h2>
+              <b className="text-[13.5px] text-dorado-oscuro">
+                Total O.P. {formatCOP(total)}
               </b>
-              <b className="text-dorado-oscuro">{formatCOP(total)}</b>
             </div>
-          </div>
-
-          {/* Despachos */}
-          <div className="rounded-card border border-borde bg-card px-5 py-4">
-            <h2 className="text-[14px] font-bold">Despachos</h2>
             {despachos.length === 0 ? (
               <p className="mt-2 text-[13px] text-neutro">
                 Sin despachos registrados todavía.
@@ -327,6 +283,37 @@ export default async function Page({ params }: { params: Params }) {
             )}
           </div>
 
+          {/* Documentos de referencia: COT siempre (salvo Shopify) · FRA o N/A */}
+          <div className="flex flex-col gap-2.5 rounded-card border border-borde bg-card px-5 py-4 text-[13px]">
+            <h2 className="text-[14px] font-bold">Documentos</h2>
+            <Dato
+              label="Cotización"
+              valor={
+                docs.cotizacion
+                  ? docs.cotizacion.numero
+                  : origen.clave === "shopify"
+                    ? "N/A (pedido Shopify)"
+                    : "— sin enlazar"
+              }
+            />
+            <Dato
+              label="Factura"
+              valor={
+                docs.factura
+                  ? (docs.factura.numero ?? "En proceso")
+                  : docs.sinFactura
+                    ? "FRA: N/A (sin factura)"
+                    : "— pendiente"
+              }
+            />
+            {(docs.pedidoWeb || origen.clave === "shopify") && (
+              <Dato
+                label="Pedido Shopify"
+                valor={docs.pedidoWeb?.numero ?? "—"}
+              />
+            )}
+          </div>
+
           {/* Pagos: placeholder hasta la integración con Siigo */}
           <div className="rounded-card border border-aviso-borde bg-aviso px-5 py-4 text-[13px] text-aviso-texto">
             <div className="flex items-center justify-between">
@@ -352,14 +339,14 @@ export default async function Page({ params }: { params: Params }) {
       </div>
     </div>
 
-      {/* Formato de taller — visible en pantalla y al imprimir */}
+      {/* Formato Imprimible OP — visible en pantalla y al imprimir */}
       <div className="no-print mx-auto mt-8 w-full max-w-[1000px] px-4 sm:px-6">
         <h2 className="text-[14px] font-bold text-carbon">
-          Formato de taller{" "}
+          Formato Imprimible OP{" "}
           <span className="font-normal text-neutro">· así sale al imprimir</span>
         </h2>
       </div>
-      <OrdenTaller detalle={detalle} bom={bom} colores={colores} />
+      <OrdenTaller detalle={detalle} bom={bom} colores={colores} docs={docs} />
     </>
   );
 }

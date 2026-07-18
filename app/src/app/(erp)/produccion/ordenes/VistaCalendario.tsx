@@ -187,9 +187,12 @@ function ChipOp({ card }: { card: OpCard }) {
     <Link
       href={`/produccion/ordenes/${card.op_id}`}
       title={`${card.numero} · ${card.cliente.nombre}`}
-      className={`mt-1 block truncate rounded-md px-1.5 py-0.5 text-[10.5px] font-bold ${clase}`}
+      className={`mt-1 block rounded-md px-1.5 py-0.5 text-[10.5px] leading-tight ${clase}`}
     >
-      {card.numero}
+      <span className="block truncate font-bold">{card.numero}</span>
+      <span className="block truncate font-medium opacity-90">
+        {card.cliente.nombre}
+      </span>
     </Link>
   );
 }

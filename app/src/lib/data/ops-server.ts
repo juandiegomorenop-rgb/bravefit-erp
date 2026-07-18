@@ -824,8 +824,67 @@ export async function bomDeProductos(
   return map;
 }
 
+/**
+ * Documentos de referencia de una OP: cotización (siempre debería existir,
+ * salvo Shopify), factura (o "sin factura" si la cotización es no_facturar)
+ * y pedido Shopify. Alimenta la tarjeta Documentos y el Formato Imprimible.
+ */
+export interface DocumentosOp {
+  cotizacion: { id: string; numero: string } | null;
+  sinFactura: boolean; // cotización marcada no_facturar → FRA: N/A
+  factura: { id: string; numero: string | null } | null;
+  pedidoWeb: { id: string; numero: string | null } | null;
+}
+
+export async function documentosDeOp(op: {
+  id: string;
+  cotizacion_id: string | null;
+  pedido_web_id: string | null;
+}): Promise<DocumentosOp> {
+  const supabase = await createClient();
+  const out: DocumentosOp = {
+    cotizacion: null,
+    sinFactura: false,
+    factura: null,
+    pedidoWeb: null,
+  };
+  const [cot, fac, pw] = await Promise.all([
+    op.cotizacion_id
+      ? supabase
+          .from("cotizaciones")
+          .select("id, numero, no_facturar")
+          .eq("id", op.cotizacion_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null } as any),
+    supabase
+      .from("facturas")
+      .select("id, numero")
+      .or(
+        op.cotizacion_id
+          ? `op_id.eq.${op.id},cotizacion_id.eq.${op.cotizacion_id}`
+          : `op_id.eq.${op.id}`,
+      )
+      .limit(1)
+      .maybeSingle(),
+    op.pedido_web_id
+      ? supabase
+          .from("pedidos_web")
+          .select("id, shopify_numero")
+          .eq("id", op.pedido_web_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null } as any),
+  ]);
+  if (cot.data) {
+    out.cotizacion = { id: cot.data.id, numero: cot.data.numero };
+    out.sinFactura = !!cot.data.no_facturar;
+  }
+  if (fac.data) out.factura = { id: fac.data.id, numero: fac.data.numero ?? null };
+  if (pw.data) out.pedidoWeb = { id: pw.data.id, numero: pw.data.shopify_numero ?? null };
+  return out;
+}
+
 /** Paleta estándar de colores (tabla `colores`) — chips pintados en el
- *  formato de taller, como en el PDF del planner. */
+ *  formato imprimible, como en el PDF del planner. */
 export async function listarColores(): Promise<{ nombre: string; hex: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("colores").select("nombre, hex");

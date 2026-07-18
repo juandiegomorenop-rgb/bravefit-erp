@@ -1,4 +1,4 @@
-import type { ComponenteBom } from "@/lib/data/ops-server";
+import type { ComponenteBom, DocumentosOp } from "@/lib/data/ops-server";
 import type { OpDetalle } from "@/lib/data/ops";
 import { formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
@@ -28,12 +28,24 @@ export function OrdenTaller({
   detalle,
   bom,
   colores = [],
+  docs,
 }: {
   detalle: OpDetalle;
   bom: Map<string, ComponenteBom[]>;
   colores?: { nombre: string; hex: string }[];
+  docs?: DocumentosOp;
 }) {
-  const { op, cliente, ciudad, items } = detalle;
+  const { op, cliente, ciudad, origen, items } = detalle;
+  const refCot = docs?.cotizacion
+    ? docs.cotizacion.numero
+    : origen.clave === "shopify"
+      ? "N/A"
+      : "—";
+  const refFra = docs?.factura
+    ? (docs.factura.numero ?? "en proceso")
+    : docs?.sinFactura
+      ? "N/A"
+      : "—";
   const paleta = new Map(colores.map((c) => [c.nombre.toLowerCase(), c.hex]));
 
   const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0);
@@ -123,6 +135,15 @@ export function OrdenTaller({
             {totalUnidades} equipo{totalUnidades === 1 ? "" : "s"} ·{" "}
             {items.length} producto{items.length === 1 ? "" : "s"} distinto
             {items.length === 1 ? "" : "s"}
+          </div>
+          <div className="mt-0.5 text-[11px]">
+            <b>COT:</b> {refCot} · <b>FRA:</b> {refFra}
+            {docs?.pedidoWeb?.numero ? (
+              <>
+                {" "}
+                · <b>Shopify:</b> {docs.pedidoWeb.numero}
+              </>
+            ) : null}
           </div>
         </Bloque>
         <Bloque label="Cliente">
