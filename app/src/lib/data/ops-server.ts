@@ -883,6 +883,25 @@ export async function documentosDeOp(op: {
   return out;
 }
 
+/**
+ * Reversa (elimina) un despacho registrado por error. Los despachos son
+ * inmutables, pero la RLS permite DELETE solo a quien tenga
+ * produccion.aprobar (Admin); el trigger revierte cantidad_entregada.
+ */
+export async function eliminarDespacho(despachoId: number): Promise<void> {
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("op_despachos")
+    .delete({ count: "exact" })
+    .eq("id", despachoId);
+  if (error) throw new Error(error.message);
+  if (!count) {
+    throw new Error(
+      "No se pudo reversar: solo un Administrador puede deshacer despachos.",
+    );
+  }
+}
+
 /** Paleta estándar de colores (tabla `colores`) — chips pintados en el
  *  formato imprimible, como en el PDF del planner. */
 export async function listarColores(): Promise<{ nombre: string; hex: string }[]> {

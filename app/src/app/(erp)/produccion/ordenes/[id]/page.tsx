@@ -95,7 +95,15 @@ export default async function Page({ params }: { params: Params }) {
             )}
           </div>
         </div>
-        <BotonImprimir />
+        <div className="no-print flex items-center gap-2">
+          <Link
+            href={`/produccion/garantias?nueva=${op.id}`}
+            className="rounded-pill border border-semaforo-rojo/50 bg-rojo-bg px-4 py-2.5 text-[13px] font-semibold text-rojo transition-colors hover:bg-semaforo-rojo hover:text-white"
+          >
+            🛡 Abrir garantía
+          </Link>
+          <BotonImprimir />
+        </div>
       </div>
 
       {/* Stepper de etapas */}

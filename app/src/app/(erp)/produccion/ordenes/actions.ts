@@ -1,6 +1,6 @@
 "use server";
 
-import { getOpsRepository } from "@/lib/data/ops-server";
+import { eliminarDespacho, getOpsRepository } from "@/lib/data/ops-server";
 import type { OpObservacion } from "@/lib/types/db";
 
 /**
@@ -49,5 +49,14 @@ export async function registrarDespacho(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo registrar el despacho." };
+  }
+}
+
+export async function deshacerDespacho(despachoId: number): Promise<MoverResp> {
+  try {
+    await eliminarDespacho(despachoId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo reversar el despacho." };
   }
 }

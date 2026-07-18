@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DespachoDetalle, OpItemConProducto } from "@/lib/data/ops";
 import { formatCOP, formatFechaHora } from "@/lib/formato";
-import { registrarDespacho } from "../actions";
+import { deshacerDespacho, registrarDespacho } from "../actions";
 
 /**
  * Despachos de la O.P.: pendiente por ítem + registro de entregas parciales.
@@ -31,6 +31,18 @@ export function DespachosOp({
 
   const pendientes = items.filter((i) => i.cantidad_entregada < i.cantidad);
   const completos = items.filter((i) => i.cantidad_entregada >= i.cantidad);
+
+  async function deshacer(despachoId: number) {
+    if (
+      !window.confirm(
+        "¿Reversar este despacho? La cantidad vuelve a quedar pendiente. Solo un Administrador puede hacerlo.",
+      )
+    )
+      return;
+    const r = await deshacerDespacho(despachoId);
+    if (r.ok) router.refresh();
+    else window.alert(r.error);
+  }
 
   async function despachar(it: OpItemConProducto) {
     const pendiente = it.cantidad - it.cantidad_entregada;
@@ -154,8 +166,16 @@ export function DespachosOp({
                 </span>
                 <b>{d.item.producto.nombre}</b>
                 {d.nota && <span className="text-neutro">· {d.nota}</span>}
-                <span className="ml-auto text-[12px] text-neutro">
+                <span className="ml-auto flex items-center gap-2 text-[12px] text-neutro">
                   {formatFechaHora(new Date(d.en))}
+                  <button
+                    type="button"
+                    onClick={() => deshacer(d.id)}
+                    title="Reversar despacho (solo Administrador)"
+                    className="no-print rounded-pill px-2 py-0.5 text-[11px] font-semibold text-rojo hover:bg-rojo-bg"
+                  >
+                    deshacer
+                  </button>
                 </span>
               </div>
             ))}

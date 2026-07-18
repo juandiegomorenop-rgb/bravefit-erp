@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeGarantia } from "@/app/(erp)/produccion/ordenes/badges";
-import { getOpsRepository } from "@/lib/data/ops-server";
+import { BotonImprimir } from "@/app/(erp)/produccion/ordenes/[id]/BotonImprimir";
+import { documentosDeOp, getOpsRepository } from "@/lib/data/ops-server";
 import { USUARIOS } from "@/lib/data/ops";
 import { formatCOP, formatFechaHora } from "@/lib/formato";
 import { EditarGarantia } from "./EditarGarantia";
+import { GarantiaImprimible } from "./GarantiaImprimible";
 
 export const metadata = { title: "Garantía" };
 
@@ -21,12 +23,14 @@ export default async function Page({
   const { id } = await params;
   const det = await getOpsRepository().obtenerGarantia(id);
   if (!det) notFound();
+  const docs = await documentosDeOp(det.op);
 
   const g = det.garantia;
   const abierta = !g.cerrada_en;
 
   return (
-    <div className="mx-auto max-w-[860px]">
+    <>
+    <div className="mx-auto max-w-[860px] print:hidden">
       <p className="text-[12.5px] text-neutro">
         <Link href="/produccion/garantias" className="hover:underline">
           Producción / Garantías
@@ -36,6 +40,9 @@ export default async function Page({
       <div className="mt-1 flex flex-wrap items-center gap-3">
         <BadgeGarantia grande />
         <h1 className="text-[28px] font-extrabold tracking-tight">{g.numero}</h1>
+        <span className="ml-auto">
+          <BotonImprimir />
+        </span>
         {abierta ? (
           <span className="rounded-pill bg-azul-bg px-3 py-1 text-[12px] font-bold text-azul">
             {det.etapa.nombre} · {det.dias === 0 ? "abierta hoy" : `${det.dias} días abierta`}
@@ -168,5 +175,15 @@ export default async function Page({
         </div>
       </div>
     </div>
+
+      {/* Formato Imprimible Garantía — pantalla + impresión */}
+      <div className="no-print mx-auto mt-8 w-full max-w-[760px]">
+        <h2 className="text-[14px] font-bold text-carbon">
+          Formato Imprimible Garantía{" "}
+          <span className="font-normal text-neutro">· así sale al imprimir</span>
+        </h2>
+      </div>
+      <GarantiaImprimible det={det} docs={docs} />
+    </>
   );
 }

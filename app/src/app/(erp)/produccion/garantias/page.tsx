@@ -35,6 +35,7 @@ export default async function Page({
             : undefined,
         texto: primero(sp.q) ?? "",
       }}
+      opPreseleccionada={primero(sp.nueva)}
     />
   );
 }

@@ -13,6 +13,8 @@ interface Props {
   opsParaGarantia: OpCard[]; // OPs activas (para el formulario de creación)
   usuarios: Usuario[];
   filtrosIniciales: GarantiaFiltros;
+  /** OP que llega preseleccionada desde "Abrir garantía" en el detalle. */
+  opPreseleccionada?: string;
 }
 
 export const RECOGIDA_LABEL: Record<Garantia["recogida"], string> = {
@@ -35,10 +37,12 @@ export function GarantiasClient({
   opsParaGarantia,
   usuarios,
   filtrosIniciales,
+  opPreseleccionada,
 }: Props) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(filtrosIniciales);
-  const [creando, setCreando] = useState(false);
+  // llega ?nueva=<opId> desde el detalle de la OP → abre el formulario listo
+  const [creando, setCreando] = useState(!!opPreseleccionada);
   const [error, setError] = useState<string | null>(null);
 
   const filtradas = useMemo(() => {
@@ -134,6 +138,7 @@ export function GarantiasClient({
       {creando && (
         <FormNuevaGarantia
           ops={opsParaGarantia}
+          opInicial={opPreseleccionada}
           usuarios={usuarios}
           onListo={(id) => {
             setCreando(false);
@@ -266,16 +271,18 @@ export function GarantiasClient({
 /** Abrir garantía: se ancla a una OP (hereda cliente) + producto de esa OP. */
 function FormNuevaGarantia({
   ops,
+  opInicial,
   usuarios,
   onListo,
   onError,
 }: {
   ops: OpCard[];
+  opInicial?: string;
   usuarios: Usuario[];
   onListo: (id: string) => void;
   onError: (e: string | null) => void;
 }) {
-  const [opId, setOpId] = useState("");
+  const [opId, setOpId] = useState(opInicial ?? "");
   const [productoId, setProductoId] = useState("");
   const [problema, setProblema] = useState("");
   const [detalle, setDetalle] = useState("");
