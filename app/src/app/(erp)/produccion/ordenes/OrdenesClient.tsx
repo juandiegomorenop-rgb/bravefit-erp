@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { aplicarFiltros, type FiltrosOps, type OpCard } from "@/lib/data/ops";
+import {
+  aplicarFiltros,
+  esOpArchivada,
+  type FiltrosOps,
+  type OpCard,
+} from "@/lib/data/ops";
 import { moverEtapa as moverEtapaAction } from "./actions";
 import type { SemaforoOp } from "@/lib/ops-logic";
 import type { Ciudad, EtapaProduccion, OrigenOp } from "@/lib/types/db";
@@ -72,9 +77,15 @@ export function OrdenesClient({
     );
   }, [vista, filtros, campoFechaCal]);
 
+  // El tablero por defecto oculta las archivadas (entregadas hace >7 días);
+  // el botón Archivo las muestra solas. archivo===false ⇒ activas.
   const filtradas = useMemo(
-    () => aplicarFiltros(cards, filtros),
+    () => aplicarFiltros(cards, { ...filtros, archivo: filtros.archivo ?? false }),
     [cards, filtros],
+  );
+  const nArchivadas = useMemo(
+    () => cards.filter((c) => esOpArchivada(c)).length,
+    [cards],
   );
 
   const hayFiltros =
@@ -138,6 +149,20 @@ export function OrdenesClient({
             {v.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() =>
+            setFiltros({ ...filtros, archivo: filtros.archivo ? undefined : true })
+          }
+          title={`Entregadas hace más de 7 días (${nArchivadas})`}
+          className={`rounded-pill border px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
+            filtros.archivo
+              ? "border-carbon bg-carbon text-white"
+              : "border-borde bg-card text-neutro hover:border-dorado"
+          }`}
+        >
+          🗄 Archivo{nArchivadas > 0 ? ` (${nArchivadas})` : ""}
+        </button>
         <div className="ml-auto hidden flex-wrap items-center gap-3 text-[11.5px] text-neutro md:flex">
           <span>Entrega:</span>
           <Leyenda color="bg-neutro-bg border border-borde" label="+3 sem" />

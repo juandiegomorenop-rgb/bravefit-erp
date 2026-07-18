@@ -17,6 +17,11 @@ export function GarantiaImprimible({
   docs: DocumentosOp;
 }) {
   const g = det.garantia;
+  const productos = det.productos?.length
+    ? det.productos
+    : det.producto
+      ? [det.producto]
+      : [];
   const refCot = docs.cotizacion ? docs.cotizacion.numero : "N/A";
   const refFra = docs.factura
     ? (docs.factura.numero ?? "en proceso")
@@ -90,30 +95,36 @@ export function GarantiaImprimible({
         </div>
       </div>
 
-      {/* Producto afectado */}
+      {/* Productos afectados (multi-ítem) */}
       <div className="mt-4 mb-2 border-b border-carbon pb-1 text-[12px] font-bold uppercase tracking-[.6px]">
-        Producto afectado
+        {productos.length > 1 ? "Productos afectados" : "Producto afectado"}
       </div>
-      <div className="flex gap-3 rounded-card border border-borde p-3">
-        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-input border border-borde bg-sutil">
-          {det.producto?.imagen_url ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={det.producto.imagen_url}
-              alt={det.producto.nombre}
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <span className="text-[10px] text-neutro">sin foto</span>
-          )}
+      {productos.length === 0 ? (
+        <p className="text-[12px] italic text-neutro">Por identificar.</p>
+      ) : (
+        <div className={productos.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
+          {productos.map((p) => (
+            <div key={p.id} className="flex gap-3 rounded-card border border-borde p-3">
+              <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-input border border-borde bg-sutil">
+                {p.imagen_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={p.imagen_url}
+                    alt={p.nombre}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <span className="text-[10px] text-neutro">sin foto</span>
+                )}
+              </div>
+              <div>
+                <b className="text-[13px]">{p.nombre}</b>
+                <div className="text-[11px] text-neutro">{p.sku}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div>
-          <b className="text-[13px]">{det.producto?.nombre ?? "Por identificar"}</b>
-          {det.producto && (
-            <div className="text-[11px] text-neutro">{det.producto.sku}</div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Falla y trabajo */}
       <div className="mt-4 mb-2 border-b border-carbon pb-1 text-[12px] font-bold uppercase tracking-[.6px]">

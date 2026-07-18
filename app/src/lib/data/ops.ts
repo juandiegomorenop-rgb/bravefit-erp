@@ -89,6 +89,20 @@ export interface FiltrosOps {
   ciudad_id?: number;
   semaforo?: SemaforoOp;
   texto?: string; // busca en número, cliente, ciudad y productos
+  /** false (tablero por defecto): oculta archivadas · true: SOLO archivadas
+   *  · undefined: sin filtro (dashboards/análisis ven todo). */
+  archivo?: boolean;
+}
+
+/** Días tras la entrega 100% después de los cuales la OP pasa al archivo
+ *  (deja de estorbar en el tablero; se consulta con el filtro Archivo). */
+export const ARCHIVO_DIAS = 7;
+
+/** Una OP queda archivada cuando fue entregada hace más de ARCHIVO_DIAS. */
+export function esOpArchivada(card: OpCard, hoy: Date = new Date()): boolean {
+  if (card.tipo !== "op" || !card.fecha_entregada) return false;
+  const entregada = new Date(`${card.fecha_entregada}T00:00:00`);
+  return (hoy.getTime() - entregada.getTime()) / 86_400_000 > ARCHIVO_DIAS;
 }
 
 // ---------------------------------------------------------------
@@ -130,6 +144,8 @@ export interface GarantiaCard {
 export interface GarantiaDetalle extends GarantiaCard {
   op: OrdenPedido;
   ciudad: Ciudad | null;
+  /** TODOS los productos cubiertos (multi-ítem); `producto` es el principal. */
+  productos?: Producto[];
 }
 
 export interface GarantiaFiltros {
@@ -139,7 +155,9 @@ export interface GarantiaFiltros {
 
 export interface GarantiaCrearInput {
   op_id: string;
-  producto_id: string | null;
+  producto_id: string | null; // principal (primero seleccionado)
+  /** Todos los productos de la OP cubiertos por esta garantía. */
+  producto_ids?: string[];
   problema: string;
   detalle: string | null;
   recogida: Garantia["recogida"];
@@ -182,6 +200,8 @@ export function aplicarFiltros(
 ): OpCard[] {
   const q = filtros.texto?.trim().toLowerCase();
   return cards.filter((c) => {
+    if (filtros.archivo !== undefined && esOpArchivada(c, hoy) !== filtros.archivo)
+      return false;
     if (filtros.etapa_id !== undefined && c.etapa_id !== filtros.etapa_id)
       return false;
     if (filtros.origen && c.origen.clave !== filtros.origen) return false;
@@ -946,10 +966,12 @@ export class MockOpsRepository implements OpsRepository {
     const g = this.garantias.find((x) => x.id === id && x.activo);
     if (!g) return null;
     const op = this.ops.find((o) => o.id === g.op_id)!;
+    const card = this.garantiaCard(g);
     return structuredClone({
-      ...this.garantiaCard(g),
+      ...card,
       op,
       ciudad: CIUDADES.find((c) => c.id === op.ciudad_id) ?? null,
+      productos: card.producto ? [card.producto] : [],
     });
   }
 

@@ -283,7 +283,7 @@ function FormNuevaGarantia({
   onError: (e: string | null) => void;
 }) {
   const [opId, setOpId] = useState(opInicial ?? "");
-  const [productoId, setProductoId] = useState("");
+  const [productoIds, setProductoIds] = useState<string[]>([]);
   const [problema, setProblema] = useState("");
   const [detalle, setDetalle] = useState("");
   const [recogida, setRecogida] = useState<Garantia["recogida"]>("por_definir");
@@ -297,7 +297,8 @@ function FormNuevaGarantia({
     setGuardando(true);
     const r = await crearGarantia({
       op_id: opId,
-      producto_id: productoId || null,
+      producto_id: productoIds[0] ?? null,
+      producto_ids: productoIds,
       problema,
       detalle: detalle.trim() || null,
       recogida,
@@ -324,7 +325,7 @@ function FormNuevaGarantia({
             value={opId}
             onChange={(e) => {
               setOpId(e.target.value);
-              setProductoId("");
+              setProductoIds([]);
             }}
           >
             <option value="">Seleccionar…</option>
@@ -335,22 +336,40 @@ function FormNuevaGarantia({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
-          PRODUCTO CON LA FALLA
-          <select
-            className={inputCls}
-            value={productoId}
-            onChange={(e) => setProductoId(e.target.value)}
-            disabled={!op}
-          >
-            <option value="">Seleccionar…</option>
-            {op?.items.map((i) => (
-              <option key={i.id} value={i.producto_id}>
-                {i.producto.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+          PRODUCTOS CON LA FALLA (marca uno o varios)
+          {!op ? (
+            <p className="rounded-input border border-borde bg-sutil px-3 py-2 text-[12px] font-normal text-neutro">
+              Selecciona primero la OP de origen.
+            </p>
+          ) : (
+            <div className="max-h-36 overflow-y-auto rounded-input border border-borde bg-card px-3 py-2">
+              {op.items.map((i) => {
+                const marcado = productoIds.includes(i.producto_id);
+                return (
+                  <label
+                    key={i.id}
+                    className="flex cursor-pointer items-center gap-2 py-1 text-[12.5px] font-normal text-carbon"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={marcado}
+                      onChange={() =>
+                        setProductoIds((prev) =>
+                          marcado
+                            ? prev.filter((p) => p !== i.producto_id)
+                            : [...prev, i.producto_id],
+                        )
+                      }
+                      className="h-3.5 w-3.5 accent-[#b98900]"
+                    />
+                    {i.producto.nombre}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
           VENDEDOR (para consultas del cliente)
           <select

@@ -688,10 +688,22 @@ class SupabaseOpsRepository implements OpsRepository {
       .select("*")
       .eq("id", g.op_id)
       .maybeSingle();
+
+    // multi-ítem: todos los productos cubiertos (fallback = principal)
+    let productos: Producto[] = card.producto ? [card.producto] : [];
+    const { data: gps, error: gpErr } = await supabase
+      .from("garantia_productos")
+      .select("productos(*)")
+      .eq("garantia_id", g.id);
+    if (!gpErr && gps && gps.length) {
+      productos = (gps as any[]).map((r) => toProducto(r.productos));
+    }
+
     return {
       ...card,
       op: toOrden(op),
       ciudad: op?.ciudad_id != null ? (lk.ciudades.get(num(op.ciudad_id)) ?? null) : null,
+      productos,
     };
   }
 
@@ -721,12 +733,16 @@ class SupabaseOpsRepository implements OpsRepository {
       .select("id", { count: "exact", head: true });
     const numero = `GR-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
+    // producto principal = primero seleccionado (compatibilidad kanban/listas)
+    const ids = [...new Set(input.producto_ids ?? [])];
+    const principal = input.producto_id ?? ids[0] ?? null;
+
     const { data, error } = await supabase
       .from("garantias")
       .insert({
         numero,
         op_id: input.op_id,
-        producto_id: input.producto_id,
+        producto_id: principal,
         cliente_id: op.cliente_id,
         vendedor_id: input.vendedor_id,
         problema: input.problema.trim(),
@@ -737,6 +753,15 @@ class SupabaseOpsRepository implements OpsRepository {
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+
+    // detalle multi-ítem (tabla garantia_productos); si aún no existe la
+    // tabla, la garantía queda creada con su producto principal igual.
+    if (ids.length) {
+      const { error: gpErr } = await supabase.from("garantia_productos").insert(
+        ids.map((pid) => ({ garantia_id: data.id, producto_id: pid })),
+      );
+      if (gpErr) console.warn("garantia_productos:", gpErr.message);
+    }
     return toGarantia(data);
   }
 

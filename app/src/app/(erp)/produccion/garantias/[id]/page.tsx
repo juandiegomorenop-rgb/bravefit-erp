@@ -74,9 +74,13 @@ export default async function Page({
             <div className="mt-4 grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-3">
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wider text-neutro">
-                  Producto
+                  {(det.productos?.length ?? 0) > 1 ? "Productos" : "Producto"}
                 </p>
-                <p className="font-semibold">{det.producto?.nombre ?? "—"}</p>
+                <p className="font-semibold">
+                  {det.productos?.length
+                    ? det.productos.map((p) => p.nombre).join(" · ")
+                    : (det.producto?.nombre ?? "—")}
+                </p>
               </div>
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wider text-neutro">
