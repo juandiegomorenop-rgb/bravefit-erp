@@ -1,9 +1,7 @@
 "use server";
 
-import {
-  getCotizacionesRepository,
-  type CotizacionInput,
-} from "@/lib/data/crm-cotizaciones";
+import { getCotizacionesRepository } from "@/lib/data/crm-cotizaciones-server";
+import { type CotizacionInput } from "@/lib/data/crm-cotizaciones";
 
 /**
  * Acciones del editor de cotizaciones — SERVER: el store vive en el

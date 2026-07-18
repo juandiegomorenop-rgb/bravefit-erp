@@ -1,4 +1,4 @@
-import { getCotizacionesRepository } from "@/lib/data/crm-cotizaciones";
+import { getCotizacionesRepository } from "@/lib/data/crm-cotizaciones-server";
 import { CotizacionesClient } from "./CotizacionesClient";
 
 export const metadata = { title: "Cotizaciones" };

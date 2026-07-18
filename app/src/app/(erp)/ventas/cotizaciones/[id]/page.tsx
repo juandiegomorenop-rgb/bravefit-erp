@@ -9,8 +9,10 @@ import {
   totalLineaLista,
   type CotizacionItemConProducto,
 } from "@/lib/cotizacion-logic";
-import { getCotizacionesRepository } from "@/lib/data/crm-cotizaciones";
-import { CATEGORIAS } from "@/lib/data/ops";
+import {
+  getCotizacionesRepository,
+  listarCategoriasProducto,
+} from "@/lib/data/crm-cotizaciones-server";
 import { formatCOP, formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 import { BadgeEstadoCotizacion } from "../badges";
@@ -32,7 +34,10 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const det = await getCotizacionesRepository().obtener(id);
+  const [det, categorias] = await Promise.all([
+    getCotizacionesRepository().obtener(id),
+    listarCategoriasProducto(),
+  ]);
   if (!det) notFound();
 
   const { cotizacion: cot, cliente, ciudad, vendedor, estado, items, totales } = det;
@@ -41,7 +46,7 @@ export default async function Page({
 
   // Agrupar por categoría (los ítems libres/transporte van a "Logística")
   const grupos: { nombre: string; items: CotizacionItemConProducto[] }[] = [];
-  for (const cat of [...CATEGORIAS].sort((a, b) => a.orden - b.orden)) {
+  for (const cat of [...categorias].sort((a, b) => a.orden - b.orden)) {
     const del = items.filter((i) => i.producto?.categoria_id === cat.id);
     if (del.length) grupos.push({ nombre: cat.nombre, items: del });
   }

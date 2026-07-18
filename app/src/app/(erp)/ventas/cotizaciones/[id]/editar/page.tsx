@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
-import { getCotizacionesRepository } from "@/lib/data/crm-cotizaciones";
-import { PRODUCTO_DIMENSIONES, PRODUCTOS } from "@/lib/data/ops";
+import {
+  getCotizacionesRepository,
+  listarDimensiones,
+  listarProductosCatalogo,
+} from "@/lib/data/crm-cotizaciones-server";
 import { EditorCotizacion } from "../../EditorCotizacion";
 
 export const metadata = { title: "Editar cotización" };
@@ -17,17 +20,19 @@ export default async function Page({
   if (!det) redirect("/ventas/cotizaciones");
   if (det.estado.nombre !== "Borrador") redirect(`/ventas/cotizaciones/${id}`);
 
-  const [clientes, vendedores] = await Promise.all([
+  const [clientes, vendedores, productos, dimensiones] = await Promise.all([
     repo.listarClientes(),
     repo.listarVendedores(),
+    listarProductosCatalogo(),
+    listarDimensiones(),
   ]);
 
   return (
     <EditorCotizacion
       clientes={clientes}
       vendedores={vendedores}
-      productos={PRODUCTOS.filter((p) => p.activo)}
-      dimensiones={PRODUCTO_DIMENSIONES}
+      productos={productos}
+      dimensiones={dimensiones}
       cotizacionId={det.cotizacion.id}
       numero={det.cotizacion.numero}
       inicial={{

@@ -1,6 +1,6 @@
 "use server";
 
-import { getCrmRepository } from "@/lib/data/crm-cotizaciones";
+import { getCrmRepository } from "@/lib/data/crm-cotizaciones-server";
 
 /**
  * Mover ficha del embudo — SERVER action: el store vive en el servidor,

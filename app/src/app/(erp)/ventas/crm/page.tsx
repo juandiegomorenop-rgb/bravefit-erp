@@ -1,4 +1,4 @@
-import { getCrmRepository } from "@/lib/data/crm-cotizaciones";
+import { getCrmRepository } from "@/lib/data/crm-cotizaciones-server";
 import { CrmClient } from "./CrmClient";
 
 export const metadata = { title: "CRM — Embudo de ventas" };
