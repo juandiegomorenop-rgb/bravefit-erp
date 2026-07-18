@@ -1,4 +1,4 @@
-import { getOpsRepository } from "@/lib/data/ops";
+import { getOpsRepository } from "@/lib/data/ops-server";
 import type { SemaforoOp } from "@/lib/ops-logic";
 import { OrdenesClient, type CampoFechaCal, type Vista } from "./OrdenesClient";
 

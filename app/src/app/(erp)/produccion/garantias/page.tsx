@@ -1,5 +1,5 @@
-import { getOpsRepository, type GarantiaFiltros } from "@/lib/data/ops";
-import { USUARIOS } from "@/lib/data/ops";
+import { getOpsRepository } from "@/lib/data/ops-server";
+import { type GarantiaFiltros, USUARIOS } from "@/lib/data/ops";
 import { GarantiasClient } from "./GarantiasClient";
 
 export const metadata = { title: "Garantías" };

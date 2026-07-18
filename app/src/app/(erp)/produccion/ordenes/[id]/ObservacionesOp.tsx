@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getOpsRepository } from "@/lib/data/ops";
+import { agregarObservacion } from "../actions";
 import { formatFechaHora } from "@/lib/formato";
 import type { OpObservacion } from "@/lib/types/db";
 
@@ -26,9 +26,13 @@ export function ObservacionesOp({
     if (!limpio || enviando) return;
     setEnviando(true);
     try {
-      const obs = await getOpsRepository().agregarObservacion(opId, limpio);
-      setLista((prev) => [obs, ...prev]);
-      setTexto("");
+      const r = await agregarObservacion(opId, limpio);
+      if (r.ok) {
+        setLista((prev) => [r.obs, ...prev]);
+        setTexto("");
+      } else if (typeof window !== "undefined") {
+        window.alert(r.error);
+      }
     } finally {
       setEnviando(false);
     }

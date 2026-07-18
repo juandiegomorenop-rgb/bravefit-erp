@@ -1,6 +1,7 @@
 "use server";
 
-import { getOpsRepository, type GarantiaCrearInput } from "@/lib/data/ops";
+import { getOpsRepository } from "@/lib/data/ops-server";
+import { type GarantiaCrearInput } from "@/lib/data/ops";
 import type { Garantia } from "@/lib/types/db";
 
 /** SERVER actions de Garantías — unión discriminada, nunca throw. */

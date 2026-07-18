@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeGarantia } from "@/app/(erp)/produccion/ordenes/badges";
-import { getOpsRepository } from "@/lib/data/ops";
+import { getOpsRepository } from "@/lib/data/ops-server";
 import { USUARIOS } from "@/lib/data/ops";
 import { formatCOP, formatFechaHora } from "@/lib/formato";
 import { EditarGarantia } from "./EditarGarantia";

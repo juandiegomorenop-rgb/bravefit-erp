@@ -1,0 +1,40 @@
+"use server";
+
+import { getOpsRepository } from "@/lib/data/ops-server";
+import type { OpObservacion } from "@/lib/types/db";
+
+/**
+ * Acciones de servidor del módulo OPs. El tablero (isla cliente) no puede
+ * llamar al repositorio Supabase directamente (es server-only), así que las
+ * mutaciones del kanban y las observaciones pasan por aquí. Nunca lanzan:
+ * devuelven un resultado que el cliente usa para confirmar u optimista-revertir.
+ */
+
+export type MoverResp = { ok: true } | { ok: false; error: string };
+export type ObsResp =
+  | { ok: true; obs: OpObservacion }
+  | { ok: false; error: string };
+
+export async function moverEtapa(
+  cardId: string,
+  etapaId: number,
+): Promise<MoverResp> {
+  try {
+    await getOpsRepository().moverEtapa(cardId, etapaId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al mover la O.P." };
+  }
+}
+
+export async function agregarObservacion(
+  opId: string,
+  texto: string,
+): Promise<ObsResp> {
+  try {
+    const obs = await getOpsRepository().agregarObservacion(opId, texto);
+    return { ok: true, obs };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo agregar la observación." };
+  }
+}

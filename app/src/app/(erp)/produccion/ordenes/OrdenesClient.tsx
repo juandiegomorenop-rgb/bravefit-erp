@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  aplicarFiltros,
-  getOpsRepository,
-  type FiltrosOps,
-  type OpCard,
-} from "@/lib/data/ops";
+import { aplicarFiltros, type FiltrosOps, type OpCard } from "@/lib/data/ops";
+import { moverEtapa as moverEtapaAction } from "./actions";
 import type { SemaforoOp } from "@/lib/ops-logic";
 import type { Ciudad, EtapaProduccion, OrigenOp } from "@/lib/types/db";
 import { VistaCalendario } from "./VistaCalendario";
@@ -95,9 +91,16 @@ export function OrdenesClient({
     setCards(
       cards.map((c) => (c.id === cardId ? { ...c, etapa_id: etapaId } : c)),
     );
-    getOpsRepository()
-      .moverEtapa(cardId, etapaId)
-      .catch(() => setCards(anterior)); // revierte si el data layer falla
+    // Persiste vía server action; revierte (y avisa) si la BD lo rechaza
+    // (p. ej. entrega con saldo pendiente o ítems sin despachar).
+    moverEtapaAction(cardId, etapaId)
+      .then((r) => {
+        if (!r.ok) {
+          setCards(anterior);
+          if (typeof window !== "undefined") window.alert(r.error);
+        }
+      })
+      .catch(() => setCards(anterior));
   }
 
   return (
