@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOpsRepository } from "@/lib/data/ops-server";
+import { bomDeProductos, getOpsRepository } from "@/lib/data/ops-server";
 import {
   formatCOP,
   formatFecha,
@@ -22,6 +22,7 @@ import {
 } from "../badges";
 import { BotonImprimir } from "./BotonImprimir";
 import { ObservacionesOp } from "./ObservacionesOp";
+import { OrdenTaller } from "./OrdenTaller";
 
 type Params = Promise<{ id: string }>;
 
@@ -42,6 +43,9 @@ export default async function Page({ params }: { params: Params }) {
   ]);
   if (!detalle) notFound();
 
+  // Despiece (BOM) de los productos de la OP → alimenta el formato de taller.
+  const bom = await bomDeProductos(detalle.items.map((i) => i.producto_id));
+
   const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
     detalle;
   const sem = semaforo(op.fecha_entrega_pactada, op.fecha_entregada);
@@ -50,7 +54,8 @@ export default async function Page({ params }: { params: Params }) {
   const ordenActual = detalle.etapa.orden;
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 print:max-w-none print:p-0">
+    <>
+    <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 print:hidden">
       {/* Encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -343,6 +348,16 @@ export default async function Page({ params }: { params: Params }) {
         </div>
       </div>
     </div>
+
+      {/* Formato de taller — visible en pantalla y al imprimir */}
+      <div className="no-print mx-auto mt-8 w-full max-w-[1000px] px-4 sm:px-6">
+        <h2 className="text-[14px] font-bold text-carbon">
+          Formato de taller{" "}
+          <span className="font-normal text-neutro">· así sale al imprimir</span>
+        </h2>
+      </div>
+      <OrdenTaller detalle={detalle} bom={bom} />
+    </>
   );
 }
 

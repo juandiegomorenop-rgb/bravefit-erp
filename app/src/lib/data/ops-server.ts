@@ -781,6 +781,50 @@ class SupabaseOpsRepository implements OpsRepository {
 }
 
 // ---------------------------------------------------------------
+// Despiece (BOM) por producto — para la vista imprimible de taller.
+// Devuelve solo componentes con material rastreado (platinas / impresión 3D);
+// la tornillería/tubería se sumará cuando se cargue ese BOM.
+// ---------------------------------------------------------------
+
+export interface ComponenteBom {
+  producto_id: string;
+  categoria: string;
+  descripcion: string;
+  cantidad: number;
+  material_nombre: string | null;
+}
+
+export async function bomDeProductos(
+  ids: string[],
+): Promise<Map<string, ComponenteBom[]>> {
+  const map = new Map<string, ComponenteBom[]>();
+  const unicos = [...new Set(ids)];
+  if (unicos.length === 0) return map;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("producto_componentes")
+    .select("producto_id, categoria, descripcion, cantidad, materiales(nombre)")
+    .in("producto_id", unicos)
+    .not("material_id", "is", null);
+  if (error) throw new Error(error.message);
+  for (const r of (data ?? []) as any[]) {
+    const arr = map.get(r.producto_id) ?? [];
+    arr.push({
+      producto_id: r.producto_id,
+      categoria: r.categoria,
+      descripcion: r.descripcion,
+      cantidad: num(r.cantidad),
+      material_nombre: r.materiales?.nombre ?? null,
+    });
+    map.set(r.producto_id, arr);
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => a.descripcion.localeCompare(b.descripcion, "es"));
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------
 // Factory server-only. Stateless (cliente por request) → singleton OK.
 // ---------------------------------------------------------------
 const globalRepo = globalThis as unknown as {
