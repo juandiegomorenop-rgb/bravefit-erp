@@ -38,3 +38,16 @@ export async function agregarObservacion(
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo agregar la observación." };
   }
 }
+
+export async function registrarDespacho(
+  opItemId: string,
+  cantidad: number,
+  nota?: string,
+): Promise<MoverResp> {
+  try {
+    await getOpsRepository().registrarDespacho(opItemId, cantidad, nota);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo registrar el despacho." };
+  }
+}

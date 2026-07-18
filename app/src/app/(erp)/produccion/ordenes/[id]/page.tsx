@@ -26,6 +26,7 @@ import {
   PillEntrega,
 } from "../badges";
 import { BotonImprimir } from "./BotonImprimir";
+import { DespachosOp } from "./DespachosOp";
 import { ObservacionesOp } from "./ObservacionesOp";
 import { OrdenTaller } from "./OrdenTaller";
 
@@ -163,43 +164,14 @@ export default async function Page({ params }: { params: Params }) {
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* Columna principal */}
         <div className="flex flex-col gap-4">
-          {/* Despachos (los productos viven en el Formato Imprimible OP) */}
-          <div className="rounded-card border border-borde bg-card px-5 py-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-[14px] font-bold">
-                Despachos{" "}
-                <span className="ml-1 rounded-pill bg-neutro-bg px-2.5 py-0.5 text-[11.5px] font-bold text-neutro">
-                  {progreso}% entregado
-                </span>
-              </h2>
-              <b className="text-[13.5px] text-dorado-oscuro">
-                Total O.P. {formatCOP(total)}
-              </b>
-            </div>
-            {despachos.length === 0 ? (
-              <p className="mt-2 text-[13px] text-neutro">
-                Sin despachos registrados todavía.
-              </p>
-            ) : (
-              <div className="mt-2 flex flex-col">
-                {despachos.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[#f6f5f2] py-2.5 text-[13px] last:border-b-0"
-                  >
-                    <span className="rounded-pill bg-verde-bg px-2 py-0.5 text-[11px] font-bold text-verde">
-                      {d.cantidad} und
-                    </span>
-                    <b>{d.item.producto.nombre}</b>
-                    {d.nota && <span className="text-neutro">· {d.nota}</span>}
-                    <span className="ml-auto text-[12px] text-neutro">
-                      {formatFechaHora(new Date(d.en))}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Despachos: pendientes por ítem + registro de entregas parciales */}
+          <DespachosOp
+            opId={op.id}
+            items={items}
+            despachos={despachos}
+            total={total}
+            progreso={progreso}
+          />
 
           {/* Línea de tiempo de etapas */}
           <div className="rounded-card border border-borde bg-card px-5 py-4">
