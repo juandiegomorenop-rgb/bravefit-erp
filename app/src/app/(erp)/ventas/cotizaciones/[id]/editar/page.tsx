@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import {
   getCotizacionesRepository,
+  listarCategoriasProducto,
   listarDimensiones,
   listarProductosCatalogo,
 } from "@/lib/data/crm-cotizaciones-server";
@@ -20,12 +21,14 @@ export default async function Page({
   if (!det) redirect("/ventas/cotizaciones");
   if (det.estado.nombre !== "Borrador") redirect(`/ventas/cotizaciones/${id}`);
 
-  const [clientes, vendedores, productos, dimensiones] = await Promise.all([
-    repo.listarClientes(),
-    repo.listarVendedores(),
-    listarProductosCatalogo(),
-    listarDimensiones(),
-  ]);
+  const [clientes, vendedores, productos, dimensiones, categorias] =
+    await Promise.all([
+      repo.listarClientes(),
+      repo.listarVendedores(),
+      listarProductosCatalogo(),
+      listarDimensiones(),
+      listarCategoriasProducto(),
+    ]);
 
   return (
     <EditorCotizacion
@@ -33,6 +36,7 @@ export default async function Page({
       vendedores={vendedores}
       productos={productos}
       dimensiones={dimensiones}
+      categorias={categorias}
       cotizacionId={det.cotizacion.id}
       numero={det.cotizacion.numero}
       inicial={{

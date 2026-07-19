@@ -724,6 +724,58 @@ export async function listarCategoriasProducto(): Promise<
   }));
 }
 
+/**
+ * Alta rápida de producto desde el editor de cotizaciones. El producto
+ * nace en la BD (fuente de la verdad del catálogo) y queda disponible
+ * de inmediato para cotizar; se enriquece después (foto, BOM, dims).
+ */
+export interface ProductoNuevoInput {
+  nombre: string;
+  sku: string;
+  categoria_id: number;
+  origen: "propio" | "comercializado";
+  precio_lista: number;
+  es_rack?: boolean;
+}
+
+export async function crearProducto(input: ProductoNuevoInput): Promise<Producto> {
+  const nombre = input.nombre.trim();
+  const sku = input.sku.trim();
+  if (!nombre || !sku) throw new Error("Nombre y SKU son obligatorios.");
+  if (!Number.isFinite(input.precio_lista) || input.precio_lista < 0) {
+    throw new Error("El precio de lista no puede ser negativo.");
+  }
+  const supabase = await createClient();
+  const { data: und, error: uErr } = await supabase
+    .from("unidades_medida")
+    .select("id")
+    .eq("clave", "und")
+    .single();
+  if (uErr) throw new Error(uErr.message);
+
+  const { data, error } = await supabase
+    .from("productos")
+    .insert({
+      sku,
+      nombre,
+      categoria_id: input.categoria_id,
+      clasificacion: input.es_rack ? "MTO" : "MTS",
+      origen: input.origen,
+      es_rack: input.es_rack ?? false,
+      unidad_id: und.id,
+      precio_lista: input.precio_lista,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(`Ya existe un producto con el SKU "${sku}".`);
+    }
+    throw new Error(error.message);
+  }
+  return toProducto(data);
+}
+
 // ---------------------------------------------------------------
 // Factories server-only (mismo patrón que ops-server)
 // ---------------------------------------------------------------

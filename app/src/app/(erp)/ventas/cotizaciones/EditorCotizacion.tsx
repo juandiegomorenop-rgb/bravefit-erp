@@ -20,13 +20,18 @@ import type {
   RecargoAplicado,
   Usuario,
 } from "@/lib/types/db";
-import { actualizarCotizacion, crearCotizacion } from "./actions";
+import {
+  actualizarCotizacion,
+  crearCotizacion,
+  crearProductoCatalogo,
+} from "./actions";
 
 interface Props {
   clientes: Cliente[];
   vendedores: Usuario[];
   productos: Producto[];
   dimensiones: ProductoDimension[];
+  categorias: { id: number; nombre: string; orden: number }[];
   /** Presente al editar un borrador existente. */
   cotizacionId?: string;
   numero?: string;
@@ -56,11 +61,14 @@ export function EditorCotizacion({
   vendedores,
   productos,
   dimensiones,
+  categorias,
   cotizacionId,
   numero,
   inicial,
 }: Props) {
   const router = useRouter();
+  // catálogo local: crece cuando se crea un producto desde el editor
+  const [prods, setProds] = useState<Producto[]>(productos);
   const [cab, setCab] = useState<Omit<CotizacionInput, "items">>({
     cliente_id: inicial?.cliente_id ?? "",
     vendedor_id: inicial?.vendedor_id ?? vendedores[0]?.id ?? "",
@@ -77,6 +85,46 @@ export function EditorCotizacion({
   const [busqueda, setBusqueda] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // Alta rápida de producto (nace en la BD = fuente de la verdad)
+  const [nuevoProd, setNuevoProd] = useState<null | {
+    nombre: string;
+    sku: string;
+    categoria_id: number;
+    origen: "propio" | "comercializado";
+    precio: string;
+  }>(null);
+  const [creandoProd, setCreandoProd] = useState(false);
+
+  async function crearProductoNuevo() {
+    if (!nuevoProd || creandoProd) return;
+    const precio = Number(nuevoProd.precio);
+    if (!nuevoProd.nombre.trim() || !nuevoProd.sku.trim()) {
+      setError("Nombre y SKU son obligatorios para crear el producto.");
+      return;
+    }
+    if (!Number.isFinite(precio) || precio < 0) {
+      setError("El precio del producto nuevo no es válido.");
+      return;
+    }
+    setCreandoProd(true);
+    setError(null);
+    const r = await crearProductoCatalogo({
+      nombre: nuevoProd.nombre,
+      sku: nuevoProd.sku,
+      categoria_id: nuevoProd.categoria_id,
+      origen: nuevoProd.origen,
+      precio_lista: precio,
+    });
+    setCreandoProd(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    setProds((ps) => [...ps, r.producto]);
+    agregarProducto(r.producto);
+    setNuevoProd(null);
+  }
 
   const dimsDe = (producto_id: string) =>
     dimensiones.filter((d) => d.producto_id === producto_id);
@@ -175,7 +223,7 @@ export function EditorCotizacion({
         if (l._key !== key) return l;
         const next = { ...l, ...patch };
         // recalcular precio sugerido salvo que el precio sea manual
-        const p = productos.find((x) => x.id === next.producto_id);
+        const p = prods.find((x) => x.id === next.producto_id);
         const cambioDeConfig =
           "alto_override_cm" in patch || "fondo_override_cm" in patch || "color" in patch;
         if (p && cambioDeConfig && !next._precioManual) {
@@ -204,9 +252,9 @@ export function EditorCotizacion({
         fondo_override_cm: l.fondo_override_cm,
         color: l.color,
         recargos: l.recargos,
-        producto: productos.find((p) => p.id === l.producto_id) ?? null,
+        producto: prods.find((p) => p.id === l.producto_id) ?? null,
       })),
-    [lineas, productos, cotizacionId],
+    [lineas, prods, cotizacionId],
   );
   const totales = useMemo(
     () => calcularTotales(itemsConProducto, cab),
@@ -216,14 +264,14 @@ export function EditorCotizacion({
   const encontrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return [];
-    return productos
+    return prods
       .filter(
         (p) =>
           p.activo &&
           (p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)),
       )
       .slice(0, 6);
-  }, [busqueda, productos]);
+  }, [busqueda, prods]);
 
   async function guardar() {
     setError(null);
@@ -432,7 +480,99 @@ export function EditorCotizacion({
           >
             + Ítem libre
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              setNuevoProd({
+                nombre: busqueda.trim(),
+                sku: "",
+                categoria_id: categorias[0]?.id ?? 1,
+                origen: "propio",
+                precio: "",
+              })
+            }
+            className="rounded-pill border border-dorado bg-dorado-suave px-4 py-2 text-[12.5px] font-semibold text-dorado-oscuro hover:border-dorado-oscuro"
+          >
+            ＋ Crear producto
+          </button>
         </div>
+
+        {/* Alta rápida: el producto nace en el catálogo (fuente de la verdad) */}
+        {nuevoProd && (
+          <div className="mt-3 rounded-[10px] border border-dorado bg-dorado-suave p-3.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-dorado-oscuro">
+              Crear producto en el catálogo — queda disponible para futuras
+              cotizaciones, OPs e inventario
+            </p>
+            <div className="mt-2 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-6">
+              <input
+                className={`${inputCls} lg:col-span-2`}
+                placeholder="Nombre del producto *"
+                value={nuevoProd.nombre}
+                onChange={(e) => setNuevoProd({ ...nuevoProd, nombre: e.target.value })}
+              />
+              <input
+                className={inputCls}
+                placeholder="SKU * (ej. 3NuevoProd)"
+                value={nuevoProd.sku}
+                onChange={(e) => setNuevoProd({ ...nuevoProd, sku: e.target.value })}
+              />
+              <select
+                aria-label="Categoría del producto nuevo"
+                className={inputCls}
+                value={nuevoProd.categoria_id}
+                onChange={(e) =>
+                  setNuevoProd({ ...nuevoProd, categoria_id: Number(e.target.value) })
+                }
+              >
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Tipo del producto nuevo"
+                className={inputCls}
+                value={nuevoProd.origen}
+                onChange={(e) =>
+                  setNuevoProd({
+                    ...nuevoProd,
+                    origen: e.target.value as "propio" | "comercializado",
+                  })
+                }
+              >
+                <option value="propio">Propio (PP 60/40)</option>
+                <option value="comercializado">Comercializado (PC 100%)</option>
+              </select>
+              <input
+                className={inputCls}
+                type="number"
+                min={0}
+                placeholder="Precio lista (IVA incl.)"
+                value={nuevoProd.precio}
+                onChange={(e) => setNuevoProd({ ...nuevoProd, precio: e.target.value })}
+              />
+            </div>
+            <div className="mt-2.5 flex gap-2">
+              <button
+                type="button"
+                disabled={creandoProd}
+                onClick={() => void crearProductoNuevo()}
+                className="rounded-pill bg-carbon px-4 py-1.5 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-40"
+              >
+                {creandoProd ? "Creando…" : "Crear y agregar a la cotización"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setNuevoProd(null)}
+                className="rounded-pill px-3 py-1.5 text-[12.5px] font-semibold text-neutro hover:bg-neutro-bg"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         {lineas.length === 0 && (
           <p className="mt-6 text-center text-[13px] text-neutro">
@@ -442,7 +582,7 @@ export function EditorCotizacion({
 
         <div className="mt-4 space-y-3">
           {lineas.map((l) => {
-            const p = productos.find((x) => x.id === l.producto_id);
+            const p = prods.find((x) => x.id === l.producto_id);
             const dims = p ? dimsDe(p.id) : [];
             const dAlto = dims.find((d) => d.eje === "alto");
             const dFondo = dims.find((d) => d.eje === "fondo");
