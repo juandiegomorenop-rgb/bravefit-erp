@@ -123,6 +123,8 @@ export interface CotizacionItemInput {
 export interface CotizacionInput {
   cliente_id: string;
   vendedor_id: string;
+  /** Fuente del lead → sigla del número (WA, SR, SPFY, BFP). */
+  origen?: Cotizacion["origen"];
   segmento: "B2B" | "B2C";
   no_facturar: boolean;
   pago_anticipado_completo: boolean;

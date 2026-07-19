@@ -199,7 +199,7 @@ export interface Cotizacion {
   pago_anticipado_completo: boolean;
   valida_hasta: string; // creado + 15 días
   tiempo_entrega: string | null; // 'Fabricados: 45 días hábiles · …'
-  origen: "manual" | "chat" | "planner";
+  origen: "manual" | "chat" | "planner" | "whatsapp" | "shopify" | "showroom";
   notas: string | null;
   activo: boolean;
   eliminado_en: string | null;

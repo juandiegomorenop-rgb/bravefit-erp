@@ -42,6 +42,7 @@ export default async function Page({
       inicial={{
         cliente_id: det.cotizacion.cliente_id,
         vendedor_id: det.cotizacion.vendedor_id,
+        origen: det.cotizacion.origen,
         segmento: det.cotizacion.segmento,
         no_facturar: det.cotizacion.no_facturar,
         pago_anticipado_completo: det.cotizacion.pago_anticipado_completo,

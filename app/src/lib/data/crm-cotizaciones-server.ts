@@ -355,11 +355,25 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     validarInput(input);
     const supabase = await createClient();
 
-    const { data: numero, error: nErr } = await supabase.rpc(
+    const { data: numRaw, error: nErr } = await supabase.rpc(
       "fn_siguiente_numero",
       { p_clave: "cotizacion" },
     );
     if (nErr) throw new Error(nErr.message);
+
+    // Numeración COT_<FUENTE>_#### (misma lógica que las OP): consecutivo
+    // GLOBAL de la secuencia + sigla según la fuente del lead.
+    const ABBR: Record<string, string> = {
+      whatsapp: "WA",
+      showroom: "SR",
+      shopify: "SPFY",
+      planner: "BFP",
+      chat: "CHAT",
+      manual: "MAN",
+    };
+    const origen = input.origen ?? "manual";
+    const digitos = String(numRaw).replace(/\D/g, "").padStart(4, "0");
+    const numero = `COT_${ABBR[origen] ?? "MAN"}_${digitos}`;
 
     const borrador = await this.estadoPorNombre("Borrador");
     const valida = new Date();
@@ -378,7 +392,7 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
         pago_anticipado_completo: input.pago_anticipado_completo,
         valida_hasta: valida.toISOString().slice(0, 10),
         tiempo_entrega: input.tiempo_entrega,
-        origen: "manual",
+        origen,
         notas: input.notas,
       })
       .select("id, numero")

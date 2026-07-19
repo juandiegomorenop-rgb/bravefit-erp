@@ -72,6 +72,7 @@ export function EditorCotizacion({
   const [cab, setCab] = useState<Omit<CotizacionInput, "items">>({
     cliente_id: inicial?.cliente_id ?? "",
     vendedor_id: inicial?.vendedor_id ?? vendedores[0]?.id ?? "",
+    origen: inicial?.origen ?? "whatsapp",
     segmento: inicial?.segmento ?? "B2B",
     no_facturar: inicial?.no_facturar ?? false,
     pago_anticipado_completo: inicial?.pago_anticipado_completo ?? false,
@@ -342,6 +343,30 @@ export function EditorCotizacion({
                   {v.nombre}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
+            FUENTE DEL LEAD * (define la sigla del número)
+            <select
+              className={inputCls}
+              value={cab.origen ?? "whatsapp"}
+              disabled={!!cotizacionId}
+              title={
+                cotizacionId
+                  ? "La fuente se fija al crear (el número ya lleva su sigla)"
+                  : undefined
+              }
+              onChange={(e) =>
+                setCab({
+                  ...cab,
+                  origen: e.target.value as NonNullable<CotizacionInput["origen"]>,
+                })
+              }
+            >
+              <option value="whatsapp">WhatsApp → COT_WA_####</option>
+              <option value="showroom">Showroom → COT_SR_####</option>
+              <option value="shopify">Shopify → COT_SPFY_####</option>
+              <option value="planner">Planner → COT_BFP_####</option>
             </select>
           </label>
           <div className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
