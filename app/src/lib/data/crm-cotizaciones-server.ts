@@ -790,6 +790,36 @@ export async function crearProducto(input: ProductoNuevoInput): Promise<Producto
   return toProducto(data);
 }
 
+/** Alta rápida de cliente desde el editor (se completa después en el ERP). */
+export interface ClienteNuevoInput {
+  nombre: string;
+  tipo: "persona" | "empresa";
+  nit_cedula?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+}
+
+export async function crearClienteRapido(input: ClienteNuevoInput): Promise<Cliente> {
+  const nombre = input.nombre.trim();
+  if (!nombre) throw new Error("El nombre del cliente es obligatorio.");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clientes")
+    .insert({
+      tipo: input.tipo,
+      nombre,
+      nit_cedula: input.nit_cedula?.trim() || null,
+      telefono: input.telefono?.trim() || null,
+      email: input.email?.trim() || null,
+      direccion: input.direccion?.trim() || null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return toCliente(data);
+}
+
 // ---------------------------------------------------------------
 // Factories server-only (mismo patrón que ops-server)
 // ---------------------------------------------------------------

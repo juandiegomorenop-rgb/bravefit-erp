@@ -22,6 +22,7 @@ import type {
 } from "@/lib/types/db";
 import {
   actualizarCotizacion,
+  crearClienteCatalogo,
   crearCotizacion,
   crearProductoCatalogo,
 } from "./actions";
@@ -77,7 +78,9 @@ export function EditorCotizacion({
     no_facturar: inicial?.no_facturar ?? false,
     pago_anticipado_completo: inicial?.pago_anticipado_completo ?? false,
     descuento_pct: inicial?.descuento_pct ?? 0,
-    tiempo_entrega: inicial?.tiempo_entrega ?? null,
+    tiempo_entrega:
+      inicial?.tiempo_entrega ??
+      "Fabricados: 45 días hábiles · Comercializados: 5 días hábiles",
     notas: inicial?.notas ?? null,
   });
   const [lineas, setLineas] = useState<Linea[]>(
@@ -86,6 +89,73 @@ export function EditorCotizacion({
   const [busqueda, setBusqueda] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // Clientes: buscador + alta rápida (regla de Juan: nada de lista gigante)
+  const [clis, setClis] = useState<Cliente[]>(clientes);
+  const [busquedaCli, setBusquedaCli] = useState("");
+  const [nuevoCli, setNuevoCli] = useState<null | {
+    nombre: string;
+    tipo: "persona" | "empresa";
+    nit_cedula: string;
+    telefono: string;
+  }>(null);
+  const [creandoCli, setCreandoCli] = useState(false);
+  const clienteSel = clis.find((c) => c.id === cab.cliente_id) ?? null;
+  const clientesEncontrados = useMemo(() => {
+    const q = busquedaCli.trim().toLowerCase();
+    if (!q) return [];
+    return clis
+      .filter(
+        (c) =>
+          c.activo &&
+          (c.nombre.toLowerCase().includes(q) ||
+            (c.nit_cedula ?? "").toLowerCase().includes(q)),
+      )
+      .slice(0, 6);
+  }, [busquedaCli, clis]);
+
+  async function crearClienteNuevo() {
+    if (!nuevoCli || creandoCli) return;
+    if (!nuevoCli.nombre.trim()) {
+      setError("El nombre del cliente es obligatorio.");
+      return;
+    }
+    setCreandoCli(true);
+    setError(null);
+    const r = await crearClienteCatalogo({
+      nombre: nuevoCli.nombre,
+      tipo: nuevoCli.tipo,
+      nit_cedula: nuevoCli.nit_cedula || null,
+      telefono: nuevoCli.telefono || null,
+    });
+    setCreandoCli(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    setClis((cs) => [...cs, r.cliente]);
+    setCab({ ...cab, cliente_id: r.cliente.id });
+    setNuevoCli(null);
+    setBusquedaCli("");
+  }
+
+  // Tiempo de entrega en DÍAS (regla de Juan): dos cajas numéricas.
+  const [diasFab, setDiasFab] = useState<string>(() => {
+    const m = /Fabricados:\s*(\d+)/.exec(inicial?.tiempo_entrega ?? "");
+    return m ? m[1] : "45";
+  });
+  const [diasCom, setDiasCom] = useState<string>(() => {
+    const m = /Comercializados:\s*(\d+)/.exec(inicial?.tiempo_entrega ?? "");
+    return m ? m[1] : "5";
+  });
+  function setDias(fab: string, com: string) {
+    setDiasFab(fab);
+    setDiasCom(com);
+    const partes: string[] = [];
+    if (fab.trim()) partes.push(`Fabricados: ${fab.trim()} días hábiles`);
+    if (com.trim()) partes.push(`Comercializados: ${com.trim()} días hábiles`);
+    setCab((c) => ({ ...c, tiempo_entrega: partes.join(" · ") || null }));
+  }
 
   // Alta rápida de producto (nace en la BD = fuente de la verdad)
   const [nuevoProd, setNuevoProd] = useState<null | {
@@ -190,7 +260,8 @@ export function EditorCotizacion({
         descuento_pct: 0,
         alto_override_cm: null,
         fondo_override_cm: null,
-        color: p.color_default,
+        // Regla de Juan: los fabricados salen NEGRO por defecto.
+        color: p.color_default ?? (p.origen === "propio" ? "Negro" : null),
         recargos,
       },
     ]);
@@ -318,18 +389,119 @@ export function EditorCotizacion({
         <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
             CLIENTE *
-            <select
-              className={inputCls}
-              value={cab.cliente_id}
-              onChange={(e) => setCab({ ...cab, cliente_id: e.target.value })}
-            >
-              <option value="">Seleccionar…</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
+            {clienteSel ? (
+              <span className="flex items-center gap-2 rounded-input border border-borde bg-sutil px-3 py-2 text-[13px]">
+                <b className="min-w-0 flex-1 truncate">{clienteSel.nombre}</b>
+                <button
+                  type="button"
+                  onClick={() => setCab({ ...cab, cliente_id: "" })}
+                  className="text-[11.5px] font-semibold text-dorado-oscuro hover:underline"
+                >
+                  cambiar
+                </button>
+              </span>
+            ) : (
+              <span className="relative">
+                <input
+                  className={`${inputCls} w-full`}
+                  placeholder="Buscar por nombre o cédula/NIT…"
+                  value={busquedaCli}
+                  onChange={(e) => setBusquedaCli(e.target.value)}
+                />
+                {busquedaCli.trim() && (
+                  <span className="absolute z-20 mt-1 block w-full overflow-hidden rounded-card border border-borde bg-card shadow-lg">
+                    {clientesEncontrados.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setCab({ ...cab, cliente_id: c.id });
+                          setBusquedaCli("");
+                        }}
+                        className="block w-full px-3 py-2 text-left hover:bg-sutil"
+                      >
+                        <span className="block text-[13px] font-semibold">{c.nombre}</span>
+                        <span className="text-[11px] font-normal text-neutro">
+                          {c.nit_cedula ?? "sin documento"}
+                          {c.telefono ? ` · ${c.telefono}` : ""}
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNuevoCli({
+                          nombre: busquedaCli.trim(),
+                          tipo: "persona",
+                          nit_cedula: "",
+                          telefono: "",
+                        })
+                      }
+                      className="block w-full border-t border-borde bg-dorado-suave px-3 py-2 text-left text-[12.5px] font-semibold text-dorado-oscuro hover:bg-dorado/20"
+                    >
+                      ＋ Crear cliente “{busquedaCli.trim()}”
+                    </button>
+                  </span>
+                )}
+              </span>
+            )}
+            {nuevoCli && (
+              <span className="mt-1 flex flex-col gap-1.5 rounded-input border border-dorado bg-dorado-suave p-2.5">
+                <input
+                  className={inputCls}
+                  placeholder="Nombre / Razón social *"
+                  value={nuevoCli.nombre}
+                  onChange={(e) => setNuevoCli({ ...nuevoCli, nombre: e.target.value })}
+                />
+                <span className="flex gap-1.5">
+                  <select
+                    aria-label="Tipo de cliente"
+                    className={`${inputCls} flex-1`}
+                    value={nuevoCli.tipo}
+                    onChange={(e) =>
+                      setNuevoCli({
+                        ...nuevoCli,
+                        tipo: e.target.value as "persona" | "empresa",
+                      })
+                    }
+                  >
+                    <option value="persona">Persona</option>
+                    <option value="empresa">Empresa</option>
+                  </select>
+                  <input
+                    className={`${inputCls} flex-1`}
+                    placeholder="Cédula / NIT"
+                    value={nuevoCli.nit_cedula}
+                    onChange={(e) =>
+                      setNuevoCli({ ...nuevoCli, nit_cedula: e.target.value })
+                    }
+                  />
+                </span>
+                <input
+                  className={inputCls}
+                  placeholder="Teléfono"
+                  value={nuevoCli.telefono}
+                  onChange={(e) => setNuevoCli({ ...nuevoCli, telefono: e.target.value })}
+                />
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={creandoCli}
+                    onClick={() => void crearClienteNuevo()}
+                    className="rounded-pill bg-carbon px-3.5 py-1.5 text-[12px] font-semibold text-white hover:bg-black disabled:opacity-40"
+                  >
+                    {creandoCli ? "Creando…" : "Crear cliente"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNuevoCli(null)}
+                    className="rounded-pill px-3 py-1.5 text-[12px] font-semibold text-neutro hover:bg-neutro-bg"
+                  >
+                    Cancelar
+                  </button>
+                </span>
+              </span>
+            )}
           </label>
           <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
             VENDEDOR *
@@ -389,20 +561,30 @@ export function EditorCotizacion({
             </div>
           </div>
           <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro lg:col-span-2">
-            TIEMPO DE ENTREGA (aparece bajo el total del documento)
-            <input
-              className={inputCls}
-              list="tiempos-entrega"
-              placeholder="Fabricados: 45 días hábiles · Comercializados: 3 a 7 días hábiles"
-              value={cab.tiempo_entrega ?? ""}
-              onChange={(e) => setCab({ ...cab, tiempo_entrega: e.target.value })}
-            />
-            <datalist id="tiempos-entrega">
-              <option value="Fabricados: 45 días hábiles" />
-              <option value="Fabricados: 45 días hábiles · Comercializados: 3 a 7 días hábiles" />
-              <option value="Comercializados: 3 a 7 días hábiles" />
-              <option value="30 días hábiles" />
-            </datalist>
+            TIEMPO DE ENTREGA EN DÍAS HÁBILES (sale bajo el total del documento)
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-neutro">FABRICADOS</span>
+                <input
+                  type="number"
+                  min={0}
+                  className={`${inputCls} w-20 text-right`}
+                  value={diasFab}
+                  onChange={(e) => setDias(e.target.value, diasCom)}
+                />
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-neutro">COMERCIALIZADOS</span>
+                <input
+                  type="number"
+                  min={0}
+                  className={`${inputCls} w-20 text-right`}
+                  value={diasCom}
+                  onChange={(e) => setDias(diasFab, e.target.value)}
+                />
+              </span>
+              <span className="text-[11px] text-neutro">{cab.tiempo_entrega}</span>
+            </span>
           </label>
           <div className="flex flex-col justify-end gap-2 pb-1">
             <label className="flex items-center gap-2 text-[12.5px]">

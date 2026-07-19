@@ -1,12 +1,14 @@
 "use server";
 
 import {
+  crearClienteRapido,
   crearProducto,
   getCotizacionesRepository,
+  type ClienteNuevoInput,
   type ProductoNuevoInput,
 } from "@/lib/data/crm-cotizaciones-server";
 import { type CotizacionInput } from "@/lib/data/crm-cotizaciones";
-import type { Producto } from "@/lib/types/db";
+import type { Cliente, Producto } from "@/lib/types/db";
 
 /**
  * Acciones del editor de cotizaciones — SERVER: el store vive en el
@@ -52,6 +54,25 @@ export async function enviarCotizacion(id: string): Promise<AccionCotizacionResp
 export type CrearProductoResp =
   | { ok: true; producto: Producto }
   | { ok: false; error: string };
+
+export type CrearClienteResp =
+  | { ok: true; cliente: Cliente }
+  | { ok: false; error: string };
+
+/** Alta rápida de cliente desde el editor de cotizaciones. */
+export async function crearClienteCatalogo(
+  input: ClienteNuevoInput,
+): Promise<CrearClienteResp> {
+  try {
+    const cliente = await crearClienteRapido(input);
+    return { ok: true, cliente };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo crear el cliente",
+    };
+  }
+}
 
 /** Alta rápida desde el editor: el producto nace en la BD (fuente de la
  *  verdad del catálogo) y queda listo para cotizarse de inmediato. */
