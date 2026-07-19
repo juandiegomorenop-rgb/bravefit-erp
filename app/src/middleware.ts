@@ -1,9 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Rutas públicas: login y webhooks entrantes (Shopify verifica por HMAC). */
+/** Rutas públicas: login, webhooks entrantes (verifican por HMAC) y la
+ *  puerta del planner (verifica por API key en el propio handler). */
 function esRutaPublica(pathname: string): boolean {
-  return pathname === "/login" || pathname.startsWith("/api/webhooks/");
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/planner/")
+  );
 }
 
 export async function middleware(request: NextRequest) {

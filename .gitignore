@@ -10,3 +10,4 @@ dist/
 .vercel
 .supabase
 datos/
+docs/PLANNER_API_KEY.txt
