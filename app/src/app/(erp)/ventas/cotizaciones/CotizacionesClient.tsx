@@ -28,8 +28,8 @@ export function CotizacionesClient({
 }: Props) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(filtrosIniciales);
-  // Archivo (patrón OPs): Anuladas de inmediato; Aprobadas y vencidas
-  // 7 días después de su validez. false = vista activa.
+  // Archivo (patrón OPs): Anuladas y Aprobadas de inmediato; vencidas
+  // sin aprobar a los 30 días (seguimiento). false = vista activa.
   const [verArchivo, setVerArchivo] = useState(false);
 
   const archivadas = useMemo(
@@ -150,7 +150,7 @@ export function CotizacionesClient({
               ? "border-carbon bg-carbon text-white"
               : "border-borde bg-card text-neutro hover:border-dorado"
           }`}
-          title="Anuladas de inmediato; Aprobadas y vencidas, 7 días después de su validez"
+          title="Anuladas y Aprobadas de inmediato; vencidas sin aprobar, 30 días después de su validez (seguimiento)"
         >
           🗄 Archivo ({archivadas.length})
         </button>

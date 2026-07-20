@@ -159,18 +159,21 @@ export interface CotizacionesRepository {
 // Archivo (patrón de esOpArchivada en ops.ts)
 // ===============================================================
 
-export const ARCHIVO_DIAS_COTIZACION = 7;
+export const ARCHIVO_DIAS_COTIZACION = 30;
 
 /**
- * Una cotización sale del listado activo cuando ya es historia:
- *   · Anulada → al Archivo de inmediato.
- *   · Aprobada o vencida (Borrador/Enviada con validez pasada) → al
- *     Archivo 7 días después de `valida_hasta` (ventana para verlas
- *     recién cerradas/vencidas antes de que se guarden solas).
+ * Una cotización sale del listado activo cuando ya es historia
+ * (reglas de Juan, 19-jul-2026):
+ *   · Anulada o Aprobada → al Archivo de inmediato. La Aprobada ya
+ *     cumplió su ciclo: su OP vive en Producción.
+ *   · Vencida sin aprobar (Borrador/Enviada con validez pasada) → al
+ *     Archivo 30 días después de `valida_hasta`: ventana amplia para
+ *     hacerle seguimiento comercial antes de que se guarde sola.
  */
 export function esCotizacionArchivada(card: CotizacionCard, hoy = new Date()): boolean {
-  if (card.estado.nombre === "Anulada") return true;
-  if (card.estado.nombre !== "Aprobada" && !card.vencida) return false;
+  const nombre = card.estado.nombre;
+  if (nombre === "Anulada" || nombre === "Aprobada") return true;
+  if (!card.vencida) return false;
   const corte = parseFechaLocal(card.cotizacion.valida_hasta);
   corte.setDate(corte.getDate() + ARCHIVO_DIAS_COTIZACION);
   return hoy > corte;
