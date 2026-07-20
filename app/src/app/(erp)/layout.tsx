@@ -1,7 +1,8 @@
 import { ChatClaude } from "@/components/ChatClaude";
 import { Header } from "@/components/Header";
 import { NAV } from "@/lib/nav";
-import { filtrarNav, PERMISOS_ADMIN } from "@/lib/permisos";
+import { filtrarNav } from "@/lib/permisos";
+import { cargarPermisos } from "@/lib/permisos-server";
 import { createClient } from "@/lib/supabase/server";
 
 /** Layout de la app autenticada: header + contenido. El middleware ya
@@ -20,8 +21,9 @@ export default async function ErpLayout({
     // Supabase sin configurar todavía (esqueleto): continuar sin usuario.
   }
 
-  // TODO fase 1: cargar permisos reales del rol desde la tabla `permisos`.
-  const permisos = PERMISOS_ADMIN;
+  // Permisos reales del rol (tablas roles/permisos); el menú y el chat
+  // se arman con esto. La seguridad de datos sigue siendo la RLS.
+  const permisos = await cargarPermisos();
   const nav = filtrarNav(NAV, permisos);
   const modulosVisibles = permisos.filter((p) => p.puede_ver).map((p) => p.modulo);
 

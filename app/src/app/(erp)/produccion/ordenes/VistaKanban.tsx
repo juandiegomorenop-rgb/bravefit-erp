@@ -24,6 +24,8 @@ interface Props {
   cards: OpCard[];
   etapas: EtapaProduccion[];
   onMoverEtapa: (cardId: string, etapaId: number) => void;
+  /** Cifras de dinero (valor por OP y suma por etapa): solo Admins. */
+  mostrarValores?: boolean;
 }
 
 /**
@@ -31,7 +33,12 @@ interface Props {
  * Drag & drop nativo HTML5; las garantías van SIEMPRE de primeras
  * en cada columna (prioridad ambulancia).
  */
-export function VistaKanban({ cards, etapas, onMoverEtapa }: Props) {
+export function VistaKanban({
+  cards,
+  etapas,
+  onMoverEtapa,
+  mostrarValores = false,
+}: Props) {
   const [colDestino, setColDestino] = useState<number | null>(null);
 
   return (
@@ -40,6 +47,9 @@ export function VistaKanban({ cards, etapas, onMoverEtapa }: Props) {
         const tarjetas = ordenarTarjetas(
           cards.filter((c) => c.etapa_id === etapa.id),
         );
+        const totalCol = tarjetas
+          .filter((c) => c.tipo === "op")
+          .reduce((a, c) => a + totalOp(c.items), 0);
         return (
           <div
             key={etapa.id}
@@ -67,8 +77,18 @@ export function VistaKanban({ cards, etapas, onMoverEtapa }: Props) {
                 {tarjetas.length}
               </span>
             </div>
+            {/* Suma $ de la etapa — solo roles con Ventas (Admins) */}
+            {mostrarValores && (
+              <div className="px-1.5 pb-0.5 text-[13.5px] font-extrabold text-dorado-oscuro">
+                {formatCOP(totalCol)}
+              </div>
+            )}
             {tarjetas.map((card) => (
-              <TarjetaOp key={card.id} card={card} />
+              <TarjetaOp
+                key={card.id}
+                card={card}
+                mostrarValores={mostrarValores}
+              />
             ))}
           </div>
         );
@@ -77,7 +97,13 @@ export function VistaKanban({ cards, etapas, onMoverEtapa }: Props) {
   );
 }
 
-function TarjetaOp({ card }: { card: OpCard }) {
+function TarjetaOp({
+  card,
+  mostrarValores,
+}: {
+  card: OpCard;
+  mostrarValores: boolean;
+}) {
   const router = useRouter();
   const sem = semaforo(card.fecha_entrega_pactada, card.fecha_entregada);
   const principal = productoPrincipal(card.items);
@@ -136,7 +162,7 @@ function TarjetaOp({ card }: { card: OpCard }) {
           <BadgeOrigen origen={card.origen} />
         </span>
       </div>
-      {card.tipo === "op" && total > 0 && (
+      {mostrarValores && card.tipo === "op" && total > 0 && (
         <div className="mt-2 border-t border-borde pt-1.5 text-right text-[11.5px] font-bold text-dorado-oscuro">
           {formatCOP(total)}
         </div>

@@ -1,5 +1,7 @@
 import { getOpsRepository } from "@/lib/data/ops-server";
 import type { SemaforoOp } from "@/lib/ops-logic";
+import { puedeVer } from "@/lib/permisos";
+import { cargarPermisos } from "@/lib/permisos-server";
 import { OrdenesClient, type CampoFechaCal, type Vista } from "./OrdenesClient";
 
 export const metadata = { title: "Órdenes de pedido" };
@@ -22,12 +24,16 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const repo = getOpsRepository();
-  const [cards, etapas, origenes, ciudades] = await Promise.all([
+  const [cards, etapas, origenes, ciudades, permisos] = await Promise.all([
     repo.listarOps(),
     repo.listarEtapas(),
     repo.listarOrigenes(),
     repo.listarCiudades(),
+    cargarPermisos(),
   ]);
+  // Cifras de dinero (valor por OP y suma por etapa) = información de
+  // Ventas: solo las ven los roles con ese módulo (Admins).
+  const mostrarValores = puedeVer(permisos, "ventas");
 
   const vistaParam = primero(sp.vista);
   const vista: Vista =
@@ -46,6 +52,7 @@ export default async function Page({
       ciudades={ciudades}
       vistaInicial={vista}
       campoFechaCalInicial={campoFechaCal}
+      mostrarValores={mostrarValores}
       filtrosIniciales={{
         etapa_id: Number(primero(sp.etapa)) || undefined,
         origen: primero(sp.origen) || undefined,

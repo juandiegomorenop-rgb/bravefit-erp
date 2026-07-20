@@ -25,6 +25,9 @@ interface Props {
   vistaInicial: Vista;
   campoFechaCalInicial: CampoFechaCal;
   filtrosIniciales: FiltrosOps;
+  /** true solo para roles con módulo Ventas (Admins): habilita las
+   *  cifras de dinero (valor por OP y suma por etapa en el kanban). */
+  mostrarValores: boolean;
 }
 
 const VISTAS: { id: Vista; label: string }[] = [
@@ -51,6 +54,7 @@ export function OrdenesClient({
   vistaInicial,
   campoFechaCalInicial,
   filtrosIniciales,
+  mostrarValores,
 }: Props) {
   const [vista, setVista] = useState<Vista>(vistaInicial);
   const [filtros, setFiltros] = useState<FiltrosOps>(filtrosIniciales);
@@ -287,6 +291,7 @@ export function OrdenesClient({
                 cards={filtradas}
                 etapas={etapas}
                 onMoverEtapa={moverEtapa}
+                mostrarValores={mostrarValores}
               />
             )}
             {vista === "lista" && <VistaLista cards={filtradas} etapas={etapas} />}
