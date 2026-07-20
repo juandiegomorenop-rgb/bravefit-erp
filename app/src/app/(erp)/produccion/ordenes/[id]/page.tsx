@@ -5,6 +5,7 @@ import {
   documentosDeOp,
   getOpsRepository,
   listarColores,
+  pagosDeOp,
 } from "@/lib/data/ops-server";
 import {
   formatCOP,
@@ -25,11 +26,14 @@ import {
   BadgeOrigen,
   PillEntrega,
 } from "../badges";
+import { puedeVer } from "@/lib/permisos";
+import { cargarPermisos } from "@/lib/permisos-server";
 import { BotonImprimir } from "./BotonImprimir";
 import { AnularOp } from "./AnularOp";
 import { DespachosOp } from "./DespachosOp";
 import { ObservacionesOp } from "./ObservacionesOp";
 import { OrdenTaller } from "./OrdenTaller";
+import { PagosOp } from "./PagosOp";
 
 type Params = Promise<{ id: string }>;
 
@@ -50,13 +54,17 @@ export default async function Page({ params }: { params: Params }) {
   ]);
   if (!detalle) notFound();
 
-  // Despiece (BOM) + paleta + documentos de referencia → alimentan el
-  // Formato Imprimible OP y la tarjeta Documentos.
-  const [bom, colores, docs] = await Promise.all([
+  // Despiece (BOM) + paleta + documentos + pagos + permisos → alimentan
+  // el Formato Imprimible OP y las tarjetas Documentos/Pagos.
+  const [bom, colores, docs, pagos, permisos] = await Promise.all([
     bomDeProductos(detalle.items.map((i) => i.producto_id)),
     listarColores(),
     documentosDeOp(detalle.op),
+    pagosDeOp(detalle.op.id, detalle.op.cotizacion_id),
+    cargarPermisos(),
   ]);
+  // Pagos = información de Ventas: solo Admins la ven (RLS igual exige).
+  const verPagos = puedeVer(permisos, "ventas");
 
   const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
     detalle;
@@ -247,6 +255,10 @@ export default async function Page({ params }: { params: Params }) {
 
         {/* Columna lateral */}
         <div className="flex flex-col gap-4">
+          {/* Pagos: solo Admins; sin saldo en cero la BD bloquea Entregado */}
+          {verPagos && !anulada && (
+            <PagosOp opId={op.id} total={total} pagos={pagos} />
+          )}
           <div className="flex flex-col gap-2.5 rounded-card border border-borde bg-card px-5 py-4 text-[13px]">
             <h2 className="text-[14px] font-bold">Cliente</h2>
             <Dato label="Nombre" valor={cliente.nombre} />

@@ -1,6 +1,11 @@
 "use server";
 
-import { eliminarDespacho, getOpsRepository } from "@/lib/data/ops-server";
+import {
+  eliminarDespacho,
+  getOpsRepository,
+  registrarPago,
+  type PagoOp,
+} from "@/lib/data/ops-server";
 import type { OpObservacion } from "@/lib/types/db";
 
 /**
@@ -49,6 +54,27 @@ export async function registrarDespacho(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo registrar el despacho." };
+  }
+}
+
+/** Registrar pago de la OP (solo Admins — la RLS de `pagos` lo exige). */
+export async function registrarPagoOp(
+  opId: string,
+  input: {
+    monto: number;
+    concepto: PagoOp["concepto"];
+    medio: string | null;
+    nota: string | null;
+  },
+): Promise<MoverResp> {
+  try {
+    await registrarPago(opId, input);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo registrar el pago.",
+    };
   }
 }
 

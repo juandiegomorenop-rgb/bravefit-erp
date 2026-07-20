@@ -938,6 +938,76 @@ export async function documentosDeOp(op: {
  * inmutables, pero la RLS permite DELETE solo a quien tenga
  * produccion.aprobar (Admin); el trigger revierte cantidad_entregada.
  */
+// ---------------------------------------------------------------
+// Pagos de la OP (regla de Juan: sin saldo en cero NO hay entrega;
+// la RLS de `pagos` solo deja escribir a roles con Ventas = Admins)
+// ---------------------------------------------------------------
+
+export interface PagoOp {
+  id: string;
+  concepto: "anticipo" | "saldo" | "abono" | "total";
+  monto: number;
+  medio: string | null;
+  recibido_en: string; // 'YYYY-MM-DD'
+  nota: string | null;
+}
+
+/** Pagos que cuentan para el saldo de la OP: los suyos directos + los
+ *  de su cotización (misma lógica que v_op_saldo y el trigger). */
+export async function pagosDeOp(
+  opId: string,
+  cotizacionId: string | null,
+): Promise<PagoOp[]> {
+  const supabase = await createClient();
+  let q = supabase.from("pagos").select("*");
+  q = cotizacionId
+    ? q.or(`op_id.eq.${opId},cotizacion_id.eq.${cotizacionId}`)
+    : q.eq("op_id", opId);
+  const { data, error } = await q.order("recibido_en", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((p: any) => ({
+    id: p.id,
+    concepto: p.concepto,
+    monto: num(p.monto),
+    medio: p.medio ?? null,
+    recibido_en: p.recibido_en,
+    nota: p.nota ?? null,
+  }));
+}
+
+export async function registrarPago(
+  opId: string,
+  input: {
+    monto: number;
+    concepto: PagoOp["concepto"];
+    medio: string | null;
+    nota: string | null;
+  },
+): Promise<void> {
+  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+    throw new Error("El monto del pago debe ser mayor a 0");
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { error } = await supabase.from("pagos").insert({
+    op_id: opId,
+    concepto: input.concepto,
+    monto: input.monto,
+    medio: input.medio,
+    nota: input.nota,
+    usuario_id: user?.id ?? null,
+    fuente: "manual",
+  });
+  if (error) {
+    if (/policy|row-level|permission/i.test(error.message)) {
+      throw new Error("Solo un Administrador puede registrar pagos.");
+    }
+    throw new Error(error.message);
+  }
+}
+
 export async function eliminarDespacho(despachoId: number): Promise<void> {
   const supabase = await createClient();
   const { error, count } = await supabase
