@@ -88,6 +88,10 @@ export function OrdenesClient({
     [cards],
   );
 
+  // El Archivo es historia (entregadas viejas + anuladas): las etapas ya no
+  // aplican, así que se muestra SIEMPRE como lista plana, sin kanban.
+  const enArchivo = !!filtros.archivo;
+
   const hayFiltros =
     !!filtros.etapa_id ||
     !!filtros.origen ||
@@ -139,9 +143,10 @@ export function OrdenesClient({
           <button
             key={v.id}
             type="button"
+            disabled={enArchivo}
             onClick={() => setVista(v.id)}
-            className={`rounded-pill border px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
-              vista === v.id
+            className={`rounded-pill border px-4 py-1.5 text-[12.5px] font-semibold transition-colors disabled:opacity-40 ${
+              vista === v.id && !enArchivo
                 ? "border-carbon bg-carbon text-white"
                 : "border-borde bg-card text-carbon hover:border-dorado"
             }`}
@@ -154,7 +159,7 @@ export function OrdenesClient({
           onClick={() =>
             setFiltros({ ...filtros, archivo: filtros.archivo ? undefined : true })
           }
-          title={`Entregadas hace más de 7 días (${nArchivadas})`}
+          title={`Entregadas hace más de 7 días y anuladas (${nArchivadas}) — se muestran como lista`}
           className={`rounded-pill border px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
             filtros.archivo
               ? "border-carbon bg-carbon text-white"
@@ -265,22 +270,34 @@ export function OrdenesClient({
         </span>
       </div>
 
-      {/* Vista activa */}
+      {/* Vista activa (el Archivo siempre en lista: las etapas no aplican) */}
       <div className="mt-5">
-        {vista === "kanban" && (
-          <VistaKanban
-            cards={filtradas}
-            etapas={etapas}
-            onMoverEtapa={moverEtapa}
-          />
-        )}
-        {vista === "lista" && <VistaLista cards={filtradas} etapas={etapas} />}
-        {vista === "calendario" && (
-          <VistaCalendario
-            cards={filtradas}
-            campoFecha={campoFechaCal}
-            onCampoFecha={setCampoFechaCal}
-          />
+        {enArchivo ? (
+          <>
+            <p className="mb-3 text-[12.5px] text-neutro">
+              🗄 Archivo — entregadas hace más de 7 días y anuladas. Abre
+              cualquiera para ver su detalle.
+            </p>
+            <VistaLista cards={filtradas} etapas={etapas} />
+          </>
+        ) : (
+          <>
+            {vista === "kanban" && (
+              <VistaKanban
+                cards={filtradas}
+                etapas={etapas}
+                onMoverEtapa={moverEtapa}
+              />
+            )}
+            {vista === "lista" && <VistaLista cards={filtradas} etapas={etapas} />}
+            {vista === "calendario" && (
+              <VistaCalendario
+                cards={filtradas}
+                campoFecha={campoFechaCal}
+                onCampoFecha={setCampoFechaCal}
+              />
+            )}
+          </>
         )}
       </div>
     </div>
