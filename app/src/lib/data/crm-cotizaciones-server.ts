@@ -29,6 +29,7 @@ import type {
   FiltrosCotizaciones,
   FiltrosCrm,
   OportunidadCard,
+  OportunidadNuevaInput,
   ResultadoMoverCrm,
 } from "@/lib/data/crm-cotizaciones";
 import { getOpsRepository } from "@/lib/data/ops-server";
@@ -460,6 +461,35 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     }
   }
 
+  async duplicar(id: string): Promise<{ id: string; numero: string }> {
+    const det = await this.obtener(id);
+    if (!det) throw new Error("La cotización no existe");
+    return this.crear({
+      cliente_id: det.cotizacion.cliente_id,
+      vendedor_id: det.cotizacion.vendedor_id,
+      origen: det.cotizacion.origen,
+      segmento: det.cotizacion.segmento,
+      no_facturar: det.cotizacion.no_facturar,
+      pago_anticipado_completo: det.cotizacion.pago_anticipado_completo,
+      descuento_pct: det.cotizacion.descuento_pct,
+      tiempo_entrega: det.cotizacion.tiempo_entrega,
+      notas: det.cotizacion.notas,
+      items: det.items.map((i) => ({
+        producto_id: i.producto_id,
+        descripcion: i.descripcion,
+        es_transporte: i.es_transporte,
+        aplica_iva: i.aplica_iva,
+        cantidad: i.cantidad,
+        precio_unit: i.precio_unit,
+        descuento_pct: i.descuento_pct,
+        alto_override_cm: i.alto_override_cm,
+        fondo_override_cm: i.fondo_override_cm,
+        color: i.color,
+        recargos: i.recargos,
+      })),
+    });
+  }
+
   async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
     validarInput(input);
     const supabase = await createClient();
@@ -605,6 +635,28 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
 // ---------------------------------------------------------------
 
 class SupabaseCrmRepository implements CrmRepository {
+  async crearOportunidad(input: OportunidadNuevaInput): Promise<void> {
+    if (!input.cliente_id) throw new Error("Seleccione el cliente");
+    if (!input.vendedor_id) throw new Error("Seleccione el vendedor");
+    const supabase = await createClient();
+    const { data: etapas, error: eErr } = await supabase
+      .from("etapas_crm")
+      .select("*")
+      .eq("activo", true)
+      .order("orden");
+    if (eErr) throw new Error(eErr.message);
+    const inicial = (etapas ?? []).find((e) => !e.es_ganada && !e.es_perdida);
+    if (!inicial) throw new Error("El embudo no tiene etapa inicial activa");
+    const { error } = await supabase.from("oportunidades").insert({
+      cliente_id: input.cliente_id,
+      vendedor_id: input.vendedor_id,
+      etapa_id: inicial.id,
+      valor_estimado: input.valor_estimado,
+      notas: input.notas,
+    });
+    if (error) throw new Error(error.message);
+  }
+
   async listarOportunidades(
     filtros: FiltrosCrm = {},
   ): Promise<OportunidadCard[]> {

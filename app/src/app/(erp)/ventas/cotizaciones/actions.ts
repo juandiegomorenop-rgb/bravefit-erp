@@ -51,6 +51,20 @@ export async function enviarCotizacion(id: string): Promise<AccionCotizacionResp
   }
 }
 
+export async function duplicarCotizacion(
+  id: string,
+): Promise<AccionCotizacionResp> {
+  try {
+    const r = await getCotizacionesRepository().duplicar(id);
+    return { ok: true, ...r };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo duplicar",
+    };
+  }
+}
+
 export async function anularCotizacion(id: string): Promise<AccionCotizacionResp> {
   try {
     await getCotizacionesRepository().anular(id);

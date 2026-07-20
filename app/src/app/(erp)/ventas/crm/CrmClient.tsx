@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { diasEnEtapa } from "@/lib/cotizacion-logic";
 import type {
   FiltrosCrm,
   OportunidadCard,
 } from "@/lib/data/crm-cotizaciones";
-import { moverEtapaCrm } from "./actions";
+import { crearClienteCatalogo } from "../cotizaciones/actions";
+import { crearOportunidad, moverEtapaCrm } from "./actions";
 import { formatCOP } from "@/lib/formato";
-import type { EtapaCrm, Usuario } from "@/lib/types/db";
+import type { Cliente, EtapaCrm, Usuario } from "@/lib/types/db";
 
 interface Props {
   cardsIniciales: OportunidadCard[];
   etapas: EtapaCrm[];
   vendedores: Usuario[];
+  clientes: Cliente[];
   filtrosIniciales: FiltrosCrm;
 }
 
@@ -32,12 +35,97 @@ export function CrmClient({
   cardsIniciales,
   etapas,
   vendedores,
+  clientes,
   filtrosIniciales,
 }: Props) {
+  const router = useRouter();
   const [cards, setCards] = useState(cardsIniciales);
   const [filtros, setFiltros] = useState(filtrosIniciales);
   const [colDestino, setColDestino] = useState<number | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
+
+  // router.refresh() tras crear una oportunidad trae cards nuevas del
+  // server: resincronizar el estado optimista con las props.
+  useEffect(() => setCards(cardsIniciales), [cardsIniciales]);
+
+  // ---- Alta manual de oportunidad (lead sin cotización) ----
+  const [nuevaAbierta, setNuevaAbierta] = useState(false);
+  const [nueva, setNueva] = useState({
+    cliente_id: "",
+    vendedor_id: "",
+    valor: "",
+    notas: "",
+  });
+  const [busquedaCli, setBusquedaCli] = useState("");
+  const [clis, setClis] = useState<Cliente[]>(clientes);
+  const [nuevoCliNombre, setNuevoCliNombre] = useState<string | null>(null);
+  const [nuevoCliTel, setNuevoCliTel] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [errorNueva, setErrorNueva] = useState<string | null>(null);
+
+  const clienteSel = clis.find((c) => c.id === nueva.cliente_id) ?? null;
+  const clientesEncontrados = useMemo(() => {
+    const q = busquedaCli.trim().toLowerCase();
+    if (!q) return [];
+    return clis
+      .filter(
+        (c) =>
+          c.activo &&
+          (c.nombre.toLowerCase().includes(q) ||
+            (c.nit_cedula ?? "").toLowerCase().includes(q)),
+      )
+      .slice(0, 6);
+  }, [busquedaCli, clis]);
+
+  async function guardarNueva() {
+    if (guardando) return;
+    setErrorNueva(null);
+    let clienteId = nueva.cliente_id;
+
+    // Cliente nuevo inline (lead de WhatsApp/showroom que aún no existe)
+    if (!clienteId && nuevoCliNombre?.trim()) {
+      setGuardando(true);
+      const rc = await crearClienteCatalogo({
+        nombre: nuevoCliNombre.trim(),
+        tipo: "persona",
+        nit_cedula: null,
+        telefono: nuevoCliTel.trim() || null,
+      });
+      if (!rc.ok) {
+        setGuardando(false);
+        setErrorNueva(rc.error);
+        return;
+      }
+      setClis((cs) => [...cs, rc.cliente]);
+      clienteId = rc.cliente.id;
+    }
+    if (!clienteId) {
+      setErrorNueva("Selecciona o crea el cliente.");
+      return;
+    }
+    setGuardando(true);
+    const r = await crearOportunidad({
+      cliente_id: clienteId,
+      vendedor_id: nueva.vendedor_id || vendedores[0]?.id || "",
+      valor_estimado: nueva.valor ? Number(nueva.valor) || null : null,
+      notas: nueva.notas.trim() || null,
+    });
+    setGuardando(false);
+    if (!r.ok) {
+      setErrorNueva(r.error);
+      return;
+    }
+    setNuevaAbierta(false);
+    setNueva({ cliente_id: "", vendedor_id: "", valor: "", notas: "" });
+    setNuevoCliNombre(null);
+    setNuevoCliTel("");
+    setBusquedaCli("");
+    setBanner({
+      tipo: "ok",
+      texto: "Oportunidad creada en «En conversaciones».",
+    });
+    router.refresh();
+  }
 
   const filtradas = useMemo(() => {
     const q = filtros.texto?.trim().toLowerCase();
@@ -124,7 +212,165 @@ export function CrmClient({
             CRM — Embudo de ventas
           </h1>
         </div>
+        <button
+          type="button"
+          onClick={() => setNuevaAbierta((v) => !v)}
+          className="rounded-pill bg-carbon px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-black"
+        >
+          + Nueva oportunidad
+        </button>
       </div>
+
+      {/* Alta manual: lead que llega por WhatsApp/showroom ANTES de cotizar */}
+      {nuevaAbierta && (
+        <div className="mb-4 rounded-card border border-dorado bg-dorado-suave p-4">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-dorado-oscuro">
+            Nueva oportunidad — entra a «En conversaciones»
+          </p>
+          <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
+              CLIENTE *
+              {clienteSel ? (
+                <span className="flex items-center gap-2 rounded-input border border-borde bg-card px-3 py-2 text-[13px]">
+                  <b className="min-w-0 flex-1 truncate">{clienteSel.nombre}</b>
+                  <button
+                    type="button"
+                    onClick={() => setNueva({ ...nueva, cliente_id: "" })}
+                    className="text-[11.5px] font-semibold text-dorado-oscuro hover:underline"
+                  >
+                    cambiar
+                  </button>
+                </span>
+              ) : nuevoCliNombre !== null ? (
+                <span className="flex flex-col gap-1.5">
+                  <input
+                    className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                    placeholder="Nombre del cliente nuevo *"
+                    value={nuevoCliNombre}
+                    onChange={(e) => setNuevoCliNombre(e.target.value)}
+                  />
+                  <span className="flex gap-1.5">
+                    <input
+                      className="flex-1 rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                      placeholder="Teléfono"
+                      value={nuevoCliTel}
+                      onChange={(e) => setNuevoCliTel(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNuevoCliNombre(null)}
+                      className="rounded-pill px-2.5 text-[11.5px] font-semibold text-neutro hover:bg-neutro-bg"
+                    >
+                      buscar existente
+                    </button>
+                  </span>
+                </span>
+              ) : (
+                <span className="relative">
+                  <input
+                    className="w-full rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                    placeholder="Buscar por nombre o cédula/NIT…"
+                    value={busquedaCli}
+                    onChange={(e) => setBusquedaCli(e.target.value)}
+                  />
+                  {busquedaCli.trim() && (
+                    <span className="absolute z-20 mt-1 block w-full overflow-hidden rounded-card border border-borde bg-card shadow-lg">
+                      {clientesEncontrados.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setNueva({ ...nueva, cliente_id: c.id });
+                            setBusquedaCli("");
+                          }}
+                          className="block w-full px-3 py-2 text-left hover:bg-sutil"
+                        >
+                          <span className="block text-[13px] font-semibold">
+                            {c.nombre}
+                          </span>
+                          <span className="text-[11px] font-normal text-neutro">
+                            {c.nit_cedula ?? "sin documento"}
+                          </span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNuevoCliNombre(busquedaCli.trim());
+                          setBusquedaCli("");
+                        }}
+                        className="block w-full border-t border-borde bg-dorado-suave px-3 py-2 text-left text-[12.5px] font-semibold text-dorado-oscuro hover:bg-dorado/20"
+                      >
+                        ＋ Crear cliente “{busquedaCli.trim()}”
+                      </button>
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
+              VENDEDOR *
+              <select
+                className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                value={nueva.vendedor_id || vendedores[0]?.id || ""}
+                onChange={(e) =>
+                  setNueva({ ...nueva, vendedor_id: e.target.value })
+                }
+              >
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
+              VALOR ESTIMADO (COP, opcional)
+              <input
+                type="number"
+                min={0}
+                className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                value={nueva.valor}
+                onChange={(e) => setNueva({ ...nueva, valor: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
+              NOTAS
+              <input
+                className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                placeholder="Ej: preguntó por rack + banco por WhatsApp"
+                value={nueva.notas}
+                onChange={(e) => setNueva({ ...nueva, notas: e.target.value })}
+              />
+            </label>
+          </div>
+          {errorNueva && (
+            <p className="mt-2 text-[12.5px] font-semibold text-rojo">
+              {errorNueva}
+            </p>
+          )}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={guardando}
+              onClick={() => void guardarNueva()}
+              className="rounded-pill bg-carbon px-4 py-1.5 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-40"
+            >
+              {guardando ? "Creando…" : "Crear oportunidad"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNuevaAbierta(false);
+                setErrorNueva(null);
+              }}
+              className="rounded-pill px-3 py-1.5 text-[12.5px] font-semibold text-neutro hover:bg-neutro-bg"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {banner && (
         <div

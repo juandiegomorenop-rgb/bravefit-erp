@@ -17,6 +17,7 @@ import { formatCOP, formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 import { BadgeEstadoCotizacion } from "../badges";
 import { AccionesCotizacion } from "./AccionesCotizacion";
+import { BotonDuplicar } from "./BotonDuplicar";
 
 export const metadata = { title: "Cotización" };
 
@@ -91,6 +92,7 @@ export default async function Page({
               estadoNombre={estado.nombre}
             />
           )}
+          <BotonDuplicar id={cot.id} />
           <BotonImprimir />
         </span>
       </div>

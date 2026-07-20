@@ -1,4 +1,7 @@
-import { getCrmRepository } from "@/lib/data/crm-cotizaciones-server";
+import {
+  getCotizacionesRepository,
+  getCrmRepository,
+} from "@/lib/data/crm-cotizaciones-server";
 import { CrmClient } from "./CrmClient";
 
 export const metadata = { title: "CRM — Embudo de ventas" };
@@ -19,10 +22,11 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const repo = getCrmRepository();
-  const [cards, etapas, vendedores] = await Promise.all([
+  const [cards, etapas, vendedores, clientes] = await Promise.all([
     repo.listarOportunidades(),
     repo.listarEtapas(),
     repo.listarVendedores(),
+    getCotizacionesRepository().listarClientes(),
   ]);
 
   return (
@@ -30,6 +34,7 @@ export default async function Page({
       cardsIniciales={cards}
       etapas={etapas}
       vendedores={vendedores}
+      clientes={clientes}
       filtrosIniciales={{
         vendedor_id: primero(sp.vendedor) || undefined,
         texto: primero(sp.q) ?? "",

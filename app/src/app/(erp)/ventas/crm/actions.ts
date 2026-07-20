@@ -1,6 +1,7 @@
 "use server";
 
 import { getCrmRepository } from "@/lib/data/crm-cotizaciones-server";
+import type { OportunidadNuevaInput } from "@/lib/data/crm-cotizaciones";
 
 /**
  * Mover ficha del embudo — SERVER action: el store vive en el servidor,
@@ -11,6 +12,23 @@ import { getCrmRepository } from "@/lib/data/crm-cotizaciones-server";
 export type MoverEtapaCrmResp =
   | { ok: true; opCreada?: { id: string; numero: string } }
   | { ok: false; error: string };
+
+export type CrearOportunidadResp = { ok: true } | { ok: false; error: string };
+
+/** Alta manual de un lead al embudo (entra a la primera etapa). */
+export async function crearOportunidad(
+  input: OportunidadNuevaInput,
+): Promise<CrearOportunidadResp> {
+  try {
+    await getCrmRepository().crearOportunidad(input);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo crear la oportunidad.",
+    };
+  }
+}
 
 export async function moverEtapaCrm(
   oportunidad_id: string,

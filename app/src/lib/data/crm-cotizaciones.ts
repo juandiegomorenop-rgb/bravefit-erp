@@ -65,8 +65,18 @@ export interface FiltrosCrm {
   texto?: string;
 }
 
+/** Alta manual de una tarjeta al embudo (lead que aún no tiene cotización). */
+export interface OportunidadNuevaInput {
+  cliente_id: string;
+  vendedor_id: string;
+  valor_estimado: number | null;
+  notas: string | null;
+}
+
 export interface CrmRepository {
   listarOportunidades(filtros?: FiltrosCrm): Promise<OportunidadCard[]>;
+  /** Crea la oportunidad en la PRIMERA etapa del embudo (En conversaciones). */
+  crearOportunidad(input: OportunidadNuevaInput): Promise<void>;
   /**
    * Mueve la ficha de etapa. Si la etapa destino es_ganada, EXIGE
    * cotización con ítems (si no, lanza Error con mensaje claro) y crea
@@ -150,6 +160,12 @@ export interface CotizacionesRepository {
    * embudo CRM, la oportunidad pasa a Perdido automáticamente.
    */
   anular(id: string): Promise<void>;
+  /**
+   * Crea un Borrador NUEVO (número nuevo) copiando cliente, condiciones
+   * e ítems de la cotización dada — para re-cotizar vencidas o hacer
+   * variantes sin rearmar. Funciona desde cualquier estado.
+   */
+  duplicar(id: string): Promise<{ id: string; numero: string }>;
   listarClientes(): Promise<Cliente[]>;
   listarEstados(): Promise<EstadoCotizacion[]>;
   listarVendedores(): Promise<Usuario[]>;
@@ -461,6 +477,25 @@ export class MockCrmRepository implements CrmRepository {
       .sort((a, b) => b.valor - a.valor);
   }
 
+  async crearOportunidad(input: OportunidadNuevaInput): Promise<void> {
+    if (!input.cliente_id) throw new Error("Seleccione el cliente");
+    if (!input.vendedor_id) throw new Error("Seleccione el vendedor");
+    const inicial = ETAPAS_CRM.find((e) => !e.es_ganada && !e.es_perdida)!;
+    this.store.oportunidades.push({
+      id: `opo-${crypto.randomUUID().slice(0, 8)}`,
+      cliente_id: input.cliente_id,
+      cotizacion_id: null,
+      etapa_id: inicial.id,
+      vendedor_id: input.vendedor_id,
+      valor_estimado: input.valor_estimado,
+      notas: input.notas,
+      movida_en: tsRel(0),
+      activo: true,
+      eliminado_en: null,
+      creado_en: tsRel(0),
+    });
+  }
+
   async moverEtapa(oportunidad_id: string, etapa_id: number): Promise<ResultadoMoverCrm> {
     const o = this.store.oportunidades.find((x) => x.id === oportunidad_id);
     if (!o) throw new Error(`Oportunidad ${oportunidad_id} no existe`);
@@ -675,6 +710,35 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
         opo.etapa_id = ETAPAS_CRM.find((e) => e.es_perdida)!.id;
       }
     }
+  }
+
+  async duplicar(id: string): Promise<{ id: string; numero: string }> {
+    const det = await this.obtener(id);
+    if (!det) throw new Error("La cotización no existe");
+    return this.crear({
+      cliente_id: det.cotizacion.cliente_id,
+      vendedor_id: det.cotizacion.vendedor_id,
+      origen: det.cotizacion.origen,
+      segmento: det.cotizacion.segmento,
+      no_facturar: det.cotizacion.no_facturar,
+      pago_anticipado_completo: det.cotizacion.pago_anticipado_completo,
+      descuento_pct: det.cotizacion.descuento_pct,
+      tiempo_entrega: det.cotizacion.tiempo_entrega,
+      notas: det.cotizacion.notas,
+      items: det.items.map((i) => ({
+        producto_id: i.producto_id,
+        descripcion: i.descripcion,
+        es_transporte: i.es_transporte,
+        aplica_iva: i.aplica_iva,
+        cantidad: i.cantidad,
+        precio_unit: i.precio_unit,
+        descuento_pct: i.descuento_pct,
+        alto_override_cm: i.alto_override_cm,
+        fondo_override_cm: i.fondo_override_cm,
+        color: i.color,
+        recargos: i.recargos,
+      })),
+    });
   }
 
   private validarInput(input: CotizacionInput): void {
