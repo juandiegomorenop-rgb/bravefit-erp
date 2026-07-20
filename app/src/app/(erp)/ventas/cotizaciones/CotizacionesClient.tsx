@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type {
-  CotizacionCard,
-  FiltrosCotizaciones,
+import {
+  esCotizacionArchivada,
+  type CotizacionCard,
+  type FiltrosCotizaciones,
 } from "@/lib/data/crm-cotizaciones";
 import { formatCOP, formatFechaCorta } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
@@ -27,10 +28,21 @@ export function CotizacionesClient({
 }: Props) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(filtrosIniciales);
+  // Archivo (patrón OPs): Anuladas de inmediato; Aprobadas y vencidas
+  // 7 días después de su validez. false = vista activa.
+  const [verArchivo, setVerArchivo] = useState(false);
+
+  const archivadas = useMemo(
+    () => cardsIniciales.filter((c) => esCotizacionArchivada(c)),
+    [cardsIniciales],
+  );
 
   const filtradas = useMemo(() => {
     const q = filtros.texto?.trim().toLowerCase();
-    return cardsIniciales.filter((c) => {
+    const base = verArchivo
+      ? archivadas
+      : cardsIniciales.filter((c) => !esCotizacionArchivada(c));
+    return base.filter((c) => {
       if (filtros.estado_id !== undefined && c.estado.id !== filtros.estado_id)
         return false;
       if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id)
@@ -45,7 +57,7 @@ export function CotizacionesClient({
       }
       return true;
     });
-  }, [cardsIniciales, filtros]);
+  }, [cardsIniciales, archivadas, verArchivo, filtros]);
 
   function actualizar(nuevos: FiltrosCotizaciones) {
     setFiltros(nuevos);
@@ -130,6 +142,18 @@ export function CotizacionesClient({
           <option value="B2B">B2B</option>
           <option value="B2C">B2C</option>
         </select>
+        <button
+          type="button"
+          onClick={() => setVerArchivo((v) => !v)}
+          className={`rounded-pill border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+            verArchivo
+              ? "border-carbon bg-carbon text-white"
+              : "border-borde bg-card text-neutro hover:border-dorado"
+          }`}
+          title="Anuladas de inmediato; Aprobadas y vencidas, 7 días después de su validez"
+        >
+          🗄 Archivo ({archivadas.length})
+        </button>
         <span className="ml-auto text-[12.5px] text-neutro">
           <b className="text-carbon">{filtradas.length}</b> cotizaciones ·{" "}
           <b className="text-carbon">{formatCOP(totalVisible)}</b>

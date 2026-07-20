@@ -23,6 +23,7 @@ import {
   tsRel,
   USUARIOS,
 } from "@/lib/data/ops";
+import { parseFechaLocal } from "@/lib/ops-logic";
 import type {
   Ciudad,
   Cliente,
@@ -143,9 +144,36 @@ export interface CotizacionesRepository {
   actualizar(id: string, input: CotizacionInput): Promise<void>;
   /** Borrador → Enviada (el documento queda listo para el cliente). */
   marcarEnviada(id: string): Promise<void>;
+  /**
+   * Borrador/Enviada/Vencida → Anulada. Aprobadas NO se anulan (ya
+   * generaron OP). Si la cotización tenía oportunidad viva en el
+   * embudo CRM, la oportunidad pasa a Perdido automáticamente.
+   */
+  anular(id: string): Promise<void>;
   listarClientes(): Promise<Cliente[]>;
   listarEstados(): Promise<EstadoCotizacion[]>;
   listarVendedores(): Promise<Usuario[]>;
+}
+
+// ===============================================================
+// Archivo (patrón de esOpArchivada en ops.ts)
+// ===============================================================
+
+export const ARCHIVO_DIAS_COTIZACION = 7;
+
+/**
+ * Una cotización sale del listado activo cuando ya es historia:
+ *   · Anulada → al Archivo de inmediato.
+ *   · Aprobada o vencida (Borrador/Enviada con validez pasada) → al
+ *     Archivo 7 días después de `valida_hasta` (ventana para verlas
+ *     recién cerradas/vencidas antes de que se guarden solas).
+ */
+export function esCotizacionArchivada(card: CotizacionCard, hoy = new Date()): boolean {
+  if (card.estado.nombre === "Anulada") return true;
+  if (card.estado.nombre !== "Aprobada" && !card.vencida) return false;
+  const corte = parseFechaLocal(card.cotizacion.valida_hasta);
+  corte.setDate(corte.getDate() + ARCHIVO_DIAS_COTIZACION);
+  return hoy > corte;
 }
 
 // ===============================================================
@@ -619,6 +647,31 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
       throw new Error("No se puede enviar una cotización sin ítems");
     }
     cot.estado_id = ESTADOS.find((e) => e.nombre === "Enviada")!.id;
+  }
+
+  async anular(id: string): Promise<void> {
+    const cot = this.store.cotizaciones.find((c) => c.id === id && c.activo);
+    if (!cot) throw new Error(`Cotización ${id} no existe`);
+    const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
+    if (estado.nombre === "Aprobada") {
+      throw new Error(
+        `La ${cot.numero} está Aprobada y ya generó OP — no se puede anular. Gestione la OP en Producción.`,
+      );
+    }
+    if (estado.nombre === "Anulada") {
+      throw new Error(`La ${cot.numero} ya está anulada`);
+    }
+    cot.estado_id = ESTADOS.find((e) => e.nombre === "Anulada")!.id;
+    // El embudo no debe quedar con tarjetas muertas: oportunidad → Perdido
+    const opo = this.store.oportunidades.find(
+      (o) => o.cotizacion_id === id && o.activo,
+    );
+    if (opo) {
+      const etapa = ETAPAS_CRM.find((e) => e.id === opo.etapa_id)!;
+      if (!etapa.es_ganada && !etapa.es_perdida) {
+        opo.etapa_id = ETAPAS_CRM.find((e) => e.es_perdida)!.id;
+      }
+    }
   }
 
   private validarInput(input: CotizacionInput): void {

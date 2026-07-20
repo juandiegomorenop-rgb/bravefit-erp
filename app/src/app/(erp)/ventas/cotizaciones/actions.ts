@@ -51,6 +51,15 @@ export async function enviarCotizacion(id: string): Promise<AccionCotizacionResp
   }
 }
 
+export async function anularCotizacion(id: string): Promise<AccionCotizacionResp> {
+  try {
+    await getCotizacionesRepository().anular(id);
+    return { ok: true, id, numero: "" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo anular" };
+  }
+}
+
 export type CrearProductoResp =
   | { ok: true; producto: Producto }
   | { ok: false; error: string };

@@ -399,6 +399,67 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     }
   }
 
+  async anular(id: string): Promise<void> {
+    const supabase = await createClient();
+    const { data: r, error } = await supabase
+      .from("cotizaciones")
+      .select("*")
+      .eq("id", id)
+      .eq("activo", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!r) throw new Error("La cotización no existe");
+    const cot = toCotizacion(r);
+    const estados = await this.listarEstados();
+    const estado = estados.find((e) => e.id === cot.estado_id)!;
+    if (estado.nombre === "Aprobada") {
+      throw new Error(
+        `La ${cot.numero} está Aprobada y ya generó OP — no se puede anular. Gestione la OP en Producción.`,
+      );
+    }
+    if (estado.nombre === "Anulada") {
+      throw new Error(`La ${cot.numero} ya está anulada`);
+    }
+    const anulada = estados.find((e) => e.nombre === "Anulada");
+    if (!anulada) throw new Error("Estado 'Anulada' no existe en la BD");
+    const { error: uErr } = await supabase
+      .from("cotizaciones")
+      .update({ estado_id: anulada.id })
+      .eq("id", id);
+    if (uErr) throw new Error(uErr.message);
+
+    // El embudo no debe quedar con tarjetas muertas: oportunidad → Perdido
+    const { data: opo } = await supabase
+      .from("oportunidades")
+      .select("*")
+      .eq("cotizacion_id", id)
+      .eq("activo", true)
+      .maybeSingle();
+    if (opo) {
+      const { data: etapa } = await supabase
+        .from("etapas_crm")
+        .select("*")
+        .eq("id", opo.etapa_id)
+        .maybeSingle();
+      if (etapa && !etapa.es_ganada && !etapa.es_perdida) {
+        const { data: perdida } = await supabase
+          .from("etapas_crm")
+          .select("*")
+          .eq("es_perdida", true)
+          .eq("activo", true)
+          .limit(1)
+          .maybeSingle();
+        if (perdida) {
+          const { error: pErr } = await supabase
+            .from("oportunidades")
+            .update({ etapa_id: perdida.id })
+            .eq("id", opo.id);
+          if (pErr) throw new Error(pErr.message);
+        }
+      }
+    }
+  }
+
   async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
     validarInput(input);
     const supabase = await createClient();

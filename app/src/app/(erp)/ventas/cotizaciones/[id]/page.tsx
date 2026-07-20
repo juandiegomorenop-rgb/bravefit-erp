@@ -16,7 +16,7 @@ import {
 import { formatCOP, formatFecha } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 import { BadgeEstadoCotizacion } from "../badges";
-import { AccionesBorrador } from "./AccionesBorrador";
+import { AccionesCotizacion } from "./AccionesCotizacion";
 
 export const metadata = { title: "Cotización" };
 
@@ -84,7 +84,13 @@ export default async function Page({
           </div>
         </div>
         <span className="flex flex-wrap items-center gap-2.5">
-          {estado.nombre === "Borrador" && <AccionesBorrador id={cot.id} />}
+          {estado.nombre !== "Aprobada" && estado.nombre !== "Anulada" && (
+            <AccionesCotizacion
+              id={cot.id}
+              numero={cot.numero}
+              estadoNombre={estado.nombre}
+            />
+          )}
           <BotonImprimir />
         </span>
       </div>
