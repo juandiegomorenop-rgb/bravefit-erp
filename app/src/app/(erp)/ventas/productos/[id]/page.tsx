@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import {
   CATEGORIA_COMPONENTE_LABEL,
   CLASIFICACION_DESCRIPCION,
-  getProductosRepository,
 } from "@/lib/data/productos";
+import { getProductosRepository } from "@/lib/data/productos-server";
 import { formatCOP, formatFecha } from "@/lib/formato";
 import {
   BadgeClasificacion,

@@ -1,7 +1,5 @@
-import {
-  getAnalisisVentasRepository,
-  type FiltrosAnalisis,
-} from "@/lib/data/analisis-ventas";
+import { type FiltrosAnalisis } from "@/lib/data/analisis-ventas";
+import { getAnalisisVentasRepository } from "@/lib/data/analisis-ventas-server";
 import { AnalisisVentasClient, type PeriodoAn } from "./AnalisisVentasClient";
 
 export const metadata = { title: "Análisis de ventas" };

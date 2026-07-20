@@ -1,4 +1,5 @@
 import { getShopifyRepository, type PeriodoClave } from "@/lib/data/shopify";
+import { AvisoEjemplo } from "@/components/AvisoEjemplo";
 import { ShopifyClient } from "./ShopifyClient";
 
 export const metadata = { title: "Pedidos web · Shopify" };
@@ -24,5 +25,16 @@ export default async function Page({
     repo.analitica(periodo),
   ]);
 
-  return <ShopifyClient pedidos={pedidos} analitica={analitica} periodo={periodo} />;
+  return (
+    <>
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-6 sm:px-6">
+        <AvisoEjemplo detalle="Pedidos y analítica reales llegan con los webhooks de Shopify." />
+      </div>
+      <ShopifyClient
+        pedidos={pedidos}
+        analitica={analitica}
+        periodo={periodo}
+      />
+    </>
+  );
 }

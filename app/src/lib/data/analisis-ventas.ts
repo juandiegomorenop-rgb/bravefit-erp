@@ -15,20 +15,11 @@
  * (o las líneas de OP) y cambiar UNA línea del factory.
  */
 
-import {
-  CATEGORIAS,
-  getOpsRepository,
-  type OpCard,
-} from "@/lib/data/ops";
+import { CATEGORIAS, getOpsRepository, type OpCard } from "@/lib/data/ops";
 import type { RangoFechas } from "@/lib/data/mercadeo";
 
 export type DimensionVenta =
-  | "cliente"
-  | "vendedor"
-  | "producto"
-  | "categoria"
-  | "ciudad"
-  | "canal";
+  "cliente" | "vendedor" | "producto" | "categoria" | "ciudad" | "canal";
 
 export const DIMENSIONES: { clave: DimensionVenta; nombre: string }[] = [
   { clave: "cliente", nombre: "Cliente" },
@@ -99,7 +90,20 @@ interface LineaVenta {
   valor: number;
 }
 
-const MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MESES_ES = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
 const CAT_NOMBRE = new Map(CATEGORIAS.map((c) => [c.id, c.nombre]));
 
 /** Vendedor REAL de la OP; las OPs sin vendedor (Shopify) → "Tienda online". */
@@ -108,7 +112,10 @@ function vendedorDe(op: OpCard): string {
   return op.origen.clave === "shopify" ? "Tienda online" : "Sin asignar";
 }
 
-function aplanar(cards: OpCard[]): LineaVenta[] {
+function aplanar(
+  cards: OpCard[],
+  catNombre: Map<number, string>,
+): LineaVenta[] {
   const lineas: LineaVenta[] = [];
   for (const op of cards) {
     if (op.tipo !== "op") continue; // solo ventas, no garantías
@@ -124,7 +131,7 @@ function aplanar(cards: OpCard[]): LineaVenta[] {
         canal: op.origen.nombre,
         segmento: op.segmento,
         producto: it.producto.nombre,
-        categoria: CAT_NOMBRE.get(it.producto.categoria_id) ?? "Sin categoría",
+        categoria: catNombre.get(it.producto.categoria_id) ?? "Sin categoría",
         origen_producto: it.producto.origen,
         unidades: it.cantidad,
         valor: it.cantidad * it.precio_unit,
@@ -134,12 +141,74 @@ function aplanar(cards: OpCard[]): LineaVenta[] {
   return lineas;
 }
 
+/**
+ * Cálculo PURO del resumen — compartido por mock y Supabase: aplana las
+ * tarjetas de OP a líneas (una por ítem) y agrega por dimensión.
+ */
+export function calcularResumenAnalisis(
+  cards: OpCard[],
+  catNombre: Map<number, string>,
+  filtros: FiltrosAnalisis,
+): ResumenAnalisis {
+  const todas = aplanar(cards, catNombre);
+
+  // Filtro por segmento / propio-comercializado (aplica a serie y a rangos).
+  const base = todas.filter(
+    (l) =>
+      (!filtros.segmento || l.segmento === filtros.segmento) &&
+      (!filtros.origenProducto || l.origen_producto === filtros.origenProducto),
+  );
+
+  // Serie: últimos 12 meses (independiente del rango, para ver tendencia).
+  const meses = ultimosMeses(12);
+  const porMes = new Map<string, number>();
+  for (const l of base)
+    porMes.set(
+      l.fecha.slice(0, 7),
+      (porMes.get(l.fecha.slice(0, 7)) ?? 0) + l.valor,
+    );
+  const serie_mensual = meses.map((m) => ({
+    mes: m.clave,
+    etiqueta: m.etiqueta,
+    valor: porMes.get(m.clave) ?? 0,
+  }));
+
+  // Rango seleccionado para KPIs y rankings.
+  const enRango = base.filter(
+    (l) => l.fecha >= filtros.desde && l.fecha <= filtros.hasta,
+  );
+  const total = enRango.reduce((a, l) => a + l.valor, 0);
+  const unidades = enRango.reduce((a, l) => a + l.unidades, 0);
+  const pedidos = new Set(enRango.map((l) => l.op_id)).size;
+
+  return {
+    total,
+    pedidos,
+    unidades,
+    ticket: pedidos ? total / pedidos : 0,
+    serie_mensual,
+    por: {
+      cliente: agrupar(enRango, "cliente"),
+      vendedor: agrupar(enRango, "vendedor"),
+      producto: agrupar(enRango, "producto"),
+      categoria: agrupar(enRango, "categoria"),
+      ciudad: agrupar(enRango, "ciudad"),
+      canal: agrupar(enRango, "canal"),
+    },
+    por_segmento: particion(enRango, "segmento"),
+    por_origen_producto: particion(enRango, "origen_producto"),
+  };
+}
+
 // ---------------------------------------------------------------
 // Agregaciones
 // ---------------------------------------------------------------
 
 function agrupar(lineas: LineaVenta[], dim: DimensionVenta): AgrupadoVenta[] {
-  const m = new Map<string, { valor: number; unidades: number; ops: Set<string> }>();
+  const m = new Map<
+    string,
+    { valor: number; unidades: number; ops: Set<string> }
+  >();
   for (const l of lineas) {
     const k = l[dim];
     const cur = m.get(k) ?? { valor: 0, unidades: 0, ops: new Set<string>() };
@@ -149,11 +218,19 @@ function agrupar(lineas: LineaVenta[], dim: DimensionVenta): AgrupadoVenta[] {
     m.set(k, cur);
   }
   return [...m.entries()]
-    .map(([nombre, v]) => ({ nombre, valor: v.valor, unidades: v.unidades, pedidos: v.ops.size }))
+    .map(([nombre, v]) => ({
+      nombre,
+      valor: v.valor,
+      unidades: v.unidades,
+      pedidos: v.ops.size,
+    }))
     .sort((a, b) => b.valor - a.valor);
 }
 
-function particion(lineas: LineaVenta[], campo: "segmento" | "origen_producto"): Particion[] {
+function particion(
+  lineas: LineaVenta[],
+  campo: "segmento" | "origen_producto",
+): Particion[] {
   const m = new Map<string, { valor: number; ops: Set<string> }>();
   for (const l of lineas) {
     const k = (l[campo] ?? "Sin dato") as string;
@@ -187,44 +264,7 @@ function ultimosMeses(n: number): { clave: string; etiqueta: string }[] {
 export class MockAnalisisVentasRepository implements AnalisisVentasRepository {
   async resumen(filtros: FiltrosAnalisis): Promise<ResumenAnalisis> {
     const cards = await getOpsRepository().listarOps();
-    const todas = aplanar(cards);
-
-    // Filtro por segmento / propio-comercializado (aplica a serie y a rangos).
-    const base = todas.filter(
-      (l) =>
-        (!filtros.segmento || l.segmento === filtros.segmento) &&
-        (!filtros.origenProducto || l.origen_producto === filtros.origenProducto),
-    );
-
-    // Serie: últimos 12 meses (independiente del rango, para ver tendencia).
-    const meses = ultimosMeses(12);
-    const porMes = new Map<string, number>();
-    for (const l of base) porMes.set(l.fecha.slice(0, 7), (porMes.get(l.fecha.slice(0, 7)) ?? 0) + l.valor);
-    const serie_mensual = meses.map((m) => ({ mes: m.clave, etiqueta: m.etiqueta, valor: porMes.get(m.clave) ?? 0 }));
-
-    // Rango seleccionado para KPIs y rankings.
-    const enRango = base.filter((l) => l.fecha >= filtros.desde && l.fecha <= filtros.hasta);
-    const total = enRango.reduce((a, l) => a + l.valor, 0);
-    const unidades = enRango.reduce((a, l) => a + l.unidades, 0);
-    const pedidos = new Set(enRango.map((l) => l.op_id)).size;
-
-    return {
-      total,
-      pedidos,
-      unidades,
-      ticket: pedidos ? total / pedidos : 0,
-      serie_mensual,
-      por: {
-        cliente: agrupar(enRango, "cliente"),
-        vendedor: agrupar(enRango, "vendedor"),
-        producto: agrupar(enRango, "producto"),
-        categoria: agrupar(enRango, "categoria"),
-        ciudad: agrupar(enRango, "ciudad"),
-        canal: agrupar(enRango, "canal"),
-      },
-      por_segmento: particion(enRango, "segmento"),
-      por_origen_producto: particion(enRango, "origen_producto"),
-    };
+    return calcularResumenAnalisis(cards, CAT_NOMBRE, filtros);
   }
 }
 
@@ -232,7 +272,9 @@ export class MockAnalisisVentasRepository implements AnalisisVentasRepository {
 // Factory (globalThis singleton — sobrevive HMR)
 // ---------------------------------------------------------------
 
-const g = globalThis as unknown as { __analisisVentasRepo?: AnalisisVentasRepository };
+const g = globalThis as unknown as {
+  __analisisVentasRepo?: AnalisisVentasRepository;
+};
 
 export function getAnalisisVentasRepository(): AnalisisVentasRepository {
   g.__analisisVentasRepo ??= new MockAnalisisVentasRepository();

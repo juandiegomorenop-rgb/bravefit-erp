@@ -1,4 +1,4 @@
-import { getProductosRepository } from "@/lib/data/productos";
+import { getProductosRepository } from "@/lib/data/productos-server";
 import { ProductosClient } from "./ProductosClient";
 
 export const metadata = { title: "Lista de productos" };

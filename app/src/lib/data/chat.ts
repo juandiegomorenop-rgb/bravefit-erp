@@ -16,15 +16,18 @@
  *   y un guard de `puede_crear` en el dispatcher.
  */
 
+// DATOS REALES: el chat consulta los MISMOS repos server que la UI
+// (solo el route /api/chat importa este módulo — contexto server).
+// RRHH sigue mock (módulo sin conectar; igual que su página).
 import {
   getCotizacionesRepository,
   getCrmRepository,
-} from "@/lib/data/crm-cotizaciones";
-import { getDashboardRepository } from "@/lib/data/dashboard";
-import { getEntregasRepository } from "@/lib/data/entregas";
+} from "@/lib/data/crm-cotizaciones-server";
+import { kpisDashboard } from "@/lib/data/dashboard-server";
+import { getEntregasRepository } from "@/lib/data/entregas-server";
 import { estadoBuffer } from "@/lib/data/inventario";
 import { getInventarioRepository } from "@/lib/data/inventario-server";
-import { getOpsRepository } from "@/lib/data/ops";
+import { getOpsRepository } from "@/lib/data/ops-server";
 import { getRrhhRepository } from "@/lib/data/rrhh";
 import type { RangoFechas } from "@/lib/data/mercadeo";
 import type { Modulo } from "@/lib/permisos";
@@ -39,12 +42,18 @@ function rangoDe(periodo: Periodo): RangoFechas {
   const hoy = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   if (periodo === "trimestre") {
-    return { desde: iso(new Date(hoy.getTime() - 89 * 86_400_000)), hasta: iso(hoy) };
+    return {
+      desde: iso(new Date(hoy.getTime() - 89 * 86_400_000)),
+      hasta: iso(hoy),
+    };
   }
   if (periodo === "anio") {
     return { desde: iso(new Date(hoy.getFullYear(), 0, 1)), hasta: iso(hoy) };
   }
-  return { desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) };
+  return {
+    desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)),
+    hasta: iso(hoy),
+  };
 }
 
 const hoyISO = () => new Date().toISOString().slice(0, 10);
@@ -90,10 +99,27 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       properties: { ...PERIODO_PROP },
       additionalProperties: false,
     },
-    claves: ["resumen", "como vamos", "kpi", "ventas", "vendido", "vendimos", "indicador", "general", "negocio", "ticket", "pedidos"],
+    claves: [
+      "resumen",
+      "como vamos",
+      "kpi",
+      "ventas",
+      "vendido",
+      "vendimos",
+      "indicador",
+      "general",
+      "negocio",
+      "ticket",
+      "pedidos",
+    ],
     async ejecutar(input) {
       const periodo = (input.periodo as Periodo) ?? "mes";
-      return { periodo, ...(await getDashboardRepository().kpis(rangoDe(periodo))) };
+      return {
+        periodo,
+        ...(await kpisDashboard(rangoDe(periodo))),
+        nota_rrhh:
+          "IMPORTANTE: los datos de RRHH son de EJEMPLO (módulo sin conectar) — adviértelo si el usuario pregunta por RRHH.",
+      };
     },
   },
   {
@@ -104,37 +130,34 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     input_schema: {
       type: "object",
       properties: {
-        meses: { type: "integer", description: "Meses a analizar (1–24). Por defecto 12." },
+        meses: {
+          type: "integer",
+          description: "Meses a analizar (1–24). Por defecto 12.",
+        },
       },
       additionalProperties: false,
     },
-    claves: ["tuberia", "tubería", "capacidad", "planta", "metros", "polea", "poleas", "cuello", "banco", "tapizado", "70x70", "procesado"],
-    async ejecutar(input) {
-      const meses = Math.max(1, Math.min(24, Number(input.meses) || 12));
-      const repo = getDashboardRepository();
-      const [capacidad, cuellos] = await Promise.all([
-        repo.capacidadTuberia(meses),
-        repo.cuellosBotella(meses),
-      ]);
+    claves: [
+      "tuberia",
+      "tubería",
+      "capacidad",
+      "planta",
+      "metros",
+      "polea",
+      "poleas",
+      "cuello",
+      "banco",
+      "tapizado",
+      "70x70",
+      "procesado",
+    ],
+    async ejecutar() {
+      // Sin BOM de tubería cargado el indicador sería inventado — se
+      // responde honesto (igual que el aviso del Dashboard).
       return {
-        tuberia_70x70: {
-          techo_m: capacidad.techo_m,
-          mes_techo: capacidad.mes_techo,
-          promedio_m: capacidad.promedio_m,
-          meses_sobre_capacidad: capacidad.meses_sobre_capacidad,
-          ultimos_meses: capacidad.serie.slice(-6).map((p) => ({
-            mes: p.etiqueta,
-            procesada_m: p.procesada_m,
-            vendida_m: p.vendida_m,
-          })),
-        },
-        cuellos_botella: cuellos.map((c) => ({
-          nombre: c.nombre,
-          unidad: c.unidad,
-          total: c.total,
-          promedio_mensual: c.promedio,
-          tendencia_pct: c.tendencia,
-        })),
+        disponible: false,
+        motivo:
+          "El indicador de capacidad de planta se calcula con el BOM de tubería 70×70 por producto, que aún no está cargado en el catálogo. Cuando se cargue, este indicador se activa solo (Dashboard → Capacidad de planta).",
       };
     },
   },
@@ -148,11 +171,24 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       properties: {},
       additionalProperties: false,
     },
-    claves: ["op", "ops", "orden", "ordenes", "órdenes", "produccion", "producción", "vencida", "vencidas", "atrasada", "etapa", "planta cola"],
+    claves: [
+      "op",
+      "ops",
+      "orden",
+      "ordenes",
+      "órdenes",
+      "produccion",
+      "producción",
+      "vencida",
+      "vencidas",
+      "atrasada",
+      "etapa",
+      "planta cola",
+    ],
     async ejecutar() {
       const ops = getOpsRepository();
       const [kpis, cards] = await Promise.all([
-        getDashboardRepository().kpis(rangoDe("mes")),
+        kpisDashboard(rangoDe("mes")),
         ops.listarOps(),
       ]);
       const hoy = hoyISO();
@@ -195,7 +231,17 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       },
       additionalProperties: false,
     },
-    claves: ["inventario", "material", "materiales", "materia prima", "reponer", "comprar", "buffer", "stock", "existencia"],
+    claves: [
+      "inventario",
+      "material",
+      "materiales",
+      "materia prima",
+      "reponer",
+      "comprar",
+      "buffer",
+      "stock",
+      "existencia",
+    ],
     async ejecutar(input) {
       const soloReponer = input.solo_reponer !== false;
       const filas = await getInventarioRepository().listarExistenciasMP(
@@ -204,13 +250,15 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       return {
         solo_reponer: soloReponer,
         total: filas.length,
-        materiales: filas.slice(0, 40).map(({ existencia, material, tipo }) => ({
-          material: material.nombre,
-          tipo: tipo.nombre,
-          disponible: existencia.cantidad_disponible,
-          buffer_min: material.buffer_min,
-          estado: estadoBuffer(existencia.cantidad_disponible, material),
-        })),
+        materiales: filas
+          .slice(0, 40)
+          .map(({ existencia, material, tipo }) => ({
+            material: material.nombre,
+            tipo: tipo.nombre,
+            disponible: existencia.cantidad_disponible,
+            buffer_min: material.buffer_min,
+            estado: estadoBuffer(existencia.cantidad_disponible, material),
+          })),
       };
     },
   },
@@ -222,11 +270,22 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     input_schema: {
       type: "object",
       properties: {
-        meses: { type: "integer", description: "Meses a resumir (1–24). Por defecto 12." },
+        meses: {
+          type: "integer",
+          description: "Meses a resumir (1–24). Por defecto 12.",
+        },
       },
       additionalProperties: false,
     },
-    claves: ["entrega", "entregas", "entregamos", "entregado", "despacho", "despachos", "reparto"],
+    claves: [
+      "entrega",
+      "entregas",
+      "entregamos",
+      "entregado",
+      "despacho",
+      "despachos",
+      "reparto",
+    ],
     async ejecutar(input) {
       const meses = Math.max(1, Math.min(24, Number(input.meses) || 12));
       const serie = await getEntregasRepository().resumenMensual(meses);
@@ -249,7 +308,15 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       },
       additionalProperties: false,
     },
-    claves: ["garantia", "garantía", "garantias", "garantías", "reclamo", "postventa", "posventa"],
+    claves: [
+      "garantia",
+      "garantía",
+      "garantias",
+      "garantías",
+      "reclamo",
+      "postventa",
+      "posventa",
+    ],
     async ejecutar(input) {
       const estado = (input.estado as "abiertas" | "cerradas") ?? "abiertas";
       const cards = await getOpsRepository().listarGarantias({ estado });
@@ -277,7 +344,17 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       properties: {},
       additionalProperties: false,
     },
-    claves: ["cotizacion", "cotización", "cotizaciones", "pipeline", "oportunidad", "oportunidades", "crm", "embudo", "prospecto"],
+    claves: [
+      "cotizacion",
+      "cotización",
+      "cotizaciones",
+      "pipeline",
+      "oportunidad",
+      "oportunidades",
+      "crm",
+      "embudo",
+      "prospecto",
+    ],
     async ejecutar() {
       const [cots, oportunidades] = await Promise.all([
         getCotizacionesRepository().listar(),
@@ -292,7 +369,10 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       const valorCrm = oportunidades.reduce((s, o) => s + o.valor, 0);
       return {
         cotizaciones: { total: cots.length, por_estado: porEstado, vencidas },
-        crm: { oportunidades_activas: oportunidades.length, valor_total: valorCrm },
+        crm: {
+          oportunidades_activas: oportunidades.length,
+          valor_total: valorCrm,
+        },
       };
     },
   },
@@ -306,7 +386,18 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       properties: {},
       additionalProperties: false,
     },
-    claves: ["empleado", "empleados", "vacacion", "vacaciones", "vacante", "vacantes", "personal", "rrhh", "reclutamiento", "aplicante"],
+    claves: [
+      "empleado",
+      "empleados",
+      "vacacion",
+      "vacaciones",
+      "vacante",
+      "vacantes",
+      "personal",
+      "rrhh",
+      "reclutamiento",
+      "aplicante",
+    ],
     async ejecutar() {
       const repo = getRrhhRepository();
       const [empleados, vacantes] = await Promise.all([
@@ -316,8 +407,10 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       const deVacaciones = empleados
         .filter((e) => e.regresaEl !== null)
         .map((e) => ({ nombre: e.empleado.nombre, regresa_el: e.regresaEl }));
-      const kpis = await getDashboardRepository().kpis(rangoDe("mes"));
+      const kpis = await kpisDashboard(rangoDe("mes"));
       return {
+        nota:
+          "IMPORTANTE: RRHH aún no está conectado a datos reales — todo lo siguiente es de EJEMPLO. Adviértelo SIEMPRE al responder.",
         empleados: empleados.length,
         de_vacaciones: deVacaciones,
         vacaciones_pendientes: kpis.rrhh.vacaciones_pendientes,
@@ -423,11 +516,15 @@ export async function responderDemo(
 ): Promise<{ reply: string; herramienta: string | null }> {
   const permitidas = herramientasPara(modulos);
   if (permitidas.length === 0) {
-    return { reply: "No tienes módulos habilitados para consultar.", herramienta: null };
+    return {
+      reply: "No tienes módulos habilitados para consultar.",
+      herramienta: null,
+    };
   }
   const q = pregunta.toLowerCase();
   const elegida =
-    permitidas.find((h) => h.claves.some((k) => q.includes(k))) ?? permitidas[0];
+    permitidas.find((h) => h.claves.some((k) => q.includes(k))) ??
+    permitidas[0];
 
   const data = JSON.parse(await ejecutarHerramienta(elegida.name, {}, modulos));
   const reply = resumirDemo(elegida.name, data);
@@ -439,15 +536,26 @@ function cop(n: number): string {
 }
 
 /** Resúmenes en español para el modo demo (uno por herramienta). */
-function resumirDemo(name: string, d: Record<string, unknown> & { error?: string }): string {
+function resumirDemo(
+  name: string,
+  d: Record<string, unknown> & { error?: string },
+): string {
   if (d?.error) return String(d.error);
-  const nota = "\n\n— Modo demostración: respuesta generada localmente sobre datos de ejemplo. Al configurar la API key de Anthropic, el chat usará Claude.";
+  const nota =
+    "\n\n— Modo demostración: respuesta generada localmente sobre datos de ejemplo. Al configurar la API key de Anthropic, el chat usará Claude.";
 
   switch (name) {
     case "resumen_general": {
-      const v = d.ventas as { total_periodo: number; pedidos: number; ticket_promedio: number };
+      const v = d.ventas as {
+        total_periodo: number;
+        pedidos: number;
+        ticket_promedio: number;
+      };
       const p = d.produccion as { ops_activas: number; vencidas: number };
-      const l = d.logistica as { entregas_mes: number; garantias_abiertas: number };
+      const l = d.logistica as {
+        entregas_mes: number;
+        garantias_abiertas: number;
+      };
       return (
         `**Resumen (${d.periodo})**\n` +
         `- Ventas: ${cop(v.total_periodo)} en ${v.pedidos} pedidos (ticket ${cop(v.ticket_promedio)})\n` +
@@ -458,15 +566,32 @@ function resumirDemo(name: string, d: Record<string, unknown> & { error?: string
     }
     case "capacidad_planta": {
       const t = d.tuberia_70x70 as {
-        techo_m: number; mes_techo: string; promedio_m: number; meses_sobre_capacidad: number;
-        ultimos_meses: { mes: string; procesada_m: number; vendida_m: number }[];
+        techo_m: number;
+        mes_techo: string;
+        promedio_m: number;
+        meses_sobre_capacidad: number;
+        ultimos_meses: {
+          mes: string;
+          procesada_m: number;
+          vendida_m: number;
+        }[];
       };
-      const cuellos = d.cuellos_botella as { nombre: string; total: number; promedio_mensual: number }[];
+      const cuellos = d.cuellos_botella as {
+        nombre: string;
+        total: number;
+        promedio_mensual: number;
+      }[];
       const filas = t.ultimos_meses
-        .map((m) => `  · ${m.mes}: ${m.procesada_m} m procesados / ${m.vendida_m} m vendidos`)
+        .map(
+          (m) =>
+            `  · ${m.mes}: ${m.procesada_m} m procesados / ${m.vendida_m} m vendidos`,
+        )
         .join("\n");
       const listaCuellos = cuellos
-        .map((c) => `  · ${c.nombre}: ${Math.round(c.promedio_mensual)}/mes (total ${c.total})`)
+        .map(
+          (c) =>
+            `  · ${c.nombre}: ${Math.round(c.promedio_mensual)}/mes (total ${c.total})`,
+        )
         .join("\n");
       return (
         `**Capacidad de planta — tubería 70×70**\n` +
@@ -477,8 +602,19 @@ function resumirDemo(name: string, d: Record<string, unknown> & { error?: string
       );
     }
     case "ordenes_produccion": {
-      const lista = (d.lista_vencidas as { numero: string; cliente: string; entrega_pactada: string }[]) ?? [];
-      const filas = lista.slice(0, 8).map((o) => `  · ${o.numero} — ${o.cliente} (pactada ${o.entrega_pactada})`).join("\n");
+      const lista =
+        (d.lista_vencidas as {
+          numero: string;
+          cliente: string;
+          entrega_pactada: string;
+        }[]) ?? [];
+      const filas = lista
+        .slice(0, 8)
+        .map(
+          (o) =>
+            `  · ${o.numero} — ${o.cliente} (pactada ${o.entrega_pactada})`,
+        )
+        .join("\n");
       return (
         `**Producción**\n` +
         `- Activas: ${d.activas} · En cola: ${d.en_cola}\n` +
@@ -488,26 +624,59 @@ function resumirDemo(name: string, d: Record<string, unknown> & { error?: string
       );
     }
     case "inventario_materiales": {
-      const mats = (d.materiales as { material: string; disponible: number; buffer_min: number }[]) ?? [];
-      if (mats.length === 0) return "No hay materiales bajo el buffer mínimo ahora mismo." + nota;
-      const filas = mats.slice(0, 12).map((m) => `  · ${m.material}: ${m.disponible} (mín ${m.buffer_min})`).join("\n");
+      const mats =
+        (d.materiales as {
+          material: string;
+          disponible: number;
+          buffer_min: number;
+        }[]) ?? [];
+      if (mats.length === 0)
+        return "No hay materiales bajo el buffer mínimo ahora mismo." + nota;
+      const filas = mats
+        .slice(0, 12)
+        .map((m) => `  · ${m.material}: ${m.disponible} (mín ${m.buffer_min})`)
+        .join("\n");
       return `**Materiales por reponer (${d.total})**\n${filas}` + nota;
     }
     case "entregas": {
-      const serie = (d.resumen as { mes: string; entregas: number; valor: number }[]) ?? [];
-      const filas = serie.slice(-6).map((m) => `  · ${m.mes}: ${m.entregas} entregas — ${cop(m.valor)}`).join("\n");
+      const serie =
+        (d.resumen as { mes: string; entregas: number; valor: number }[]) ?? [];
+      const filas = serie
+        .slice(-6)
+        .map((m) => `  · ${m.mes}: ${m.entregas} entregas — ${cop(m.valor)}`)
+        .join("\n");
       return `**Entregas por mes (últimos ${d.meses})**\n${filas}` + nota;
     }
     case "garantias": {
-      const gs = (d.garantias as { numero: string; cliente: string; problema: string; dias: number }[]) ?? [];
+      const gs =
+        (d.garantias as {
+          numero: string;
+          cliente: string;
+          problema: string;
+          dias: number;
+        }[]) ?? [];
       if (gs.length === 0) return `No hay garantías ${d.estado}.` + nota;
-      const filas = gs.slice(0, 10).map((g) => `  · ${g.numero} — ${g.cliente} (${g.dias} d): ${g.problema}`).join("\n");
+      const filas = gs
+        .slice(0, 10)
+        .map(
+          (g) => `  · ${g.numero} — ${g.cliente} (${g.dias} d): ${g.problema}`,
+        )
+        .join("\n");
       return `**Garantías ${d.estado} (${d.total})**\n${filas}` + nota;
     }
     case "ventas_cotizaciones": {
-      const c = d.cotizaciones as { total: number; vencidas: number; por_estado: Record<string, number> };
-      const crm = d.crm as { oportunidades_activas: number; valor_total: number };
-      const estados = Object.entries(c.por_estado).map(([k, n]) => `${k}: ${n}`).join(", ");
+      const c = d.cotizaciones as {
+        total: number;
+        vencidas: number;
+        por_estado: Record<string, number>;
+      };
+      const crm = d.crm as {
+        oportunidades_activas: number;
+        valor_total: number;
+      };
+      const estados = Object.entries(c.por_estado)
+        .map(([k, n]) => `${k}: ${n}`)
+        .join(", ");
       return (
         `**Comercial**\n` +
         `- Cotizaciones: ${c.total} (${estados}). Vencidas: ${c.vencidas}\n` +
@@ -516,10 +685,17 @@ function resumirDemo(name: string, d: Record<string, unknown> & { error?: string
       );
     }
     case "rrhh": {
-      const vac = (d.de_vacaciones as { nombre: string; regresa_el: string }[]) ?? [];
-      const vacantes = (d.vacantes as { cargo: string; aplicantes: number }[]) ?? [];
-      const enVac = vac.length ? vac.map((v) => `${v.nombre} (regresa ${v.regresa_el})`).join(", ") : "nadie";
-      const vs = vacantes.map((v) => `${v.cargo} (${v.aplicantes} aplicantes)`).join(", ") || "ninguna";
+      const vac =
+        (d.de_vacaciones as { nombre: string; regresa_el: string }[]) ?? [];
+      const vacantes =
+        (d.vacantes as { cargo: string; aplicantes: number }[]) ?? [];
+      const enVac = vac.length
+        ? vac.map((v) => `${v.nombre} (regresa ${v.regresa_el})`).join(", ")
+        : "nadie";
+      const vs =
+        vacantes
+          .map((v) => `${v.cargo} (${v.aplicantes} aplicantes)`)
+          .join(", ") || "ninguna";
       return (
         `**RRHH**\n` +
         `- Empleados: ${d.empleados}\n` +

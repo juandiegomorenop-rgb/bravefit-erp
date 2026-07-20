@@ -1,5 +1,6 @@
 import { getComprasRepository } from "@/lib/data/compras";
 import type { FiltrosCompras } from "@/lib/data/compras";
+import { AvisoEjemplo } from "@/components/AvisoEjemplo";
 import { ComprasClient } from "./ComprasClient";
 
 export const metadata = { title: "Solicitudes de compra" };
@@ -28,19 +29,24 @@ export default async function Page({
 
   const estadoParam = primero(sp.estado);
   return (
-    <ComprasClient
-      cards={cards}
-      faltantes={faltantes}
-      tipos={tipos}
-      materiales={materiales}
-      proveedores={proveedores}
-      filtrosIniciales={{
-        estado: ESTADOS_VALIDOS.includes(estadoParam ?? "")
-          ? (estadoParam as FiltrosCompras["estado"])
-          : undefined,
-        tipo_material_id: Number(primero(sp.tipo)) || undefined,
-        texto: primero(sp.q) ?? "",
-      }}
-    />
+    <>
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-6 sm:px-6">
+        <AvisoEjemplo detalle="Las solicitudes reales se registran por ahora con Juan Diego; la conexión viene en la próxima tanda." />
+      </div>
+      <ComprasClient
+        cards={cards}
+        faltantes={faltantes}
+        tipos={tipos}
+        materiales={materiales}
+        proveedores={proveedores}
+        filtrosIniciales={{
+          estado: ESTADOS_VALIDOS.includes(estadoParam ?? "")
+            ? (estadoParam as FiltrosCompras["estado"])
+            : undefined,
+          tipo_material_id: Number(primero(sp.tipo)) || undefined,
+          texto: primero(sp.q) ?? "",
+        }}
+      />
+    </>
   );
 }
