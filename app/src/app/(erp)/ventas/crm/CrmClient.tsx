@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { diasEnEtapa } from "@/lib/cotizacion-logic";
-import type {
-  FiltrosCrm,
-  OportunidadCard,
+import {
+  ARCHIVO_DIAS_CRM,
+  esOportunidadArchivada,
+  type FiltrosCrm,
+  type OportunidadCard,
 } from "@/lib/data/crm-cotizaciones";
 import { crearClienteCatalogo } from "../cotizaciones/actions";
 import { crearOportunidad, moverEtapaCrm } from "./actions";
@@ -43,6 +45,9 @@ export function CrmClient({
   const [filtros, setFiltros] = useState(filtrosIniciales);
   const [colDestino, setColDestino] = useState<number | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
+  // Archivo del embudo: las cerradas (Ganado/Perdido) hace más de 7
+  // días salen del tablero — su OP ya vive en Producción.
+  const [verArchivo, setVerArchivo] = useState(false);
 
   // router.refresh() tras crear una oportunidad trae cards nuevas del
   // server: resincronizar el estado optimista con las props.
@@ -127,9 +132,17 @@ export function CrmClient({
     router.refresh();
   }
 
+  const archivadas = useMemo(
+    () => cards.filter((c) => esOportunidadArchivada(c, etapas)),
+    [cards, etapas],
+  );
+
   const filtradas = useMemo(() => {
     const q = filtros.texto?.trim().toLowerCase();
-    return cards.filter((c) => {
+    const base = verArchivo
+      ? archivadas
+      : cards.filter((c) => !esOportunidadArchivada(c, etapas));
+    return base.filter((c) => {
       if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id)
         return false;
       if (q) {
@@ -144,7 +157,7 @@ export function CrmClient({
       }
       return true;
     });
-  }, [cards, filtros]);
+  }, [cards, archivadas, verArchivo, etapas, filtros]);
 
   function actualizarFiltros(nuevos: FiltrosCrm) {
     setFiltros(nuevos);
@@ -425,12 +438,24 @@ export function CrmClient({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => setVerArchivo((v) => !v)}
+          title={`Ganadas y perdidas hace más de ${ARCHIVO_DIAS_CRM} días (${archivadas.length}) — su OP ya vive en Producción`}
+          className={`rounded-pill border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+            verArchivo
+              ? "border-carbon bg-carbon text-white"
+              : "border-borde bg-card text-neutro hover:border-dorado"
+          }`}
+        >
+          🗄 Archivo ({archivadas.length})
+        </button>
         <span className="ml-auto text-[12.5px] text-neutro">
           <b className="text-carbon">{filtradas.length}</b> oportunidades ·{" "}
           <b className="text-carbon">
             {formatCOP(filtradas.reduce((a, c) => a + c.valor, 0))}
           </b>{" "}
-          en juego
+          {verArchivo ? "archivadas" : "en juego"}
         </span>
       </div>
 
@@ -558,6 +583,16 @@ function TarjetaOportunidad({ card }: { card: OportunidadCard }) {
           <span className="rounded-pill bg-neutro-bg px-2 py-0.5 text-[10.5px] font-bold text-neutro">
             Sin cotización
           </span>
+        )}
+        {card.op && (
+          <Link
+            href={`/produccion/ordenes/${card.op.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Ver la orden de pedido en Producción"
+            className="rounded-pill bg-verde-bg px-2 py-0.5 text-[10.5px] font-bold text-verde hover:underline"
+          >
+            → {card.op.numero}
+          </Link>
         )}
         <span className="ml-auto text-[10.5px] font-semibold text-neutro">
           {dias === 0 ? "hoy" : dias === 1 ? "1 día" : `${dias} días`} en etapa

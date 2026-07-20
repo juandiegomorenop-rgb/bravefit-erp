@@ -783,6 +783,19 @@ class SupabaseCrmRepository implements CrmRepository {
       }
     }
 
+    // OP generada al ganar: la ficha enlaza a Producción (cierra el
+    // círculo — el usuario ve que la venta ya pasó a la planta).
+    const opPorCotizacion = new Map<string, { id: string; numero: string }>();
+    if (cotIds.length) {
+      const { data: ops } = await supabase
+        .from("ordenes_pedido")
+        .select("id, numero, cotizacion_id")
+        .in("cotizacion_id", cotIds as string[]);
+      (ops ?? []).forEach((o: any) =>
+        opPorCotizacion.set(o.cotizacion_id, { id: o.id, numero: o.numero }),
+      );
+    }
+
     const q = filtros.texto?.trim().toLowerCase();
     return (opos ?? [])
       .map((r) => {
@@ -804,6 +817,7 @@ class SupabaseCrmRepository implements CrmRepository {
               }
             : null,
           valor: cot && its.length > 0 ? total : (o.valor_estimado ?? 0),
+          op: cot ? (opPorCotizacion.get(cot.id) ?? null) : null,
         } satisfies OportunidadCard;
       })
       .filter((c) => {

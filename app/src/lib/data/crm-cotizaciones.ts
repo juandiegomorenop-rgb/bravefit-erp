@@ -53,6 +53,8 @@ export interface OportunidadCard {
   } | null;
   /** Valor a mostrar: total de la cotización o valor_estimado. */
   valor: number;
+  /** OP generada al ganar (si existe): la ficha enlaza a Producción. */
+  op?: { id: string; numero: string } | null;
 }
 
 export interface ResultadoMoverCrm {
@@ -176,6 +178,26 @@ export interface CotizacionesRepository {
 // ===============================================================
 
 export const ARCHIVO_DIAS_COTIZACION = 30;
+
+/** Días que una oportunidad cerrada (Ganado/Perdido) sigue visible en
+ *  el embudo antes de pasar al Archivo del CRM. */
+export const ARCHIVO_DIAS_CRM = 7;
+
+/**
+ * Una oportunidad sale del embudo activo cuando ya cerró (Ganado —su OP
+ * vive en Producción— o Perdido) hace más de ARCHIVO_DIAS_CRM días.
+ * Las cerradas recientes se quedan a la vista para el corte semanal.
+ */
+export function esOportunidadArchivada(
+  card: OportunidadCard,
+  etapas: EtapaCrm[],
+  hoy = new Date(),
+): boolean {
+  const etapa = etapas.find((e) => e.id === card.oportunidad.etapa_id);
+  if (!etapa || (!etapa.es_ganada && !etapa.es_perdida)) return false;
+  const cerrada = new Date(card.oportunidad.movida_en);
+  return (hoy.getTime() - cerrada.getTime()) / 86_400_000 > ARCHIVO_DIAS_CRM;
+}
 
 /**
  * Una cotización sale del listado activo cuando ya es historia
