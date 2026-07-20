@@ -229,7 +229,16 @@ export function CrmClient({
                   {fichas.length}
                 </span>
               </div>
-              <div className="px-1.5 text-[11px] font-bold text-neutro">
+              {/* Total $ de la etapa — protagonista (pedido de Juan) */}
+              <div
+                className={`px-1.5 pb-1 text-[15px] font-extrabold ${
+                  etapa.es_ganada
+                    ? "text-verde"
+                    : etapa.es_perdida
+                      ? "text-rojo"
+                      : "text-dorado-oscuro"
+                }`}
+              >
                 {formatCOP(totalCol)}
               </div>
               {fichas.map((card) => (
