@@ -52,6 +52,18 @@ export async function registrarDespacho(
   }
 }
 
+export async function anularOp(
+  opId: string,
+  motivo: string,
+): Promise<MoverResp> {
+  try {
+    await getOpsRepository().anularOp(opId, motivo);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo anular la O.P." };
+  }
+}
+
 export async function deshacerDespacho(despachoId: number): Promise<MoverResp> {
   try {
     await eliminarDespacho(despachoId);

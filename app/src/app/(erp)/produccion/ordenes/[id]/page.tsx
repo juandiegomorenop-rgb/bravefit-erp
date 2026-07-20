@@ -26,6 +26,7 @@ import {
   PillEntrega,
 } from "../badges";
 import { BotonImprimir } from "./BotonImprimir";
+import { AnularOp } from "./AnularOp";
 import { DespachosOp } from "./DespachosOp";
 import { ObservacionesOp } from "./ObservacionesOp";
 import { OrdenTaller } from "./OrdenTaller";
@@ -63,6 +64,7 @@ export default async function Page({ params }: { params: Params }) {
   const total = totalOp(items);
   const progreso = progresoEntrega(items);
   const ordenActual = detalle.etapa.orden;
+  const anulada = !!op.anulada_en;
 
   return (
     <>
@@ -96,15 +98,40 @@ export default async function Page({ params }: { params: Params }) {
           </div>
         </div>
         <div className="no-print flex items-center gap-2">
-          <Link
-            href={`/produccion/garantias?nueva=${op.id}`}
-            className="rounded-pill border border-semaforo-rojo/50 bg-rojo-bg px-4 py-2.5 text-[13px] font-semibold text-rojo transition-colors hover:bg-semaforo-rojo hover:text-white"
-          >
-            🛡 Abrir garantía
-          </Link>
+          {!anulada && (
+            <>
+              <Link
+                href={`/produccion/garantias?nueva=${op.id}`}
+                className="rounded-pill border border-semaforo-rojo/50 bg-rojo-bg px-4 py-2.5 text-[13px] font-semibold text-rojo transition-colors hover:bg-semaforo-rojo hover:text-white"
+              >
+                🛡 Abrir garantía
+              </Link>
+              {!op.fecha_entregada && <AnularOp opId={op.id} numero={op.numero} />}
+            </>
+          )}
           <BotonImprimir />
         </div>
       </div>
+
+      {/* Banner de anulación */}
+      {anulada && (
+        <div className="mt-4 rounded-card border border-rojo/40 bg-rojo-bg px-5 py-4">
+          <p className="text-[15px] font-extrabold text-rojo">⛔ O.P. ANULADA</p>
+          <p className="mt-1 text-[13px] text-carbon">
+            {op.anulada_en && (
+              <>Anulada el {formatFechaCorta(new Date(op.anulada_en))}. </>
+            )}
+            {op.anulada_motivo && (
+              <>
+                Motivo: <b>{op.anulada_motivo}</b>.{" "}
+              </>
+            )}
+            Si había descontado materia prima, el inventario fue reversado
+            automáticamente. Esta orden no participa en producción ni en
+            dashboards; se conserva solo como registro.
+          </p>
+        </div>
+      )}
 
       {/* Stepper de etapas */}
       <div className="mt-5 rounded-card border border-borde bg-card px-6 py-5">
@@ -172,14 +199,17 @@ export default async function Page({ params }: { params: Params }) {
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* Columna principal */}
         <div className="flex flex-col gap-4">
-          {/* Despachos: pendientes por ítem + registro de entregas parciales */}
-          <DespachosOp
-            opId={op.id}
-            items={items}
-            despachos={despachos}
-            total={total}
-            progreso={progreso}
-          />
+          {/* Despachos: pendientes por ítem + registro de entregas parciales
+              (una OP anulada no despacha: se oculta la sección) */}
+          {!anulada && (
+            <DespachosOp
+              opId={op.id}
+              items={items}
+              despachos={despachos}
+              total={total}
+              progreso={progreso}
+            />
+          )}
 
           {/* Línea de tiempo de etapas */}
           <div className="rounded-card border border-borde bg-card px-5 py-4">

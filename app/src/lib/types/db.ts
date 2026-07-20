@@ -117,6 +117,10 @@ export interface OrdenPedido {
   activo: boolean;
   eliminado_en: string | null;
   creado_en: string;
+  // Anulación (fn_anular_op): activo pasa a false y se estampan estos campos
+  anulada_en?: string | null;
+  anulada_motivo?: string | null;
+  anulada_por?: string | null;
   // SEMÁFORO: calculado siempre desde fecha_entrega_pactada, NUNCA almacenado
 }
 

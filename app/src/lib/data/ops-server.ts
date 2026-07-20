@@ -154,6 +154,9 @@ function toOrden(r: any): OrdenPedido {
     activo: r.activo,
     eliminado_en: r.eliminado_en ?? null,
     creado_en: r.creado_en,
+    anulada_en: r.anulada_en ?? null,
+    anulada_motivo: r.anulada_motivo ?? null,
+    anulada_por: r.anulada_por ?? null,
   };
 }
 function toItem(r: any): OpItem {
@@ -275,6 +278,7 @@ class SupabaseOpsRepository implements OpsRepository {
       fecha_entregada: op.fecha_entregada ?? null,
       items: this.itemsConProducto(op.op_items),
       garantia: null,
+      anulada: !!op.anulada_en,
     };
   }
 
@@ -319,10 +323,12 @@ class SupabaseOpsRepository implements OpsRepository {
     const supabase = await createClient();
     const lk = await this.cargarLookups();
 
+    // Activas + anuladas: las anuladas viajan con anulada=true y el
+    // filtro de archivo (esOpArchivada) las saca del tablero por defecto.
     const { data: ops, error } = await supabase
       .from("ordenes_pedido")
       .select("*, op_items(*, productos(*))")
-      .eq("activo", true);
+      .or("activo.is.true,anulada_en.not.is.null");
     if (error) throw new Error(error.message);
 
     // garantías abiertas (comparten el tablero con prioridad ambulancia)
@@ -370,11 +376,12 @@ class SupabaseOpsRepository implements OpsRepository {
       .maybeSingle();
     const opId = gar?.op_id ?? id;
 
+    // Sin filtro de activo: las OP anuladas siguen siendo consultables
+    // (el detalle muestra el banner de anulación).
     const { data: op, error } = await supabase
       .from("ordenes_pedido")
       .select("*, op_items(*, productos(*))")
       .eq("id", opId)
-      .eq("activo", true)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!op) return null;
@@ -413,6 +420,24 @@ class SupabaseOpsRepository implements OpsRepository {
       observaciones: (obs.data ?? []).map(toObs),
       garantias: (gars.data ?? []).map(toGarantia),
     };
+  }
+
+  async anularOp(op_id: string, motivo: string): Promise<void> {
+    if (!motivo.trim()) throw new Error("El motivo de anulación es obligatorio");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_anular_op", {
+      p_op_id: op_id,
+      p_motivo: motivo.trim(),
+    });
+    if (error) {
+      // Si la función no existe aún, guiar al SQL pendiente
+      if (/fn_anular_op/.test(error.message) && /not exist|no existe/i.test(error.message)) {
+        throw new Error(
+          "Falta correr el SQL 2026-07-20_anular_op.sql en Supabase (crea fn_anular_op).",
+        );
+      }
+      throw new Error(error.message);
+    }
   }
 
   async moverEtapa(cardId: string, etapa_id: number, nota?: string): Promise<void> {

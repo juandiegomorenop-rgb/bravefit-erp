@@ -102,7 +102,14 @@ function TarjetaOp({ card }: { card: OpCard }) {
         </div>
       )}
       <div className="flex items-baseline justify-between gap-2">
-        <b className="text-[12.5px]">{card.numero}</b>
+        <b className="text-[12.5px]">
+          {card.numero}
+          {card.anulada && (
+            <span className="ml-1.5 rounded-pill bg-rojo px-1.5 py-0.5 text-[9.5px] font-bold text-white">
+              ANULADA
+            </span>
+          )}
+        </b>
         <PillEntrega
           fecha_entrega_pactada={card.fecha_entrega_pactada}
           fecha_entregada={card.fecha_entregada}

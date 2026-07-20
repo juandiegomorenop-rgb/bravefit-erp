@@ -99,6 +99,11 @@ function FilaOp({
         <div className="flex items-center gap-2">
           <b>{card.numero}</b>
           {card.tipo === "garantia" && <BadgeGarantia />}
+          {card.anulada && (
+            <span className="rounded-pill bg-rojo px-2 py-0.5 text-[10px] font-bold text-white">
+              ANULADA
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-3">{card.cliente.nombre}</td>

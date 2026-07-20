@@ -59,6 +59,8 @@ export interface OpCard {
   fecha_entregada: string | null;
   items: OpItemConProducto[];
   garantia: Garantia | null; // solo tarjetas tipo 'garantia'
+  /** true si la OP fue anulada (solo aparece en el Archivo). */
+  anulada?: boolean;
 }
 
 export interface HistorialEtapaDetalle extends OpHistorialEtapa {
@@ -98,8 +100,10 @@ export interface FiltrosOps {
  *  (deja de estorbar en el tablero; se consulta con el filtro Archivo). */
 export const ARCHIVO_DIAS = 7;
 
-/** Una OP queda archivada cuando fue entregada hace más de ARCHIVO_DIAS. */
+/** Una OP queda archivada cuando fue entregada hace más de ARCHIVO_DIAS
+ *  o cuando fue ANULADA (esas van al archivo de inmediato). */
 export function esOpArchivada(card: OpCard, hoy: Date = new Date()): boolean {
+  if (card.anulada) return true;
   if (card.tipo !== "op" || !card.fecha_entregada) return false;
   const entregada = new Date(`${card.fecha_entregada}T00:00:00`);
   return (hoy.getTime() - entregada.getTime()) / 86_400_000 > ARCHIVO_DIAS;
@@ -168,6 +172,12 @@ export interface OpsRepository {
   listarOps(filtros?: FiltrosOps): Promise<OpCard[]>;
   obtenerOp(id: string): Promise<OpDetalle | null>;
   moverEtapa(cardId: string, etapa_id: number, nota?: string): Promise<void>;
+  /**
+   * Anula la OP (solo Admin): motivo obligatorio, bloqueada si está
+   * entregada o tiene despachos; si ya descontó BOM, reversa el
+   * inventario. La OP queda fuera del tablero (Archivo).
+   */
+  anularOp(op_id: string, motivo: string): Promise<void>;
   registrarDespacho(
     op_item_id: string,
     cantidad: number,
@@ -791,6 +801,25 @@ export class MockOpsRepository implements OpsRepository {
         .sort((a, b) => b.en.localeCompare(a.en)),
       garantias: this.garantias.filter((g) => g.op_id === op.id && g.activo),
     });
+  }
+
+  async anularOp(op_id: string, motivo: string): Promise<void> {
+    if (!motivo.trim()) throw new Error("El motivo de anulación es obligatorio");
+    const op = this.ops.find((o) => o.id === op_id && o.activo);
+    if (!op) throw new Error("La OP no existe o ya está anulada");
+    if (op.fecha_entregada) {
+      throw new Error(`La OP ${op.numero} ya fue entregada — no se puede anular`);
+    }
+    const items = this.itemsDeOp(op.id);
+    if (this.despachos.some((d) => items.some((i) => i.id === d.op_item_id))) {
+      throw new Error(
+        `La OP ${op.numero} tiene despachos registrados: deshágalos primero desde el detalle`,
+      );
+    }
+    op.activo = false;
+    op.eliminado_en = tsRel(0);
+    op.anulada_en = tsRel(0);
+    op.anulada_motivo = motivo.trim();
   }
 
   async moverEtapa(cardId: string, etapa_id: number, nota?: string): Promise<void> {
