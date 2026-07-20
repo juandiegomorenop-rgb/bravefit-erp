@@ -1,4 +1,4 @@
-import { getEntregasRepository } from "@/lib/data/entregas";
+import { getEntregasRepository } from "@/lib/data/entregas-server";
 import { EntregasClient } from "./EntregasClient";
 
 export const metadata = { title: "Entregas" };
