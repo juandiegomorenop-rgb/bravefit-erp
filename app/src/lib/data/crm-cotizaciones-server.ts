@@ -490,7 +490,10 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     });
   }
 
-  async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
+  async crear(
+    input: CotizacionInput,
+    oportunidadId?: string,
+  ): Promise<{ id: string; numero: string }> {
     validarInput(input);
     const supabase = await createClient();
 
@@ -539,7 +542,12 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     if (error) throw new Error(error.message);
 
     await this.insertarItems(cot.id, input.items);
-    await this.vincularAlEmbudo(cot.id, input.cliente_id, input.vendedor_id);
+    await this.vincularAlEmbudo(
+      cot.id,
+      input.cliente_id,
+      input.vendedor_id,
+      oportunidadId,
+    );
     return { id: cot.id, numero: cot.numero };
   }
 
@@ -555,6 +563,7 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     cotizacionId: string,
     cliente_id: string,
     vendedor_id: string,
+    oportunidadId?: string,
   ): Promise<void> {
     try {
       const supabase = await createClient();
@@ -575,6 +584,33 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
         lista.find((e) => e.nombre === "Elaborando Cotización y/o Render") ??
         lista.find((e) => !e.es_ganada && !e.es_perdida);
       if (!etapa) return;
+
+      // Cotizando una oportunidad EXISTENTE (botón del CRM): se le
+      // engancha la cotización y avanza de etapa — no nace otra ficha.
+      if (oportunidadId) {
+        const { data: opo } = await supabase
+          .from("oportunidades")
+          .select("*")
+          .eq("id", oportunidadId)
+          .eq("activo", true)
+          .maybeSingle();
+        if (opo && !opo.cotizacion_id) {
+          const actual = lista.find((e) => num(e.id) === num(opo.etapa_id));
+          const patch: Record<string, unknown> = {
+            cotizacion_id: cotizacionId,
+          };
+          if (actual && !actual.es_ganada && !actual.es_perdida) {
+            patch.etapa_id = etapa.id;
+          }
+          const { error } = await supabase
+            .from("oportunidades")
+            .update(patch)
+            .eq("id", oportunidadId);
+          if (error) throw new Error(error.message);
+          return;
+        }
+      }
+
       const { error } = await supabase.from("oportunidades").insert({
         cliente_id,
         vendedor_id,
@@ -1082,20 +1118,75 @@ export interface ClienteNuevoInput {
   direccion?: string | null;
 }
 
+/** Solo dígitos: compara teléfonos escritos de distintas formas
+ *  ("310 524 5471", "3105245471", "+57 310 5245471"). */
+const soloDigitos = (v: string | null | undefined) =>
+  (v ?? "").replace(/\D/g, "");
+
+/**
+ * Alta rápida de cliente con GUARDA ANTI-DUPLICADOS (pedido de Juan
+ * 20-jul-2026): antes de insertar busca uno existente por documento,
+ * por teléfono (comparando solo dígitos) o por nombre exacto. Si lo
+ * encuentra NO crea otro: devuelve el existente y COMPLETA los datos
+ * que traiga nuevos y estén vacíos (así el cliente "nombre+teléfono"
+ * se enriquece en vez de duplicarse).
+ */
 export async function crearClienteRapido(
   input: ClienteNuevoInput,
 ): Promise<Cliente> {
   const nombre = input.nombre.trim();
   if (!nombre) throw new Error("El nombre del cliente es obligatorio.");
   const supabase = await createClient();
+
+  const doc = input.nit_cedula?.trim() || null;
+  const telDigitos = soloDigitos(input.telefono);
+  const email = input.email?.trim().toLowerCase() || null;
+
+  const { data: candidatos } = await supabase
+    .from("clientes")
+    .select("*")
+    .eq("activo", true);
+
+  const existente = (candidatos ?? []).find((c: any) => {
+    if (doc && c.nit_cedula && c.nit_cedula.trim() === doc) return true;
+    if (
+      telDigitos.length >= 7 &&
+      soloDigitos(c.telefono).endsWith(telDigitos.slice(-7))
+    )
+      return true;
+    if (email && (c.email ?? "").toLowerCase() === email) return true;
+    return c.nombre.trim().toLowerCase() === nombre.toLowerCase();
+  });
+
+  if (existente) {
+    // Completar huecos con lo nuevo (no pisar datos ya cargados)
+    const parche: Record<string, string> = {};
+    if (!existente.nit_cedula && doc) parche.nit_cedula = doc;
+    if (!existente.telefono && input.telefono?.trim())
+      parche.telefono = input.telefono.trim();
+    if (!existente.email && email) parche.email = email;
+    if (!existente.direccion && input.direccion?.trim())
+      parche.direccion = input.direccion.trim();
+    if (Object.keys(parche).length) {
+      const { data: act } = await supabase
+        .from("clientes")
+        .update(parche)
+        .eq("id", existente.id)
+        .select("*")
+        .single();
+      if (act) return toCliente(act);
+    }
+    return toCliente(existente);
+  }
+
   const { data, error } = await supabase
     .from("clientes")
     .insert({
       tipo: input.tipo,
       nombre,
-      nit_cedula: input.nit_cedula?.trim() || null,
+      nit_cedula: doc,
       telefono: input.telefono?.trim() || null,
-      email: input.email?.trim() || null,
+      email,
       direccion: input.direccion?.trim() || null,
     })
     .select("*")

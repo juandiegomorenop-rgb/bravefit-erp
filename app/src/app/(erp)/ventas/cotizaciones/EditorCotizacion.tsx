@@ -21,9 +21,10 @@ import {
   totalLinea,
   type CotizacionItemConProducto,
 } from "@/lib/cotizacion-logic";
-import type {
-  CotizacionInput,
-  CotizacionItemInput,
+import {
+  vendedorPorDefecto,
+  type CotizacionInput,
+  type CotizacionItemInput,
 } from "@/lib/data/crm-cotizaciones";
 import { COLORES_ESTANDAR } from "@/lib/data/ops";
 import { formatCOP } from "@/lib/formato";
@@ -51,6 +52,10 @@ interface Props {
   cotizacionId?: string;
   numero?: string;
   inicial?: CotizacionInput;
+  /** Cliente/vendedor preseleccionados al cotizar desde el CRM. */
+  prefill?: { cliente_id: string; vendedor_id: string };
+  /** Oportunidad del embudo a la que se vinculará esta cotización. */
+  oportunidadId?: string;
 }
 
 interface Linea extends CotizacionItemInput {
@@ -134,13 +139,18 @@ export function EditorCotizacion({
   cotizacionId,
   numero,
   inicial,
+  prefill,
+  oportunidadId,
 }: Props) {
   const router = useRouter();
   // catálogo local: crece cuando se crea un producto desde el editor
   const [prods, setProds] = useState<Producto[]>(productos);
   const [cab, setCab] = useState<Omit<CotizacionInput, "items">>({
-    cliente_id: inicial?.cliente_id ?? "",
-    vendedor_id: inicial?.vendedor_id ?? vendedores[0]?.id ?? "",
+    cliente_id: inicial?.cliente_id ?? prefill?.cliente_id ?? "",
+    vendedor_id:
+      inicial?.vendedor_id ||
+      prefill?.vendedor_id ||
+      vendedorPorDefecto(vendedores),
     origen: inicial?.origen ?? "whatsapp",
     segmento: inicial?.segmento ?? "B2B",
     no_facturar: inicial?.no_facturar ?? false,
@@ -176,12 +186,16 @@ export function EditorCotizacion({
   const clientesEncontrados = useMemo(() => {
     const q = busquedaCli.trim().toLowerCase();
     if (!q) return [];
+    const qDigitos = q.replace(/\D/g, "");
     return clis
       .filter(
         (c) =>
           c.activo &&
           (c.nombre.toLowerCase().includes(q) ||
-            (c.nit_cedula ?? "").toLowerCase().includes(q)),
+            (c.nit_cedula ?? "").toLowerCase().includes(q) ||
+            // buscar también por teléfono evita crear duplicados
+            (qDigitos.length >= 4 &&
+              (c.telefono ?? "").replace(/\D/g, "").includes(qDigitos))),
       )
       .slice(0, 6);
   }, [busquedaCli, clis]);
@@ -455,7 +469,7 @@ export function EditorCotizacion({
     };
     const r = cotizacionId
       ? await actualizarCotizacion(cotizacionId, input)
-      : await crearCotizacion(input);
+      : await crearCotizacion(input, oportunidadId);
     setGuardando(false);
     if (!r.ok) {
       setError(r.error);

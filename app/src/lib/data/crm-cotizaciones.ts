@@ -150,8 +150,15 @@ export interface CotizacionInput {
 export interface CotizacionesRepository {
   listar(filtros?: FiltrosCotizaciones): Promise<CotizacionCard[]>;
   obtener(id: string): Promise<CotizacionDetalle | null>;
-  /** Crea en estado Borrador con el siguiente número BFP de la serie. */
-  crear(input: CotizacionInput): Promise<{ id: string; numero: string }>;
+  /**
+   * Crea en estado Borrador con el siguiente número de la serie.
+   * `oportunidadId`: si viene, la cotización se vincula a ESA
+   * oportunidad del embudo; si no, nace una tarjeta nueva.
+   */
+  crear(
+    input: CotizacionInput,
+    oportunidadId?: string,
+  ): Promise<{ id: string; numero: string }>;
   /** Solo borradores: reemplaza cabecera e ítems completos. */
   actualizar(id: string, input: CotizacionInput): Promise<void>;
   /** Borrador → Enviada (el documento queda listo para el cliente). */
@@ -182,6 +189,20 @@ export const ARCHIVO_DIAS_COTIZACION = 30;
 /** Días que una oportunidad cerrada (Ganado/Perdido) sigue visible en
  *  el embudo antes de pasar al Archivo del CRM. */
 export const ARCHIVO_DIAS_CRM = 7;
+
+/** Vendedor preseleccionado en cotizaciones y oportunidades nuevas
+ *  (regla de Juan: siempre Yohan; cambiar el nombre aquí si cambia
+ *  el comercial de cabecera). */
+const VENDEDOR_POR_DEFECTO = "yohan";
+export function vendedorPorDefecto(vendedores: Usuario[]): string {
+  return (
+    vendedores.find((v) =>
+      v.nombre.toLowerCase().includes(VENDEDOR_POR_DEFECTO),
+    )?.id ??
+    vendedores[0]?.id ??
+    ""
+  );
+}
 
 /**
  * Una oportunidad sale del embudo activo cuando ya cerró (Ganado —su OP
@@ -638,7 +659,10 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
     });
   }
 
-  async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
+  async crear(
+    input: CotizacionInput,
+    oportunidadId?: string,
+  ): Promise<{ id: string; numero: string }> {
     this.validarInput(input);
     const maxNum = Math.max(
       105,
@@ -671,11 +695,23 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
     });
     this.reemplazarItems(id, input.items);
     // Regla de Juan: TODA cotización queda en el embudo — nace su
-    // oportunidad en "Elaborando Cotización y/o Render".
+    // oportunidad en "Elaborando Cotización y/o Render" (o se engancha
+    // a la oportunidad existente si se cotizó desde el CRM).
     if (!this.store.oportunidades.some((o) => o.cotizacion_id === id && o.activo)) {
       const etapa =
         ETAPAS_CRM.find((e) => e.nombre === "Elaborando Cotización y/o Render") ??
         ETAPAS_CRM.find((e) => !e.es_ganada && !e.es_perdida)!;
+      const existente = oportunidadId
+        ? this.store.oportunidades.find(
+            (o) => o.id === oportunidadId && o.activo && !o.cotizacion_id,
+          )
+        : undefined;
+      if (existente) {
+        existente.cotizacion_id = id;
+        const actual = ETAPAS_CRM.find((e) => e.id === existente.etapa_id)!;
+        if (!actual.es_ganada && !actual.es_perdida) existente.etapa_id = etapa.id;
+        return { id, numero };
+      }
       this.store.oportunidades.push({
         id: `opo-${crypto.randomUUID().slice(0, 8)}`,
         cliente_id: input.cliente_id,

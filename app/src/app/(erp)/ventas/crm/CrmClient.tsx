@@ -7,6 +7,7 @@ import { diasEnEtapa } from "@/lib/cotizacion-logic";
 import {
   ARCHIVO_DIAS_CRM,
   esOportunidadArchivada,
+  vendedorPorDefecto,
   type FiltrosCrm,
   type OportunidadCard,
 } from "@/lib/data/crm-cotizaciones";
@@ -72,12 +73,16 @@ export function CrmClient({
   const clientesEncontrados = useMemo(() => {
     const q = busquedaCli.trim().toLowerCase();
     if (!q) return [];
+    const qDigitos = q.replace(/\D/g, "");
     return clis
       .filter(
         (c) =>
           c.activo &&
           (c.nombre.toLowerCase().includes(q) ||
-            (c.nit_cedula ?? "").toLowerCase().includes(q)),
+            (c.nit_cedula ?? "").toLowerCase().includes(q) ||
+            // buscar también por teléfono evita crear duplicados
+            (qDigitos.length >= 4 &&
+              (c.telefono ?? "").replace(/\D/g, "").includes(qDigitos))),
       )
       .slice(0, 6);
   }, [busquedaCli, clis]);
@@ -111,7 +116,7 @@ export function CrmClient({
     setGuardando(true);
     const r = await crearOportunidad({
       cliente_id: clienteId,
-      vendedor_id: nueva.vendedor_id || vendedores[0]?.id || "",
+      vendedor_id: nueva.vendedor_id || vendedorPorDefecto(vendedores),
       valor_estimado: nueva.valor ? Number(nueva.valor) || null : null,
       notas: nueva.notas.trim() || null,
     });
@@ -325,7 +330,7 @@ export function CrmClient({
               VENDEDOR *
               <select
                 className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
-                value={nueva.vendedor_id || vendedores[0]?.id || ""}
+                value={nueva.vendedor_id || vendedorPorDefecto(vendedores)}
                 onChange={(e) =>
                   setNueva({ ...nueva, vendedor_id: e.target.value })
                 }
@@ -488,13 +493,15 @@ export function CrmClient({
                     : "bg-kanban"
               } ${colDestino === etapa.id ? "ring-2 ring-dorado" : ""}`}
             >
-              <div className="flex items-center justify-between gap-2 px-1.5 pt-0.5">
-                <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-neutro">
+              <div className="flex items-start justify-between gap-2 px-1.5 pt-0.5">
+                {/* Nombre completo en 2 líneas si hace falta: etapas como
+                    "Elaborando Cotización y/o Render" no deben cortarse */}
+                <span className="flex min-w-0 items-start gap-1.5 text-[11.5px] font-bold uppercase leading-tight tracking-wider text-neutro">
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full"
+                    className="mt-1 h-2 w-2 shrink-0 rounded-full"
                     style={{ background: etapa.color ?? "#5a5a5a" }}
                   />
-                  <span className="truncate">{etapa.nombre}</span>
+                  <span className="break-words">{etapa.nombre}</span>
                 </span>
                 <span className="shrink-0 text-[11.5px] font-semibold text-neutro">
                   {fichas.length}
@@ -580,9 +587,14 @@ function TarjetaOportunidad({ card }: { card: OportunidadCard }) {
             {!card.cotizacion.tiene_items && " · vacía"}
           </Link>
         ) : (
-          <span className="rounded-pill bg-neutro-bg px-2 py-0.5 text-[10.5px] font-bold text-neutro">
-            Sin cotización
-          </span>
+          <Link
+            href={`/ventas/cotizaciones/nueva?cliente=${card.cliente.id}&vendedor=${card.vendedor.id}&oportunidad=${card.oportunidad.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Crear la cotización de esta oportunidad (queda vinculada a esta ficha)"
+            className="rounded-pill border border-dorado bg-dorado-suave px-2 py-0.5 text-[10.5px] font-bold text-dorado-oscuro hover:border-dorado-oscuro"
+          >
+            ＋ Cotizar
+          </Link>
         )}
         {card.op && (
           <Link

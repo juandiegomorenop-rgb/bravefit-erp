@@ -21,9 +21,11 @@ export type AccionCotizacionResp =
 
 export async function crearCotizacion(
   input: CotizacionInput,
+  /** Oportunidad del CRM a la que se vincula (en vez de crear otra). */
+  oportunidadId?: string,
 ): Promise<AccionCotizacionResp> {
   try {
-    const r = await getCotizacionesRepository().crear(input);
+    const r = await getCotizacionesRepository().crear(input, oportunidadId);
     return { ok: true, ...r };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo crear" };
