@@ -27,7 +27,7 @@ import { kpisDashboard } from "@/lib/data/dashboard-server";
 import { getEntregasRepository } from "@/lib/data/entregas-server";
 import { estadoBuffer } from "@/lib/data/inventario";
 import { getInventarioRepository } from "@/lib/data/inventario-server";
-import { getOpsRepository } from "@/lib/data/ops-server";
+import { bomDeProductos, getOpsRepository } from "@/lib/data/ops-server";
 import { getRrhhRepository } from "@/lib/data/rrhh";
 import type { RangoFechas } from "@/lib/data/mercadeo";
 import type { Modulo } from "@/lib/permisos";
@@ -213,6 +213,191 @@ export const HERRAMIENTAS: HerramientaChat[] = [
         proximas_a_vencer: kpis.produccion.proximas_vencer,
         por_etapa: kpis.produccion.por_etapa,
         lista_vencidas: vencidas.slice(0, 25),
+      };
+    },
+  },
+  {
+    name: "materiales_para_ops",
+    modulo: "produccion",
+    description:
+      "Cruza el BOM (despiece) de una o varias OPs contra el inventario de materia prima: cuánto requiere cada material, cuánto hay disponible y cuánto FALTA comprar. Acepta números de OP completos o parciales (ej. 'OP_WA_0007' o solo '0007'). Úsala para '¿qué material necesito para estas OPs?', '¿alcanza el inventario para…?', '¿qué falta comprar para fabricar…?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ops: {
+          type: "array",
+          items: { type: "string" },
+          description: "Números de OP, completos o parciales.",
+        },
+      },
+      required: ["ops"],
+      additionalProperties: false,
+    },
+    claves: [
+      "material",
+      "materiales",
+      "necesito",
+      "falta",
+      "faltante",
+      "alcanza",
+      "bom",
+      "despiece",
+      "platina",
+      "platinas",
+      "comprar para",
+    ],
+    async ejecutar(input) {
+      const pedidos = ((input.ops as string[] | undefined) ?? [])
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+      if (!pedidos.length) {
+        return { error: "Indica al menos un número de OP (ej. OP_WA_0007)." };
+      }
+      const norm = (s: string) => s.toUpperCase().replace(/[\s\-–]/g, "_");
+      const cards = (await getOpsRepository().listarOps()).filter(
+        (c) => c.tipo === "op" && !c.anulada,
+      );
+
+      const porId = new Map<string, (typeof cards)[number]>();
+      const noEncontradas: string[] = [];
+      for (const q of pedidos) {
+        const matches = cards.filter((c) => norm(c.numero).includes(norm(q)));
+        if (!matches.length) noEncontradas.push(q);
+        matches.forEach((c) => porId.set(c.op_id, c));
+      }
+      const ops = [...porId.values()];
+      if (!ops.length) {
+        return {
+          error: "Ninguna OP coincidió con esos números.",
+          ops_no_encontradas: noEncontradas,
+        };
+      }
+
+      const bom = await bomDeProductos(
+        ops.flatMap((c) => c.items.map((i) => i.producto_id)),
+      );
+      const requerido = new Map<string, number>();
+      const sinBom = new Set<string>();
+      for (const c of ops) {
+        for (const it of c.items) {
+          const comps = bom.get(it.producto_id) ?? [];
+          if (!comps.length) {
+            sinBom.add(it.producto.nombre);
+            continue;
+          }
+          for (const comp of comps) {
+            const clave = comp.material_nombre ?? comp.descripcion;
+            requerido.set(
+              clave,
+              (requerido.get(clave) ?? 0) + comp.cantidad * it.cantidad,
+            );
+          }
+        }
+      }
+
+      const mp = await getInventarioRepository().listarExistenciasMP();
+      const disponible = new Map(
+        mp.map((e) => [e.material.nombre, e.existencia.cantidad_disponible]),
+      );
+      const materiales = [...requerido.entries()]
+        .map(([material, req]) => {
+          const disp = disponible.get(material) ?? 0;
+          return {
+            material,
+            requerido: req,
+            disponible: disp,
+            faltante: Math.max(0, req - disp),
+          };
+        })
+        .sort((a, b) => b.faltante - a.faltante || b.requerido - a.requerido);
+
+      return {
+        ops_analizadas: ops.map((c) => c.numero),
+        ops_no_encontradas: noEncontradas,
+        materiales,
+        faltantes: materiales.filter((m) => m.faltante > 0),
+        productos_sin_bom: [...sinBom],
+        nota: "El BOM cargado hoy cubre platinas e impresión 3D; tubería, tornillería y otros insumos aún no están en la BD (esos no aparecen en este cálculo).",
+      };
+    },
+  },
+  {
+    name: "agenda_entregas",
+    modulo: "produccion",
+    description:
+      "Agenda de entregas e instalaciones: OPs activas con fecha de entrega pactada en los próximos N días (7 por defecto), separando las que requieren instalación, más las vencidas que siguen pendientes. Úsala para '¿qué instalaciones tengo esta semana?', '¿qué se entrega esta semana?', 'agenda de entregas'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        dias: {
+          type: "integer",
+          description: "Horizonte en días hacia adelante (1–60). Por defecto 7.",
+        },
+      },
+      additionalProperties: false,
+    },
+    claves: [
+      "instalacion",
+      "instalación",
+      "instalaciones",
+      "agenda",
+      "entregar",
+      "entregas esta",
+      "semana",
+      "proximas entregas",
+      "próximas entregas",
+    ],
+    async ejecutar(input) {
+      const dias = Math.max(1, Math.min(60, Number(input.dias) || 7));
+      const ops = getOpsRepository();
+      const [cards, etapas] = await Promise.all([
+        ops.listarOps(),
+        ops.listarEtapas(),
+      ]);
+      const etapaNombre = (id: number) =>
+        etapas.find((e) => e.id === id)?.nombre ?? "—";
+      const hoy = hoyISO();
+      const limite = new Date(Date.now() + dias * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+
+      const activas = cards.filter(
+        (c) =>
+          c.tipo === "op" &&
+          !c.anulada &&
+          !c.fecha_entregada &&
+          c.fecha_entrega_pactada,
+      );
+      const fila = (c: (typeof activas)[number]) => ({
+        numero: c.numero,
+        cliente: c.cliente.nombre,
+        ciudad: c.ciudad?.nombre ?? null,
+        entrega_pactada: c.fecha_entrega_pactada,
+        etapa: etapaNombre(c.etapa_id),
+        requiere_instalacion: c.requiere_instalacion,
+      });
+      const enVentana = activas
+        .filter(
+          (c) =>
+            c.fecha_entrega_pactada! >= hoy && c.fecha_entrega_pactada! <= limite,
+        )
+        .sort((a, b) =>
+          a.fecha_entrega_pactada!.localeCompare(b.fecha_entrega_pactada!),
+        );
+
+      return {
+        horizonte_dias: dias,
+        instalaciones: enVentana.filter((c) => c.requiere_instalacion).map(fila),
+        entregas_sin_instalacion: enVentana
+          .filter((c) => !c.requiere_instalacion)
+          .map(fila),
+        vencidas_pendientes: activas
+          .filter((c) => c.fecha_entrega_pactada! < hoy)
+          .sort((a, b) =>
+            a.fecha_entrega_pactada!.localeCompare(b.fecha_entrega_pactada!),
+          )
+          .map(fila)
+          .slice(0, 25),
       };
     },
   },
