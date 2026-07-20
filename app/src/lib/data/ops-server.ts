@@ -560,19 +560,37 @@ class SupabaseOpsRepository implements OpsRepository {
       .single();
     if (cErr) throw new Error(cErr.message);
 
-    // numeración global OP_<ABBR>_#### (consecutivo entre todos los orígenes)
+    // Numeración global OP_<ABBR>_#### — la sigla dice DE DÓNDE VINO EL
+    // PEDIDO (WhatsApp, planner, showroom, Shopify). Si la OP nace de una
+    // cotización ganada, hereda el origen de ESA cotización: "COT" no es
+    // un origen (toda OP nace de una venta) y perdía el rastro del lead.
     const ABBR: Record<string, string> = {
       whatsapp: "WA",
       planner: "BFP",
       shopify: "SPFY",
-      cotizacion: "COT",
       showroom: "SR",
+      chat: "CHAT",
+      manual: "MAN",
     };
-    const abbr = ABBR[input.origen_clave] ?? input.origen_clave.slice(0, 3).toUpperCase();
-    const { count } = await supabase
-      .from("ordenes_pedido")
-      .select("id", { count: "exact", head: true });
-    const numero = `OP_${abbr}_${String((count ?? 0) + 1).padStart(4, "0")}`;
+    let claveOrigen = input.origen_clave;
+    if (input.cotizacion_id) {
+      const { data: cot } = await supabase
+        .from("cotizaciones")
+        .select("origen")
+        .eq("id", input.cotizacion_id)
+        .maybeSingle();
+      if (cot?.origen) claveOrigen = cot.origen;
+    }
+    const abbr = ABBR[claveOrigen] ?? claveOrigen.slice(0, 3).toUpperCase();
+    // Consecutivo ATÓMICO desde la tabla `secuencias` (antes se contaban
+    // las OPs: dos altas simultáneas producían el mismo número).
+    const { data: numRaw, error: nErr } = await supabase.rpc(
+      "fn_siguiente_numero",
+      { p_clave: "op" },
+    );
+    if (nErr) throw new Error(nErr.message);
+    const digitos = String(numRaw).replace(/\D/g, "").padStart(4, "0");
+    const numero = `OP_${abbr}_${digitos}`;
 
     // comercializados puros → entran a Cola esperando proveedor
     const prodIds = input.items.map((i) => i.producto_id);
