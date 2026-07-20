@@ -539,7 +539,55 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     if (error) throw new Error(error.message);
 
     await this.insertarItems(cot.id, input.items);
+    await this.vincularAlEmbudo(cot.id, input.cliente_id, input.vendedor_id);
     return { id: cot.id, numero: cot.numero };
+  }
+
+  /**
+   * Regla de Juan (19-jul-2026): TODA cotización, venga de donde venga,
+   * queda en el embudo CRM. Al crearla nace su oportunidad en
+   * "Elaborando Cotización y/o Render"; al marcarla Enviada pasa a
+   * "Cotizado". (El endpoint del planner crea la suya aparte — aquí se
+   * verifica que no exista antes de insertar.) Si el embudo falla, la
+   * cotización NO se pierde: se avisa por consola y sigue.
+   */
+  private async vincularAlEmbudo(
+    cotizacionId: string,
+    cliente_id: string,
+    vendedor_id: string,
+  ): Promise<void> {
+    try {
+      const supabase = await createClient();
+      const { data: existente } = await supabase
+        .from("oportunidades")
+        .select("id")
+        .eq("cotizacion_id", cotizacionId)
+        .eq("activo", true)
+        .maybeSingle();
+      if (existente) return;
+      const { data: etapas } = await supabase
+        .from("etapas_crm")
+        .select("*")
+        .eq("activo", true)
+        .order("orden");
+      const lista = etapas ?? [];
+      const etapa =
+        lista.find((e) => e.nombre === "Elaborando Cotización y/o Render") ??
+        lista.find((e) => !e.es_ganada && !e.es_perdida);
+      if (!etapa) return;
+      const { error } = await supabase.from("oportunidades").insert({
+        cliente_id,
+        vendedor_id,
+        cotizacion_id: cotizacionId,
+        etapa_id: etapa.id,
+      });
+      if (error) throw new Error(error.message);
+    } catch (e) {
+      console.warn(
+        "No se pudo vincular la cotización al embudo CRM:",
+        e instanceof Error ? e.message : e,
+      );
+    }
   }
 
   async actualizar(id: string, input: CotizacionInput): Promise<void> {
@@ -594,6 +642,36 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
       .update({ estado_id: enviada.id })
       .eq("id", id);
     if (error) throw new Error(error.message);
+
+    // Embudo sincronizado: la oportunidad de esta cotización avanza a
+    // "Cotizado" (si sigue viva y no está ganada/perdida).
+    try {
+      const { data: opo } = await supabase
+        .from("oportunidades")
+        .select("*")
+        .eq("cotizacion_id", id)
+        .eq("activo", true)
+        .maybeSingle();
+      if (!opo) return;
+      const { data: etapas } = await supabase
+        .from("etapas_crm")
+        .select("*")
+        .eq("activo", true);
+      const lista = etapas ?? [];
+      const actual = lista.find((e) => num(e.id) === num(opo.etapa_id));
+      const cotizado = lista.find((e) => e.nombre === "Cotizado");
+      if (cotizado && actual && !actual.es_ganada && !actual.es_perdida) {
+        await supabase
+          .from("oportunidades")
+          .update({ etapa_id: cotizado.id })
+          .eq("id", opo.id);
+      }
+    } catch (e) {
+      console.warn(
+        "No se pudo mover la oportunidad a Cotizado:",
+        e instanceof Error ? e.message : e,
+      );
+    }
   }
 
   async listarClientes(): Promise<Cliente[]> {

@@ -648,6 +648,26 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
       creado_en: hoy.toISOString(),
     });
     this.reemplazarItems(id, input.items);
+    // Regla de Juan: TODA cotización queda en el embudo — nace su
+    // oportunidad en "Elaborando Cotización y/o Render".
+    if (!this.store.oportunidades.some((o) => o.cotizacion_id === id && o.activo)) {
+      const etapa =
+        ETAPAS_CRM.find((e) => e.nombre === "Elaborando Cotización y/o Render") ??
+        ETAPAS_CRM.find((e) => !e.es_ganada && !e.es_perdida)!;
+      this.store.oportunidades.push({
+        id: `opo-${crypto.randomUUID().slice(0, 8)}`,
+        cliente_id: input.cliente_id,
+        cotizacion_id: id,
+        etapa_id: etapa.id,
+        vendedor_id: input.vendedor_id,
+        valor_estimado: null,
+        notas: null,
+        movida_en: tsRel(0),
+        activo: true,
+        eliminado_en: null,
+        creado_en: tsRel(0),
+      });
+    }
     return { id, numero };
   }
 
@@ -685,6 +705,18 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
       throw new Error("No se puede enviar una cotización sin ítems");
     }
     cot.estado_id = ESTADOS.find((e) => e.nombre === "Enviada")!.id;
+    // Embudo sincronizado: la oportunidad avanza a "Cotizado"
+    const opo = this.store.oportunidades.find(
+      (o) => o.cotizacion_id === id && o.activo,
+    );
+    if (opo) {
+      const actual = ETAPAS_CRM.find((e) => e.id === opo.etapa_id)!;
+      const cotizado = ETAPAS_CRM.find((e) => e.nombre === "Cotizado");
+      if (cotizado && !actual.es_ganada && !actual.es_perdida) {
+        opo.etapa_id = cotizado.id;
+        opo.movida_en = tsRel(0);
+      }
+    }
   }
 
   async anular(id: string): Promise<void> {
