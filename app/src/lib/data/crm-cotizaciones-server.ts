@@ -75,7 +75,13 @@ function toCliente(r: any): Cliente {
   };
 }
 function toUsuario(r: any): Usuario {
-  return { id: r.id, rol_id: num(r.rol_id), nombre: r.nombre, email: r.email, activo: r.activo };
+  return {
+    id: r.id,
+    rol_id: num(r.rol_id),
+    nombre: r.nombre,
+    email: r.email,
+    activo: r.activo,
+  };
 }
 function toCiudad(r: any): Ciudad {
   return { id: num(r.id), nombre: r.nombre, departamento: r.departamento };
@@ -144,8 +150,17 @@ function toItem(r: any): CotizacionItem {
     recargos: r.recargos ?? [],
   };
 }
+/** Ordena filas crudas de cotizacion_items por su orden manual (drag & drop). */
+function ordenarItems<T extends { orden?: number | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
 function toEstado(r: any): EstadoCotizacion {
-  return { id: num(r.id), nombre: r.nombre, orden: num(r.orden), activo: r.activo };
+  return {
+    id: num(r.id),
+    nombre: r.nombre,
+    orden: num(r.orden),
+    activo: r.activo,
+  };
 }
 function toEtapaCrm(r: any): EtapaCrm {
   return {
@@ -187,8 +202,10 @@ function validarInput(input: CotizacionInput): void {
     if (!it.producto_id && !it.descripcion?.trim()) {
       throw new Error("Todo ítem libre necesita descripción");
     }
-    if (it.cantidad <= 0) throw new Error("Las cantidades deben ser mayores a 0");
-    if (it.precio_unit < 0) throw new Error("Los precios no pueden ser negativos");
+    if (it.cantidad <= 0)
+      throw new Error("Las cantidades deben ser mayores a 0");
+    if (it.precio_unit < 0)
+      throw new Error("Los precios no pueden ser negativos");
     if (it.descuento_pct < 0 || it.descuento_pct > 100) {
       throw new Error("El descuento por línea va de 0 a 100%");
     }
@@ -211,9 +228,12 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
       .select("*, productos(*)")
       .in("cotizacion_id", cotIds);
     if (error) throw new Error(error.message);
-    for (const r of (data ?? []) as any[]) {
+    for (const r of ordenarItems((data ?? []) as any[])) {
       const arr = map.get(r.cotizacion_id) ?? [];
-      arr.push({ ...toItem(r), producto: r.productos ? toProducto(r.productos) : null });
+      arr.push({
+        ...toItem(r),
+        producto: r.productos ? toProducto(r.productos) : null,
+      });
       map.set(r.cotizacion_id, arr);
     }
     return map;
@@ -221,17 +241,21 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
 
   async listar(filtros: FiltrosCotizaciones = {}): Promise<CotizacionCard[]> {
     const supabase = await createClient();
-    const [{ data: cots, error }, { data: clientes }, { data: usuarios }, estados] =
-      await Promise.all([
-        supabase
-          .from("cotizaciones")
-          .select("*")
-          .eq("activo", true)
-          .order("creado_en", { ascending: false }),
-        supabase.from("clientes").select("*"),
-        supabase.from("usuarios").select("*"),
-        this.listarEstados(),
-      ]);
+    const [
+      { data: cots, error },
+      { data: clientes },
+      { data: usuarios },
+      estados,
+    ] = await Promise.all([
+      supabase
+        .from("cotizaciones")
+        .select("*")
+        .eq("activo", true)
+        .order("creado_en", { ascending: false }),
+      supabase.from("clientes").select("*"),
+      supabase.from("usuarios").select("*"),
+      this.listarEstados(),
+    ]);
     if (error) throw new Error(error.message);
 
     const cliMap = new Map((clientes ?? []).map((c) => [c.id, toCliente(c)]));
@@ -255,9 +279,13 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
         } satisfies CotizacionCard;
       })
       .filter((c) => {
-        if (filtros.estado_id !== undefined && c.estado.id !== filtros.estado_id)
+        if (
+          filtros.estado_id !== undefined &&
+          c.estado.id !== filtros.estado_id
+        )
           return false;
-        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id) return false;
+        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id)
+          return false;
         if (filtros.segmento && c.cotizacion.segmento !== filtros.segmento)
           return false;
         if (q) {
@@ -285,7 +313,11 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     const [{ data: cli }, { data: vend }, estados, itemsMap, { data: opo }] =
       await Promise.all([
         supabase.from("clientes").select("*").eq("id", cot.cliente_id).single(),
-        supabase.from("usuarios").select("*").eq("id", cot.vendedor_id).single(),
+        supabase
+          .from("usuarios")
+          .select("*")
+          .eq("id", cot.vendedor_id)
+          .single(),
         this.listarEstados(),
         this.itemsDe([cot.id]),
         supabase
@@ -332,23 +364,39 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
   ): Promise<void> {
     if (!items.length) return;
     const supabase = await createClient();
-    const { error } = await supabase.from("cotizacion_items").insert(
-      items.map((it) => ({
-        cotizacion_id: cotizacionId,
-        producto_id: it.producto_id,
-        descripcion: it.descripcion,
-        es_transporte: it.es_transporte,
-        aplica_iva: it.aplica_iva,
-        cantidad: it.cantidad,
-        precio_unit: it.precio_unit,
-        descuento_pct: it.descuento_pct,
-        alto_override_cm: it.alto_override_cm,
-        fondo_override_cm: it.fondo_override_cm,
-        color: it.color,
-        recargos: it.recargos ?? [],
-      })),
-    );
-    if (error) throw new Error(error.message);
+    // El orden del array ES el orden manual (drag & drop del editor).
+    const filas = items.map((it, idx) => ({
+      cotizacion_id: cotizacionId,
+      producto_id: it.producto_id,
+      descripcion: it.descripcion,
+      es_transporte: it.es_transporte,
+      aplica_iva: it.aplica_iva,
+      cantidad: it.cantidad,
+      precio_unit: it.precio_unit,
+      descuento_pct: it.descuento_pct,
+      alto_override_cm: it.alto_override_cm,
+      fondo_override_cm: it.fondo_override_cm,
+      color: it.color,
+      recargos: it.recargos ?? [],
+      orden: idx,
+    }));
+    const { error } = await supabase.from("cotizacion_items").insert(filas);
+    if (error) {
+      // Si la columna `orden` aún no existe (falta correr el SQL
+      // 2026-07-19_cotizacion_items_orden.sql), guardar sin ella.
+      if (/orden/.test(error.message)) {
+        console.warn(
+          "cotizacion_items.orden no existe aún — guardando sin orden manual:",
+          error.message,
+        );
+        const { error: e2 } = await supabase
+          .from("cotizacion_items")
+          .insert(filas.map(({ orden, ...f }) => f));
+        if (e2) throw new Error(e2.message);
+        return;
+      }
+      throw new Error(error.message);
+    }
   }
 
   async crear(input: CotizacionInput): Promise<{ id: string; numero: string }> {
@@ -442,7 +490,9 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     const det = await this.obtener(id);
     if (!det) throw new Error(`Cotización ${id} no existe`);
     if (det.estado.nombre !== "Borrador") {
-      throw new Error(`La ${det.cotizacion.numero} ya está ${det.estado.nombre}`);
+      throw new Error(
+        `La ${det.cotizacion.numero} ya está ${det.estado.nombre}`,
+      );
     }
     if (!det.items.length) {
       throw new Error("No se puede enviar una cotización sin ítems");
@@ -494,22 +544,32 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
 // ---------------------------------------------------------------
 
 class SupabaseCrmRepository implements CrmRepository {
-  async listarOportunidades(filtros: FiltrosCrm = {}): Promise<OportunidadCard[]> {
+  async listarOportunidades(
+    filtros: FiltrosCrm = {},
+  ): Promise<OportunidadCard[]> {
     const supabase = await createClient();
-    const [{ data: opos, error }, { data: clientes }, { data: usuarios }, { data: estados }] =
-      await Promise.all([
-        supabase.from("oportunidades").select("*").eq("activo", true),
-        supabase.from("clientes").select("*"),
-        supabase.from("usuarios").select("*"),
-        supabase.from("estados_cotizacion").select("*"),
-      ]);
+    const [
+      { data: opos, error },
+      { data: clientes },
+      { data: usuarios },
+      { data: estados },
+    ] = await Promise.all([
+      supabase.from("oportunidades").select("*").eq("activo", true),
+      supabase.from("clientes").select("*"),
+      supabase.from("usuarios").select("*"),
+      supabase.from("estados_cotizacion").select("*"),
+    ]);
     if (error) throw new Error(error.message);
 
     const cliMap = new Map((clientes ?? []).map((c) => [c.id, toCliente(c)]));
     const usrMap = new Map((usuarios ?? []).map((u) => [u.id, toUsuario(u)]));
-    const estMap = new Map((estados ?? []).map((e) => [num(e.id), e.nombre as string]));
+    const estMap = new Map(
+      (estados ?? []).map((e) => [num(e.id), e.nombre as string]),
+    );
 
-    const cotIds = [...new Set((opos ?? []).map((o) => o.cotizacion_id).filter(Boolean))];
+    const cotIds = [
+      ...new Set((opos ?? []).map((o) => o.cotizacion_id).filter(Boolean)),
+    ];
     const cotMap = new Map<string, Cotizacion>();
     const itemsMap = new Map<string, CotizacionItemConProducto[]>();
     if (cotIds.length) {
@@ -522,9 +582,12 @@ class SupabaseCrmRepository implements CrmRepository {
         .from("cotizacion_items")
         .select("*, productos(*)")
         .in("cotizacion_id", cotIds as string[]);
-      for (const r of (its ?? []) as any[]) {
+      for (const r of ordenarItems((its ?? []) as any[])) {
         const arr = itemsMap.get(r.cotizacion_id) ?? [];
-        arr.push({ ...toItem(r), producto: r.productos ? toProducto(r.productos) : null });
+        arr.push({
+          ...toItem(r),
+          producto: r.productos ? toProducto(r.productos) : null,
+        });
         itemsMap.set(r.cotizacion_id, arr);
       }
     }
@@ -553,9 +616,14 @@ class SupabaseCrmRepository implements CrmRepository {
         } satisfies OportunidadCard;
       })
       .filter((c) => {
-        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id) return false;
+        if (filtros.vendedor_id && c.vendedor.id !== filtros.vendedor_id)
+          return false;
         if (q) {
-          const blob = [c.cliente.nombre, c.cotizacion?.numero ?? "", c.oportunidad.notas ?? ""]
+          const blob = [
+            c.cliente.nombre,
+            c.cotizacion?.numero ?? "",
+            c.oportunidad.notas ?? "",
+          ]
             .join(" ")
             .toLowerCase();
           if (!blob.includes(q)) return false;
@@ -606,9 +674,12 @@ class SupabaseCrmRepository implements CrmRepository {
         )
       : null;
     const { data: itemsRaw } = cot
-      ? await supabase.from("cotizacion_items").select("*").eq("cotizacion_id", cot.id)
+      ? await supabase
+          .from("cotizacion_items")
+          .select("*")
+          .eq("cotizacion_id", cot.id)
       : { data: [] as any[] };
-    const items = (itemsRaw ?? []).map(toItem);
+    const items = ordenarItems((itemsRaw ?? []) as any[]).map(toItem);
     if (!cot || items.length === 0) {
       throw new Error(
         "Para ganar la oportunidad necesita una cotización con ítems. " +
@@ -622,7 +693,9 @@ class SupabaseCrmRepository implements CrmRepository {
       .eq("id", oportunidad_id);
     if (uErr) {
       if (/sin una cotización con ítems/i.test(uErr.message)) {
-        throw new Error("Para ganar la oportunidad necesita una cotización con ítems.");
+        throw new Error(
+          "Para ganar la oportunidad necesita una cotización con ítems.",
+        );
       }
       throw new Error(uErr.message);
     }
@@ -709,7 +782,9 @@ export async function listarProductosCatalogo(): Promise<Producto[]> {
 
 export async function listarDimensiones(): Promise<ProductoDimension[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("producto_dimensiones").select("*");
+  const { data, error } = await supabase
+    .from("producto_dimensiones")
+    .select("*");
   if (error) throw new Error(error.message);
   return (data ?? []).map((r: any) => ({
     id: r.id,
@@ -752,7 +827,9 @@ export interface ProductoNuevoInput {
   es_rack?: boolean;
 }
 
-export async function crearProducto(input: ProductoNuevoInput): Promise<Producto> {
+export async function crearProducto(
+  input: ProductoNuevoInput,
+): Promise<Producto> {
   const nombre = input.nombre.trim();
   const sku = input.sku.trim();
   if (!nombre || !sku) throw new Error("Nombre y SKU son obligatorios.");
@@ -800,7 +877,9 @@ export interface ClienteNuevoInput {
   direccion?: string | null;
 }
 
-export async function crearClienteRapido(input: ClienteNuevoInput): Promise<Cliente> {
+export async function crearClienteRapido(
+  input: ClienteNuevoInput,
+): Promise<Cliente> {
   const nombre = input.nombre.trim();
   if (!nombre) throw new Error("El nombre del cliente es obligatorio.");
   const supabase = await createClient();

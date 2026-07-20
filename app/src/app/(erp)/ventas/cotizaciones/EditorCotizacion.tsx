@@ -1,7 +1,21 @@
 "use client";
 
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   calcularTotales,
   totalLinea,
@@ -51,6 +65,60 @@ let seq = 0;
 const nuevaKey = () => `ln-${++seq}-${Date.now()}`;
 
 /**
+ * Fila arrastrable del editor: handle ⠿ + número de ítem. El orden
+ * del array `lineas` es el que se guarda (cotizacion_items.orden).
+ */
+function SortableLinea({
+  id,
+  indice,
+  children,
+}: {
+  id: string;
+  indice: number;
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: transform
+          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+          : undefined,
+        transition,
+      }}
+      className={`flex gap-2.5 rounded-[10px] border bg-sutil p-3.5 ${
+        isDragging ? "relative z-10 border-dorado shadow-lg" : "border-borde"
+      }`}
+    >
+      <div className="flex flex-col items-center gap-1.5 pt-1">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none text-[16px] leading-none text-neutro hover:text-carbon active:cursor-grabbing"
+          aria-label={`Arrastrar para reordenar el ítem ${indice + 1}`}
+          title="Arrastrar para reordenar"
+        >
+          ⠿
+        </button>
+        <span className="rounded bg-neutro-bg px-1.5 py-0.5 text-[10.5px] font-bold text-neutro">
+          #{indice + 1}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/**
  * Editor de cotizaciones — crea/edita BORRADORES con la lógica del
  * formato oficial: precio sugerido = lista + $/cm extra por dimensión
  * + recargo ATO 8% si el color no es estándar; descuento POR LÍNEA;
@@ -84,7 +152,11 @@ export function EditorCotizacion({
     notas: inicial?.notas ?? null,
   });
   const [lineas, setLineas] = useState<Linea[]>(
-    (inicial?.items ?? []).map((i) => ({ ...i, _key: nuevaKey(), _precioManual: true })),
+    (inicial?.items ?? []).map((i) => ({
+      ...i,
+      _key: nuevaKey(),
+      _precioManual: true,
+    })),
   );
   const [busqueda, setBusqueda] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +287,9 @@ export function EditorCotizacion({
     ] as const) {
       const d = dimsDe(p.id).find((x) => x.eje === eje);
       if (d && valor !== null && valor > d.default_cm) {
-        const monto = Math.round((valor - d.default_cm) * d.precio_por_cm_extra);
+        const monto = Math.round(
+          (valor - d.default_cm) * d.precio_por_cm_extra,
+        );
         base += monto;
         recargos.push({
           recargo_id: null,
@@ -229,7 +303,9 @@ export function EditorCotizacion({
     const colorLimpio = color?.trim();
     if (
       colorLimpio &&
-      !COLORES_ESTANDAR.some((c) => c.toLowerCase() === colorLimpio.toLowerCase())
+      !COLORES_ESTANDAR.some(
+        (c) => c.toLowerCase() === colorLimpio.toLowerCase(),
+      )
     ) {
       const monto = Math.round((base * RECARGO_ATO_PCT) / 100);
       recargos.push({
@@ -289,6 +365,21 @@ export function EditorCotizacion({
     ]);
   }
 
+  // Drag & drop: reordenar líneas (el array es la fuente del orden)
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+  function alSoltarLinea(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setLineas((ls) => {
+      const desde = ls.findIndex((l) => l._key === active.id);
+      const hasta = ls.findIndex((l) => l._key === over.id);
+      if (desde < 0 || hasta < 0) return ls;
+      return arrayMove(ls, desde, hasta);
+    });
+  }
+
   function actualizarLinea(key: string, patch: Partial<Linea>) {
     setLineas((ls) =>
       ls.map((l) => {
@@ -297,9 +388,16 @@ export function EditorCotizacion({
         // recalcular precio sugerido salvo que el precio sea manual
         const p = prods.find((x) => x.id === next.producto_id);
         const cambioDeConfig =
-          "alto_override_cm" in patch || "fondo_override_cm" in patch || "color" in patch;
+          "alto_override_cm" in patch ||
+          "fondo_override_cm" in patch ||
+          "color" in patch;
         if (p && cambioDeConfig && !next._precioManual) {
-          const s = sugerir(p, next.alto_override_cm, next.fondo_override_cm, next.color);
+          const s = sugerir(
+            p,
+            next.alto_override_cm,
+            next.fondo_override_cm,
+            next.color,
+          );
           next.precio_unit = s.precio;
           next.recargos = s.recargos;
         }
@@ -340,7 +438,8 @@ export function EditorCotizacion({
       .filter(
         (p) =>
           p.activo &&
-          (p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)),
+          (p.nombre.toLowerCase().includes(q) ||
+            p.sku.toLowerCase().includes(q)),
       )
       .slice(0, 6);
   }, [busqueda, prods]);
@@ -420,7 +519,9 @@ export function EditorCotizacion({
                         }}
                         className="block w-full px-3 py-2 text-left hover:bg-sutil"
                       >
-                        <span className="block text-[13px] font-semibold">{c.nombre}</span>
+                        <span className="block text-[13px] font-semibold">
+                          {c.nombre}
+                        </span>
                         <span className="text-[11px] font-normal text-neutro">
                           {c.nit_cedula ?? "sin documento"}
                           {c.telefono ? ` · ${c.telefono}` : ""}
@@ -451,7 +552,9 @@ export function EditorCotizacion({
                   className={inputCls}
                   placeholder="Nombre / Razón social *"
                   value={nuevoCli.nombre}
-                  onChange={(e) => setNuevoCli({ ...nuevoCli, nombre: e.target.value })}
+                  onChange={(e) =>
+                    setNuevoCli({ ...nuevoCli, nombre: e.target.value })
+                  }
                 />
                 <span className="flex gap-1.5">
                   <select
@@ -481,7 +584,9 @@ export function EditorCotizacion({
                   className={inputCls}
                   placeholder="Teléfono"
                   value={nuevoCli.telefono}
-                  onChange={(e) => setNuevoCli({ ...nuevoCli, telefono: e.target.value })}
+                  onChange={(e) =>
+                    setNuevoCli({ ...nuevoCli, telefono: e.target.value })
+                  }
                 />
                 <span className="flex gap-2">
                   <button
@@ -531,7 +636,9 @@ export function EditorCotizacion({
               onChange={(e) =>
                 setCab({
                   ...cab,
-                  origen: e.target.value as NonNullable<CotizacionInput["origen"]>,
+                  origen: e.target.value as NonNullable<
+                    CotizacionInput["origen"]
+                  >,
                 })
               }
             >
@@ -564,7 +671,9 @@ export function EditorCotizacion({
             TIEMPO DE ENTREGA EN DÍAS HÁBILES (sale bajo el total del documento)
             <span className="flex items-center gap-3">
               <span className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-neutro">FABRICADOS</span>
+                <span className="text-[11px] font-bold text-neutro">
+                  FABRICADOS
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -574,7 +683,9 @@ export function EditorCotizacion({
                 />
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-neutro">COMERCIALIZADOS</span>
+                <span className="text-[11px] font-bold text-neutro">
+                  COMERCIALIZADOS
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -583,7 +694,9 @@ export function EditorCotizacion({
                   onChange={(e) => setDias(diasFab, e.target.value)}
                 />
               </span>
-              <span className="text-[11px] text-neutro">{cab.tiempo_entrega}</span>
+              <span className="text-[11px] text-neutro">
+                {cab.tiempo_entrega}
+              </span>
             </span>
           </label>
           <div className="flex flex-col justify-end gap-2 pb-1">
@@ -591,7 +704,9 @@ export function EditorCotizacion({
               <input
                 type="checkbox"
                 checked={cab.no_facturar}
-                onChange={(e) => setCab({ ...cab, no_facturar: e.target.checked })}
+                onChange={(e) =>
+                  setCab({ ...cab, no_facturar: e.target.checked })
+                }
               />
               No facturar (no va a Siigo)
             </label>
@@ -603,7 +718,9 @@ export function EditorCotizacion({
                   setCab({
                     ...cab,
                     pago_anticipado_completo: e.target.checked,
-                    descuento_pct: e.target.checked ? cab.descuento_pct || 5 : 0,
+                    descuento_pct: e.target.checked
+                      ? cab.descuento_pct || 5
+                      : 0,
                   })
                 }
               />
@@ -655,14 +772,20 @@ export function EditorCotizacion({
                   >
                     {p.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imagen_url} alt="" className="h-9 w-9 object-contain" />
+                      <img
+                        src={p.imagen_url}
+                        alt=""
+                        className="h-9 w-9 object-contain"
+                      />
                     ) : (
                       <span className="flex h-9 w-9 items-center justify-center rounded bg-neutro-bg text-[10px] font-bold text-neutro">
                         {p.sku.slice(3, 5)}
                       </span>
                     )}
                     <span className="flex-1">
-                      <span className="block text-[13px] font-semibold">{p.nombre}</span>
+                      <span className="block text-[13px] font-semibold">
+                        {p.nombre}
+                      </span>
                       <span className="text-[11px] text-neutro">
                         {p.sku} · {p.origen === "comercializado" ? "PC" : "PP"}
                       </span>
@@ -716,20 +839,27 @@ export function EditorCotizacion({
                 className={`${inputCls} lg:col-span-2`}
                 placeholder="Nombre del producto *"
                 value={nuevoProd.nombre}
-                onChange={(e) => setNuevoProd({ ...nuevoProd, nombre: e.target.value })}
+                onChange={(e) =>
+                  setNuevoProd({ ...nuevoProd, nombre: e.target.value })
+                }
               />
               <input
                 className={inputCls}
                 placeholder="SKU * (ej. 3NuevoProd)"
                 value={nuevoProd.sku}
-                onChange={(e) => setNuevoProd({ ...nuevoProd, sku: e.target.value })}
+                onChange={(e) =>
+                  setNuevoProd({ ...nuevoProd, sku: e.target.value })
+                }
               />
               <select
                 aria-label="Categoría del producto nuevo"
                 className={inputCls}
                 value={nuevoProd.categoria_id}
                 onChange={(e) =>
-                  setNuevoProd({ ...nuevoProd, categoria_id: Number(e.target.value) })
+                  setNuevoProd({
+                    ...nuevoProd,
+                    categoria_id: Number(e.target.value),
+                  })
                 }
               >
                 {categorias.map((c) => (
@@ -758,7 +888,9 @@ export function EditorCotizacion({
                 min={0}
                 placeholder="Precio lista (IVA incl.)"
                 value={nuevoProd.precio}
-                onChange={(e) => setNuevoProd({ ...nuevoProd, precio: e.target.value })}
+                onChange={(e) =>
+                  setNuevoProd({ ...nuevoProd, precio: e.target.value })
+                }
               />
             </div>
             <div className="mt-2.5 flex gap-2">
@@ -787,167 +919,199 @@ export function EditorCotizacion({
           </p>
         )}
 
-        <div className="mt-4 space-y-3">
-          {lineas.map((l) => {
-            const p = prods.find((x) => x.id === l.producto_id);
-            const dims = p ? dimsDe(p.id) : [];
-            const dAlto = dims.find((d) => d.eje === "alto");
-            const dFondo = dims.find((d) => d.eje === "fondo");
-            return (
-              <div key={l._key} className="rounded-[10px] border border-borde bg-sutil p-3.5">
-                <div className="flex flex-wrap items-start gap-3">
-                  {p?.imagen_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imagen_url} alt="" className="h-12 w-12 object-contain" />
-                  )}
-                  <div className="min-w-[200px] flex-1">
-                    {p ? (
-                      <>
-                        <b className="text-[13.5px]">{p.nombre}</b>
-                        <span className="ml-2 text-[11px] text-neutro">
-                          {p.sku} · {p.origen === "comercializado" ? "PC 100%" : "PP 60/40"}
-                        </span>
-                      </>
-                    ) : (
-                      <input
-                        className={`${inputCls} w-full`}
-                        placeholder="Descripción del ítem…"
-                        value={l.descripcion ?? ""}
-                        onChange={(e) =>
-                          actualizarLinea(l._key, { descripcion: e.target.value })
+        <DndContext
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          onDragEnd={alSoltarLinea}
+        >
+          <SortableContext
+            items={lineas.map((l) => l._key)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="mt-4 space-y-3">
+              {lineas.map((l, idx) => {
+                const p = prods.find((x) => x.id === l.producto_id);
+                const dims = p ? dimsDe(p.id) : [];
+                const dAlto = dims.find((d) => d.eje === "alto");
+                const dFondo = dims.find((d) => d.eje === "fondo");
+                return (
+                  <SortableLinea key={l._key} id={l._key} indice={idx}>
+                    <div className="flex flex-wrap items-start gap-3">
+                      {p?.imagen_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.imagen_url}
+                          alt=""
+                          className="h-12 w-12 object-contain"
+                        />
+                      )}
+                      <div className="min-w-[200px] flex-1">
+                        {p ? (
+                          <>
+                            <b className="text-[13.5px]">{p.nombre}</b>
+                            <span className="ml-2 text-[11px] text-neutro">
+                              {p.sku} ·{" "}
+                              {p.origen === "comercializado"
+                                ? "PC 100%"
+                                : "PP 60/40"}
+                            </span>
+                          </>
+                        ) : (
+                          <input
+                            className={`${inputCls} w-full`}
+                            placeholder="Descripción del ítem…"
+                            value={l.descripcion ?? ""}
+                            onChange={(e) =>
+                              actualizarLinea(l._key, {
+                                descripcion: e.target.value,
+                              })
+                            }
+                          />
+                        )}
+                        {l.recargos.length > 0 && (
+                          <p className="mt-1 text-[11px] text-dorado-oscuro">
+                            {l.recargos.map((r) => r.nombre).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLineas((ls) => ls.filter((x) => x._key !== l._key))
                         }
-                      />
-                    )}
-                    {l.recargos.length > 0 && (
-                      <p className="mt-1 text-[11px] text-dorado-oscuro">
-                        {l.recargos.map((r) => r.nombre).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLineas((ls) => ls.filter((x) => x._key !== l._key))
-                    }
-                    className="text-[18px] leading-none text-neutro hover:text-rojo"
-                    aria-label="Quitar ítem"
-                  >
-                    ×
-                  </button>
-                </div>
+                        className="text-[18px] leading-none text-neutro hover:text-rojo"
+                        aria-label="Quitar ítem"
+                      >
+                        ×
+                      </button>
+                    </div>
 
-                <div className="mt-2.5 flex flex-wrap items-end gap-3 text-[11.5px] font-bold text-neutro">
-                  <label className="flex flex-col gap-1">
-                    CANT
-                    <input
-                      type="number"
-                      min={1}
-                      className={`${inputCls} w-[72px]`}
-                      value={l.cantidad}
-                      onChange={(e) =>
-                        actualizarLinea(l._key, { cantidad: Number(e.target.value) || 1 })
-                      }
-                    />
-                  </label>
-                  {dAlto && (
-                    <label className="flex flex-col gap-1">
-                      ALTO CM ({dAlto.min_cm}–{dAlto.max_cm}, base {dAlto.default_cm})
-                      <input
-                        type="number"
-                        min={dAlto.min_cm}
-                        max={dAlto.max_cm}
-                        placeholder={String(dAlto.default_cm)}
-                        className={`${inputCls} w-[130px]`}
-                        value={l.alto_override_cm ?? ""}
-                        onChange={(e) =>
-                          actualizarLinea(l._key, {
-                            alto_override_cm: e.target.value ? Number(e.target.value) : null,
-                          })
-                        }
-                      />
-                    </label>
-                  )}
-                  {dFondo && (
-                    <label className="flex flex-col gap-1">
-                      FONDO CM ({dFondo.min_cm}–{dFondo.max_cm}, base {dFondo.default_cm})
-                      <input
-                        type="number"
-                        min={dFondo.min_cm}
-                        max={dFondo.max_cm}
-                        placeholder={String(dFondo.default_cm)}
-                        className={`${inputCls} w-[140px]`}
-                        value={l.fondo_override_cm ?? ""}
-                        onChange={(e) =>
-                          actualizarLinea(l._key, {
-                            fondo_override_cm: e.target.value ? Number(e.target.value) : null,
-                          })
-                        }
-                      />
-                    </label>
-                  )}
-                  {p && (
-                    <label className="flex flex-col gap-1">
-                      COLOR (fuera de estándar = ATO +8%)
-                      <input
-                        list="colores-estandar"
-                        className={`${inputCls} w-[150px]`}
-                        value={l.color ?? ""}
-                        onChange={(e) =>
-                          actualizarLinea(l._key, { color: e.target.value || null })
-                        }
-                      />
-                    </label>
-                  )}
-                  <label className="flex flex-col gap-1">
-                    PRECIO UNIT. (COP con IVA)
-                    <input
-                      type="number"
-                      min={0}
-                      className={`${inputCls} w-[130px] ${l._precioManual ? "border-dorado" : ""}`}
-                      value={l.precio_unit}
-                      onChange={(e) =>
-                        actualizarLinea(l._key, {
-                          precio_unit: Number(e.target.value) || 0,
-                          _precioManual: true,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    % DESC
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      className={`${inputCls} w-[70px]`}
-                      value={l.descuento_pct}
-                      onChange={(e) =>
-                        actualizarLinea(l._key, {
-                          descuento_pct: Number(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </label>
-                  {!p && (
-                    <label className="flex items-center gap-1.5 pb-2 text-[12px] font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={l.aplica_iva}
-                        onChange={(e) =>
-                          actualizarLinea(l._key, { aplica_iva: e.target.checked })
-                        }
-                      />
-                      Aplica IVA
-                    </label>
-                  )}
-                  <span className="ml-auto pb-2 text-[14px] font-extrabold text-carbon">
-                    {formatCOP(totalLinea(l))}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    <div className="mt-2.5 flex flex-wrap items-end gap-3 text-[11.5px] font-bold text-neutro">
+                      <label className="flex flex-col gap-1">
+                        CANT
+                        <input
+                          type="number"
+                          min={1}
+                          className={`${inputCls} w-[72px]`}
+                          value={l.cantidad}
+                          onChange={(e) =>
+                            actualizarLinea(l._key, {
+                              cantidad: Number(e.target.value) || 1,
+                            })
+                          }
+                        />
+                      </label>
+                      {dAlto && (
+                        <label className="flex flex-col gap-1">
+                          ALTO CM ({dAlto.min_cm}–{dAlto.max_cm}, base{" "}
+                          {dAlto.default_cm})
+                          <input
+                            type="number"
+                            min={dAlto.min_cm}
+                            max={dAlto.max_cm}
+                            placeholder={String(dAlto.default_cm)}
+                            className={`${inputCls} w-[130px]`}
+                            value={l.alto_override_cm ?? ""}
+                            onChange={(e) =>
+                              actualizarLinea(l._key, {
+                                alto_override_cm: e.target.value
+                                  ? Number(e.target.value)
+                                  : null,
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      {dFondo && (
+                        <label className="flex flex-col gap-1">
+                          FONDO CM ({dFondo.min_cm}–{dFondo.max_cm}, base{" "}
+                          {dFondo.default_cm})
+                          <input
+                            type="number"
+                            min={dFondo.min_cm}
+                            max={dFondo.max_cm}
+                            placeholder={String(dFondo.default_cm)}
+                            className={`${inputCls} w-[140px]`}
+                            value={l.fondo_override_cm ?? ""}
+                            onChange={(e) =>
+                              actualizarLinea(l._key, {
+                                fondo_override_cm: e.target.value
+                                  ? Number(e.target.value)
+                                  : null,
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      {p && (
+                        <label className="flex flex-col gap-1">
+                          COLOR (fuera de estándar = ATO +8%)
+                          <input
+                            list="colores-estandar"
+                            className={`${inputCls} w-[150px]`}
+                            value={l.color ?? ""}
+                            onChange={(e) =>
+                              actualizarLinea(l._key, {
+                                color: e.target.value || null,
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      <label className="flex flex-col gap-1">
+                        PRECIO UNIT. (COP con IVA)
+                        <input
+                          type="number"
+                          min={0}
+                          className={`${inputCls} w-[130px] ${l._precioManual ? "border-dorado" : ""}`}
+                          value={l.precio_unit}
+                          onChange={(e) =>
+                            actualizarLinea(l._key, {
+                              precio_unit: Number(e.target.value) || 0,
+                              _precioManual: true,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        % DESC
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          className={`${inputCls} w-[70px]`}
+                          value={l.descuento_pct}
+                          onChange={(e) =>
+                            actualizarLinea(l._key, {
+                              descuento_pct: Number(e.target.value) || 0,
+                            })
+                          }
+                        />
+                      </label>
+                      {!p && (
+                        <label className="flex items-center gap-1.5 pb-2 text-[12px] font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={l.aplica_iva}
+                            onChange={(e) =>
+                              actualizarLinea(l._key, {
+                                aplica_iva: e.target.checked,
+                              })
+                            }
+                          />
+                          Aplica IVA
+                        </label>
+                      )}
+                      <span className="ml-auto pb-2 text-[14px] font-extrabold text-carbon">
+                        {formatCOP(totalLinea(l))}
+                      </span>
+                    </div>
+                  </SortableLinea>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
         <datalist id="colores-estandar">
           {COLORES_ESTANDAR.map((c) => (
             <option key={c} value={c} />
@@ -960,7 +1124,8 @@ export function EditorCotizacion({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-[12.5px] text-neutro">
             <span>
-              Subtotal <b className="text-carbon">{formatCOP(totales.subtotal)}</b>
+              Subtotal{" "}
+              <b className="text-carbon">{formatCOP(totales.subtotal)}</b>
             </span>
             <span>
               IVA <b className="text-carbon">{formatCOP(totales.iva)}</b>
@@ -968,14 +1133,20 @@ export function EditorCotizacion({
             {totales.descuentoMonto > 0 && (
               <span>
                 Descuento{" "}
-                <b className="text-dorado-oscuro">-{formatCOP(totales.descuentoMonto)}</b>
+                <b className="text-dorado-oscuro">
+                  -{formatCOP(totales.descuentoMonto)}
+                </b>
               </span>
             )}
             <span>
-              Total <b className="text-[15px] text-dorado-oscuro">{formatCOP(totales.total)}</b>
+              Total{" "}
+              <b className="text-[15px] text-dorado-oscuro">
+                {formatCOP(totales.total)}
+              </b>
             </span>
             <span>
-              Pago inicial <b className="text-carbon">{formatCOP(totales.pagoInicial)}</b>
+              Pago inicial{" "}
+              <b className="text-carbon">{formatCOP(totales.pagoInicial)}</b>
             </span>
           </div>
           <div className="flex gap-2.5">
