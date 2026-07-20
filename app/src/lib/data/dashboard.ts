@@ -16,7 +16,7 @@ import {
   getMercadeoRepository,
   type RangoFechas,
 } from "@/lib/data/mercadeo";
-import { getOpsRepository } from "@/lib/data/ops";
+import { getOpsRepository, type OpCard } from "@/lib/data/ops";
 import { getRrhhRepository } from "@/lib/data/rrhh";
 
 // ---------------------------------------------------------------
@@ -126,8 +126,138 @@ function mulberry(seed: number) {
 }
 
 const MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-function etiquetaMes(anio: number, mes0: number): string {
+export function etiquetaMes(anio: number, mes0: number): string {
   return `${MESES_ES[mes0]} ${String(anio).slice(2)}`;
+}
+
+// ---------------------------------------------------------------
+// Cálculo de KPIs — función PURA compartida por mock y Supabase:
+// ventas/producción/logística se derivan de las tarjetas de OPs; los
+// agregados de rrhh/mercadeo/récord/pipeline los aporta cada repo.
+// ---------------------------------------------------------------
+
+export interface FuentesKpis {
+  cards: OpCard[];
+  etapas: { id: number; nombre: string }[];
+  garantias_abiertas: number;
+  rrhh: KpisDashboard["rrhh"];
+  mercadeo: KpisDashboard["mercadeo"];
+  pipeline_valor: number;
+  record: { n: number; etiqueta: string };
+}
+
+export function calcularKpis(f: FuentesKpis, rango: RangoFechas): KpisDashboard {
+  const opsReales = f.cards.filter((c) => c.tipo === "op");
+  const enRango = (iso: string | null) =>
+    iso ? iso.slice(0, 10) >= rango.desde && iso.slice(0, 10) <= rango.hasta : false;
+
+  // --- Ventas (desde OPs del rango + sus ítems) ---
+  const opsDelRango = opsReales.filter((c) => enRango(c.fecha_creacion));
+  const valorOp = (c: OpCard) =>
+    c.items.reduce((a, i) => a + i.cantidad * i.precio_unit, 0);
+  const total_periodo = opsDelRango.reduce((a, c) => a + valorOp(c), 0);
+
+  const acumular = (
+    pairs: [string, number][],
+  ): { nombre: string; valor: number }[] => {
+    const m = new Map<string, number>();
+    for (const [k, v] of pairs) m.set(k, (m.get(k) ?? 0) + v);
+    return [...m.entries()]
+      .map(([nombre, valor]) => ({ nombre, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  };
+
+  const por_canal = acumular(opsDelRango.map((c) => [c.origen.nombre, valorOp(c)]));
+  const por_ciudad = acumular(
+    opsDelRango.map((c) => [c.ciudad?.nombre ?? "Sin ciudad", valorOp(c)]),
+  ).slice(0, 6);
+
+  const prodMap = new Map<string, { unidades: number; valor: number }>();
+  for (const c of opsDelRango) {
+    for (const it of c.items) {
+      const cur = prodMap.get(it.producto.nombre) ?? { unidades: 0, valor: 0 };
+      cur.unidades += it.cantidad;
+      cur.valor += it.cantidad * it.precio_unit;
+      prodMap.set(it.producto.nombre, cur);
+    }
+  }
+  const top_productos = [...prodMap.entries()]
+    .map(([nombre, v]) => ({ nombre, ...v }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 6);
+
+  // por vendedor REAL (op.vendedor, heredado de la cotización); las OPs sin
+  // vendedor (Shopify) se agrupan como "Tienda online".
+  const por_vendedor = acumular(
+    opsDelRango.map((c) => [
+      c.vendedor?.nombre ??
+        (c.origen.clave === "shopify" ? "Tienda online" : "Sin asignar"),
+      valorOp(c),
+    ]),
+  );
+
+  // --- Producción ---
+  const activas = opsReales.filter((c) => !c.fecha_entregada);
+  const etapaNombre = (id: number) =>
+    f.etapas.find((e) => e.id === id)?.nombre ?? "—";
+  const por_etapa = f.etapas
+    .map((e) => ({
+      etapa: e.nombre,
+      n: activas.filter((c) => c.etapa_id === e.id).length,
+    }))
+    .filter((x) => x.n > 0);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const dias = (fecha: string) =>
+    Math.round((new Date(fecha).getTime() - new Date(hoy).getTime()) / MS_DIA);
+  const vencidas = activas.filter(
+    (c) => c.fecha_entrega_pactada && c.fecha_entrega_pactada < hoy,
+  ).length;
+  const proximas_vencer = activas.filter((c) => {
+    if (!c.fecha_entrega_pactada || c.fecha_entrega_pactada < hoy) return false;
+    return dias(c.fecha_entrega_pactada) <= 14;
+  }).length;
+
+  // --- Logística (entregas) ---
+  const entregadas = opsReales.filter((c) => c.fecha_entregada);
+  const anioActual = hoy.slice(0, 4);
+  const mesActual = hoy.slice(0, 7);
+  const entregas_mes = entregadas.filter((c) =>
+    c.fecha_entregada!.startsWith(mesActual),
+  ).length;
+  const entregas_anio = entregadas.filter((c) =>
+    c.fecha_entregada!.startsWith(anioActual),
+  ).length;
+
+  return {
+    ventas: {
+      total_periodo,
+      pedidos: opsDelRango.length,
+      ticket_promedio: opsDelRango.length
+        ? Math.round(total_periodo / opsDelRango.length)
+        : 0,
+      por_canal,
+      por_ciudad,
+      top_productos,
+      por_vendedor,
+      pipeline_valor: f.pipeline_valor,
+    },
+    produccion: {
+      ops_activas: activas.length,
+      en_cola: activas.filter((c) => etapaNombre(c.etapa_id) === "En Cola").length,
+      por_etapa,
+      vencidas,
+      proximas_vencer,
+    },
+    logistica: {
+      entregas_mes,
+      entregas_anio,
+      record_mes: f.record.n,
+      record_etiqueta: f.record.etiqueta,
+      garantias_abiertas: f.garantias_abiertas,
+    },
+    rrhh: f.rrhh,
+    mercadeo: f.mercadeo,
+  };
 }
 
 /** Genera los últimos `meses` como {anio, mes0, clave 'YYYY-MM'}. */
@@ -235,128 +365,28 @@ export class MockDashboardRepository implements DashboardRepository {
         mkt.cacRoas(rango),
       ]);
 
-    const opsReales = cards.filter((c) => c.tipo === "op");
-    const enRango = (iso: string | null) =>
-      iso ? iso.slice(0, 10) >= rango.desde && iso.slice(0, 10) <= rango.hasta : false;
-
-    // --- Ventas (desde OPs del rango + sus ítems) ---
-    const opsDelRango = opsReales.filter((c) => enRango(c.fecha_creacion));
-    const valorOp = (c: (typeof opsReales)[number]) =>
-      c.items.reduce((a, i) => a + i.cantidad * i.precio_unit, 0);
-    const total_periodo = opsDelRango.reduce((a, c) => a + valorOp(c), 0);
-
-    const acumular = (
-      pairs: [string, number][],
-    ): { nombre: string; valor: number }[] => {
-      const m = new Map<string, number>();
-      for (const [k, v] of pairs) m.set(k, (m.get(k) ?? 0) + v);
-      return [...m.entries()]
-        .map(([nombre, valor]) => ({ nombre, valor }))
-        .sort((a, b) => b.valor - a.valor);
-    };
-
-    const por_canal = acumular(opsDelRango.map((c) => [c.origen.nombre, valorOp(c)]));
-    const por_ciudad = acumular(
-      opsDelRango.map((c) => [c.ciudad?.nombre ?? "Sin ciudad", valorOp(c)]),
-    ).slice(0, 6);
-
-    const prodMap = new Map<string, { unidades: number; valor: number }>();
-    for (const c of opsDelRango) {
-      for (const it of c.items) {
-        const cur = prodMap.get(it.producto.nombre) ?? { unidades: 0, valor: 0 };
-        cur.unidades += it.cantidad;
-        cur.valor += it.cantidad * it.precio_unit;
-        prodMap.set(it.producto.nombre, cur);
-      }
-    }
-    const top_productos = [...prodMap.entries()]
-      .map(([nombre, v]) => ({ nombre, ...v }))
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 6);
-
-    // por vendedor REAL (op.vendedor, heredado de la cotización); las OPs sin
-    // vendedor (Shopify) se agrupan como "Tienda online".
-    const por_vendedor = acumular(
-      opsDelRango.map((c) => [
-        c.vendedor?.nombre ??
-          (c.origen.clave === "shopify" ? "Tienda online" : "Sin asignar"),
-        valorOp(c),
-      ]),
-    );
-
-    // --- Producción ---
-    const activas = opsReales.filter(
-      (c) => !c.fecha_entregada,
-    );
-    const etapaNombre = (id: number) => etapas.find((e) => e.id === id)?.nombre ?? "—";
-    const por_etapa = etapas
-      .map((e) => ({
-        etapa: e.nombre,
-        n: activas.filter((c) => c.etapa_id === e.id).length,
-      }))
-      .filter((x) => x.n > 0);
-    const hoy = new Date().toISOString().slice(0, 10);
-    const dias = (f: string) =>
-      Math.round((new Date(f).getTime() - new Date(hoy).getTime()) / MS_DIA);
-    const vencidas = activas.filter(
-      (c) => c.fecha_entrega_pactada && c.fecha_entrega_pactada < hoy,
-    ).length;
-    const proximas_vencer = activas.filter((c) => {
-      if (!c.fecha_entrega_pactada || c.fecha_entrega_pactada < hoy) return false;
-      return dias(c.fecha_entrega_pactada) <= 14;
-    }).length;
-
-    // --- Logística (entregas) ---
-    const entregadas = opsReales.filter((c) => c.fecha_entregada);
-    const anioActual = hoy.slice(0, 4);
-    const mesActual = hoy.slice(0, 7);
-    const entregas_mes = entregadas.filter((c) =>
-      c.fecha_entregada!.startsWith(mesActual),
-    ).length;
-    const entregas_anio = entregadas.filter((c) =>
-      c.fecha_entregada!.startsWith(anioActual),
-    ).length;
-
-    return {
-      ventas: {
-        total_periodo,
-        pedidos: opsDelRango.length,
-        ticket_promedio: opsDelRango.length
-          ? Math.round(total_periodo / opsDelRango.length)
-          : 0,
-        por_canal,
-        por_ciudad,
-        top_productos,
-        por_vendedor,
-        pipeline_valor: 0, // se completa abajo si hace falta
-      },
-      produccion: {
-        ops_activas: activas.length,
-        en_cola: activas.filter((c) => etapaNombre(c.etapa_id) === "En Cola").length,
-        por_etapa,
-        vencidas,
-        proximas_vencer,
-      },
-      logistica: {
-        entregas_mes,
-        entregas_anio,
-        record_mes: 12, // récord histórico (ver módulo Entregas)
-        record_etiqueta: "dic 2025",
+    return calcularKpis(
+      {
+        cards,
+        etapas,
         garantias_abiertas: garantias.length,
+        rrhh: {
+          empleados: empleados.length,
+          tecnicos: empleados.filter((e) => e.empleado.es_tecnico).length,
+          de_vacaciones: empleados.filter((e) => e.regresaEl).length,
+          vacaciones_pendientes: vacaciones.length,
+        },
+        mercadeo: {
+          leads: embudo.total,
+          tasa_cierre: embudo.tasa_cierre,
+          roas_meta: cacRoas.find((c) => c.canal === "Meta Ads")?.roas ?? null,
+          valor_ganado: embudo.valor_ganado,
+        },
+        pipeline_valor: 0,
+        record: { n: 12, etiqueta: "dic 2025" }, // récord del histórico mock
       },
-      rrhh: {
-        empleados: empleados.length,
-        tecnicos: empleados.filter((e) => e.empleado.es_tecnico).length,
-        de_vacaciones: empleados.filter((e) => e.regresaEl).length,
-        vacaciones_pendientes: vacaciones.length,
-      },
-      mercadeo: {
-        leads: embudo.total,
-        tasa_cierre: embudo.tasa_cierre,
-        roas_meta: cacRoas.find((c) => c.canal === "Meta Ads")?.roas ?? null,
-        valor_ganado: embudo.valor_ganado,
-      },
-    };
+      rango,
+    );
   }
 }
 

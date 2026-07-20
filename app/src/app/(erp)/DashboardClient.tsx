@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type {
-  CapacidadTuberia,
-  CuelloBotella,
-  KpisDashboard,
-} from "@/lib/data/dashboard";
+import type { KpisDashboard } from "@/lib/data/dashboard";
 import { formatCOP } from "@/lib/formato";
 
 export type PeriodoDash = "mes" | "trimestre" | "anio";
@@ -14,8 +10,6 @@ export type PeriodoDash = "mes" | "trimestre" | "anio";
 interface Props {
   periodo: PeriodoDash;
   kpis: KpisDashboard;
-  capacidad: CapacidadTuberia;
-  cuellos: CuelloBotella[];
 }
 
 const num = (n: number) => n.toLocaleString("es-CO");
@@ -28,7 +22,7 @@ const PERIODOS: { clave: PeriodoDash; nombre: string }[] = [
   { clave: "anio", nombre: "Este año" },
 ];
 
-export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
+export function DashboardClient({ periodo, kpis }: Props) {
   const router = useRouter();
 
   return (
@@ -58,64 +52,23 @@ export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
         </div>
       </div>
 
-      {/* ================= CAPACIDAD DE PLANTA (estrella) ================= */}
-      <Tema titulo="🏭 Capacidad de planta" sub="Indicador crítico: tubería cuadrada 70×70 mm — la materia prima que nos copa">
-        <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-          <div className="rounded-card border border-borde bg-card p-5">
-            <p className="mb-1 text-[13px] font-bold">
-              Metros lineales de tubería 70×70 — procesados vs. vendidos por mes
-            </p>
-            <p className="mb-3 text-[11.5px] text-neutro">
-              Procesado = lo que ENTREGAMOS (del BOM de racks/jaulas/rigs). Vendido =
-              la demanda del mes. Cuando el vendido supera al procesado, se acumula
-              trabajo: ahí se ve el tope de la planta.
-            </p>
-            <GraficoCapacidad cap={capacidad} />
-          </div>
-          <div className="flex flex-col gap-3">
-            <KpiGrande
-              titulo="Capacidad demostrada (techo)"
-              valor={`${num(capacidad.techo_m)} m`}
-              nota={`Mejor mes: ${capacidad.mes_techo}`}
-              destacar
-            />
-            <KpiGrande
-              titulo="Promedio procesado / mes"
-              valor={`${num(capacidad.promedio_m)} m`}
-              nota={`Utilización ~${pct(capacidad.promedio_m / capacidad.techo_m)}`}
-            />
-            <KpiGrande
-              titulo="Meses con demanda > capacidad"
-              valor={`${capacidad.meses_sobre_capacidad} / 12`}
-              nota={
-                capacidad.meses_sobre_capacidad > 0
-                  ? "En esos meses la venta nos copó la planta"
-                  : "La planta cubrió toda la demanda"
-              }
-            />
-          </div>
-        </div>
-
-        {/* Cuellos de botella */}
-        <p className="mb-2 mt-5 text-[13px] font-bold">
-          Otros cuellos de botella (unidades/mes)
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {cuellos.map((c) => (
-            <div key={c.nombre} className="rounded-card border border-borde bg-card p-4">
-              <p className="text-[12.5px] font-semibold">{c.nombre}</p>
-              <div className="mt-1 flex items-end justify-between">
-                <span className="text-[22px] font-extrabold">{num(c.promedio)}</span>
-                <span
-                  className={`text-[12px] font-bold ${c.tendencia >= 0 ? "text-verde" : "text-rojo"}`}
-                >
-                  {c.tendencia >= 0 ? "▲" : "▼"} {Math.abs(Math.round(c.tendencia))}%
-                </span>
-              </div>
-              <p className="text-[11px] text-neutro">promedio/mes · {num(c.total)} en 12m</p>
-              <Sparkline serie={c.serie.map((s) => s.cantidad)} />
-            </div>
-          ))}
+      {/* ================= CAPACIDAD DE PLANTA (estrella) =================
+          Oculta hasta cargar el BOM de tubería: sin metros reales por
+          producto el indicador sería inventado (decisión Juan 20-jul). */}
+      <Tema
+        titulo="🏭 Capacidad de planta"
+        sub="Indicador crítico: tubería cuadrada 70×70 mm — la materia prima que nos copa"
+      >
+        <div className="rounded-card border border-dashed border-borde bg-card p-6 text-center">
+          <p className="text-[13.5px] font-semibold text-neutro">
+            📐 Se activará cuando el BOM de tubería esté cargado en el catálogo.
+          </p>
+          <p className="mx-auto mt-1 max-w-[560px] text-[12px] text-neutro">
+            Este indicador se calcula con los metros reales de tubería por
+            producto entregado (procesado vs. vendido por mes y el techo de
+            capacidad de la planta). Hoy solo está cargado el BOM de platinas —
+            cuando carguemos el de tubería, aparece solo.
+          </p>
         </div>
       </Tema>
 
@@ -125,7 +78,7 @@ export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
           <Kpi titulo="Ventas del periodo" valor={formatCOP(kpis.ventas.total_periodo)} />
           <Kpi titulo="Pedidos" valor={num(kpis.ventas.pedidos)} />
           <Kpi titulo="Ticket promedio" valor={formatCOP(kpis.ventas.ticket_promedio)} />
-          <Kpi titulo="Valor ganado (mkt)" valor={formatCOP(kpis.mercadeo.valor_ganado)} />
+          <Kpi titulo="Pipeline abierto (CRM)" valor={formatCOP(kpis.ventas.pipeline_valor)} />
         </div>
         <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
           <Ranking titulo="Por vendedor" items={kpis.ventas.por_vendedor} formato="cop" />
@@ -192,8 +145,8 @@ export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
         </div>
       </Tema>
 
-      {/* ================= RRHH ================= */}
-      <Tema titulo="👥 RRHH" enlace="/rrhh/empleados">
+      {/* ================= RRHH (módulo aún sin conectar) ================= */}
+      <Tema titulo="👥 RRHH" enlace="/rrhh/empleados" ejemplo>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi titulo="Empleados" valor={num(kpis.rrhh.empleados)} />
           <Kpi titulo="Técnicos de planta" valor={num(kpis.rrhh.tecnicos)} />
@@ -207,7 +160,11 @@ export function DashboardClient({ periodo, kpis, capacidad, cuellos }: Props) {
       </Tema>
 
       {/* ================= MERCADEO ================= */}
-      <Tema titulo="📣 Mercadeo" enlace="/mercadeo">
+      <Tema
+        titulo="📣 Mercadeo"
+        enlace="/mercadeo"
+        sub="Leads, cierre y valor ganado salen del embudo CRM real · ROAS disponible al conectar Meta Ads"
+      >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi titulo="Leads del periodo" valor={num(kpis.mercadeo.leads)} />
           <Kpi titulo="Tasa de cierre" valor={pct(kpis.mercadeo.tasa_cierre)} />
@@ -231,18 +188,28 @@ function Tema({
   titulo,
   sub,
   enlace,
+  ejemplo,
   children,
 }: {
   titulo: string;
   sub?: string;
   enlace?: string;
+  /** true = el módulo aún no está conectado: cifras de ejemplo, en gris. */
+  ejemplo?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section className="mb-7">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
-          <h2 className="text-[18px] font-extrabold tracking-tight">{titulo}</h2>
+          <h2 className="flex flex-wrap items-center gap-2 text-[18px] font-extrabold tracking-tight">
+            {titulo}
+            {ejemplo && (
+              <span className="rounded-pill bg-neutro-bg px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-neutro">
+                Datos de ejemplo · módulo sin conectar
+              </span>
+            )}
+          </h2>
           {sub && <p className="text-[12px] text-neutro">{sub}</p>}
         </div>
         {enlace && (
@@ -251,7 +218,7 @@ function Tema({
           </Link>
         )}
       </div>
-      {children}
+      <div className={ejemplo ? "opacity-55 grayscale" : undefined}>{children}</div>
     </section>
   );
 }
@@ -282,32 +249,6 @@ function Kpi({
       <p className="text-[11.5px] font-bold text-neutro">{titulo}</p>
       <p className={`text-[21px] font-extrabold ${color}`}>{valor}</p>
       {nota && <p className="text-[11px] text-neutro">{nota}</p>}
-    </div>
-  );
-}
-
-function KpiGrande({
-  titulo,
-  valor,
-  nota,
-  destacar,
-}: {
-  titulo: string;
-  valor: string;
-  nota?: string;
-  destacar?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-card border p-4 ${
-        destacar ? "border-dorado bg-dorado-suave" : "border-borde bg-card"
-      }`}
-    >
-      <p className="text-[11.5px] font-bold text-neutro">{titulo}</p>
-      <p className={`text-[24px] font-extrabold ${destacar ? "text-dorado-oscuro" : ""}`}>
-        {valor}
-      </p>
-      {nota && <p className="text-[11.5px] text-neutro">{nota}</p>}
     </div>
   );
 }
@@ -368,99 +309,5 @@ function RankingProd({
         {items.length === 0 && <p className="text-[12px] text-neutro">Sin datos en el periodo.</p>}
       </div>
     </div>
-  );
-}
-
-/** Gráfico de capacidad: barras procesado + línea vendido + línea de techo. */
-function GraficoCapacidad({ cap }: { cap: CapacidadTuberia }) {
-  const W = 620;
-  const H = 220;
-  const padL = 44;
-  const padR = 12;
-  const padT = 14;
-  const padB = 28;
-  const innerW = W - padL - padR;
-  const innerH = H - padT - padB;
-  const s = cap.serie;
-  const max = Math.max(cap.techo_m, ...s.map((p) => p.vendida_m)) * 1.08;
-  const n = s.length;
-  const bw = (innerW / n) * 0.6;
-  const x = (i: number) => padL + (i + 0.5) * (innerW / n);
-  const y = (v: number) => padT + innerH - (v / max) * innerH;
-  const lineaVendido = s
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.vendida_m).toFixed(1)}`)
-    .join(" ");
-
-  return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[520px]" role="img" aria-label="Capacidad de tubería">
-        {/* techo (capacidad demostrada) */}
-        <line
-          x1={padL}
-          x2={W - padR}
-          y1={y(cap.techo_m)}
-          y2={y(cap.techo_m)}
-          stroke="var(--color-dorado)"
-          strokeWidth={1.5}
-          strokeDasharray="5 4"
-        />
-        <text x={W - padR} y={y(cap.techo_m) - 4} textAnchor="end" className="fill-dorado-oscuro text-[9px] font-bold">
-          Techo {num(cap.techo_m)} m
-        </text>
-        {/* barras procesado */}
-        {s.map((p, i) => (
-          <g key={p.mes}>
-            <rect
-              x={x(i) - bw / 2}
-              y={y(p.procesada_m)}
-              width={bw}
-              height={padT + innerH - y(p.procesada_m)}
-              rx={2}
-              className="fill-azul"
-              opacity={0.85}
-            />
-            <text x={x(i)} y={H - 10} textAnchor="middle" className="fill-neutro text-[8.5px]">
-              {p.etiqueta}
-            </text>
-          </g>
-        ))}
-        {/* línea vendido */}
-        <path d={lineaVendido} fill="none" stroke="var(--color-semaforo-rojo)" strokeWidth={2} />
-        {s.map((p, i) => (
-          <circle key={p.mes} cx={x(i)} cy={y(p.vendida_m)} r={2.4} className="fill-semaforo-rojo" />
-        ))}
-      </svg>
-      <div className="mt-1 flex flex-wrap gap-4 pl-11 text-[11px]">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-3 rounded-sm bg-azul" /> Procesado (entregado)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-[2px] w-4 bg-semaforo-rojo" /> Vendido (demanda)
-        </span>
-        <span className="flex items-center gap-1.5 text-dorado-oscuro">
-          <span className="inline-block h-[2px] w-4 border-t-2 border-dashed border-dorado" /> Capacidad
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Sparkline({ serie }: { serie: number[] }) {
-  const W = 120;
-  const H = 30;
-  const max = Math.max(1, ...serie);
-  const min = Math.min(...serie);
-  const rango = max - min || 1;
-  const pts = serie
-    .map((v, i) => {
-      const x = (i / (serie.length - 1)) * W;
-      const y = H - ((v - min) / rango) * (H - 4) - 2;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 h-8 w-full" preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke="var(--color-dorado)" strokeWidth={1.5} />
-    </svg>
   );
 }

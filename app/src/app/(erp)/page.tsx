@@ -1,4 +1,4 @@
-import { getDashboardRepository } from "@/lib/data/dashboard";
+import { kpisDashboard } from "@/lib/data/dashboard-server";
 import type { RangoFechas } from "@/lib/data/mercadeo";
 import { DashboardClient, type PeriodoDash } from "./DashboardClient";
 
@@ -32,19 +32,9 @@ export default async function Page({
     pParam === "mes" || pParam === "trimestre" || pParam === "anio" ? pParam : "mes";
   const rango = rangoDe(periodo);
 
-  const repo = getDashboardRepository();
-  const [kpis, capacidad, cuellos] = await Promise.all([
-    repo.kpis(rango),
-    repo.capacidadTuberia(12),
-    repo.cuellosBotella(12),
-  ]);
+  // KPIs reales (OPs/entregas/CRM de Supabase; RRHH sigue mock y la UI
+  // lo marca). Capacidad de planta: oculta hasta cargar el BOM de tubería.
+  const kpis = await kpisDashboard(rango);
 
-  return (
-    <DashboardClient
-      periodo={periodo}
-      kpis={kpis}
-      capacidad={capacidad}
-      cuellos={cuellos}
-    />
-  );
+  return <DashboardClient periodo={periodo} kpis={kpis} />;
 }
