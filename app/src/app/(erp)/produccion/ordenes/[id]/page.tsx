@@ -63,7 +63,9 @@ export default async function Page({ params }: { params: Params }) {
     pagosDeOp(detalle.op.id, detalle.op.cotizacion_id),
     cargarPermisos(),
   ]);
-  // Pagos = información de Ventas: solo Admins la ven (RLS igual exige).
+  // Pagos = información de Ventas: solo Admins ven MONTOS (RLS igual
+  // exige). Operaciones solo ve el SÍ/NO de "¿debe saldo?" — lo único
+  // que necesita para despachar (regla de Juan).
   const verPagos = puedeVer(permisos, "ventas");
 
   const { op, cliente, ciudad, origen, vendedor, items, historial, despachos, observaciones, garantias } =
@@ -73,6 +75,8 @@ export default async function Page({ params }: { params: Params }) {
   const progreso = progresoEntrega(items);
   const ordenActual = detalle.etapa.orden;
   const anulada = !!op.anulada_en;
+  const pagado = pagos.reduce((a, p) => a + p.monto, 0);
+  const debeSaldo = pagado < total;
 
   return (
     <>
@@ -216,6 +220,7 @@ export default async function Page({ params }: { params: Params }) {
               despachos={despachos}
               total={total}
               progreso={progreso}
+              mostrarTotal={verPagos}
             />
           )}
 
@@ -255,10 +260,27 @@ export default async function Page({ params }: { params: Params }) {
 
         {/* Columna lateral */}
         <div className="flex flex-col gap-4">
-          {/* Pagos: solo Admins; sin saldo en cero la BD bloquea Entregado */}
-          {verPagos && !anulada && (
-            <PagosOp opId={op.id} total={total} pagos={pagos} />
-          )}
+          {/* Pagos: Admins ven montos y registran; Operaciones solo el
+              SÍ/NO de saldo (sin cifras) — es lo que decide la entrega */}
+          {!anulada &&
+            (verPagos ? (
+              <PagosOp opId={op.id} total={total} pagos={pagos} />
+            ) : (
+              <div
+                className={`flex items-center justify-between gap-3 rounded-card border px-5 py-4 ${
+                  debeSaldo
+                    ? "border-rojo/40 bg-rojo-bg"
+                    : "border-verde/40 bg-verde-bg"
+                }`}
+              >
+                <h2 className="text-[14px] font-bold">¿Debe saldo?</h2>
+                <span
+                  className={`text-[15px] font-extrabold ${debeSaldo ? "text-rojo" : "text-verde"}`}
+                >
+                  {debeSaldo ? "SÍ — no entregar" : "NO — libre para entregar"}
+                </span>
+              </div>
+            ))}
           <div className="flex flex-col gap-2.5 rounded-card border border-borde bg-card px-5 py-4 text-[13px]">
             <h2 className="text-[14px] font-bold">Cliente</h2>
             <Dato label="Nombre" valor={cliente.nombre} />
@@ -368,7 +390,13 @@ export default async function Page({ params }: { params: Params }) {
           <span className="font-normal text-neutro">· así sale al imprimir</span>
         </h2>
       </div>
-      <OrdenTaller detalle={detalle} bom={bom} colores={colores} docs={docs} />
+      <OrdenTaller
+        detalle={detalle}
+        bom={bom}
+        colores={colores}
+        docs={docs}
+        debeSaldo={debeSaldo}
+      />
     </>
   );
 }

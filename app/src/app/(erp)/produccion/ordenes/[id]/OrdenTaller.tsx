@@ -29,11 +29,14 @@ export function OrdenTaller({
   bom,
   colores = [],
   docs,
+  debeSaldo,
 }: {
   detalle: OpDetalle;
   bom: Map<string, ComponenteBom[]>;
   colores?: { nombre: string; hex: string }[];
   docs?: DocumentosOp;
+  /** Calculado de la tabla pagos (solo el SÍ/NO — sin montos). */
+  debeSaldo?: boolean;
 }) {
   const { op, cliente, ciudad, origen, items } = detalle;
   const refCot = docs?.cotizacion
@@ -121,9 +124,19 @@ export function OrdenTaller({
             {op.requiere_instalacion ? "Coordinar técnico" : "Solo despacho"}
           </div>
         </Card>
-        <Card tono="aviso" label="¿Debe saldo?">
-          <div className="text-[15px] font-bold">VERIFICAR</div>
-          <div className="text-[11px] text-neutro">Confirmar pago antes de despachar</div>
+        <Card tono={debeSaldo === false ? "gris" : "aviso"} label="¿Debe saldo?">
+          <div
+            className={`text-[15px] font-bold ${
+              debeSaldo === undefined ? "" : debeSaldo ? "text-rojo" : "text-verde"
+            }`}
+          >
+            {debeSaldo === undefined ? "VERIFICAR" : debeSaldo ? "SÍ" : "NO"}
+          </div>
+          <div className="text-[11px] text-neutro">
+            {debeSaldo === false
+              ? "Libre para entregar"
+              : "No entregar sin registrar el pago"}
+          </div>
         </Card>
       </div>
 

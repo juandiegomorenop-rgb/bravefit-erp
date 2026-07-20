@@ -17,12 +17,15 @@ export function DespachosOp({
   despachos,
   total,
   progreso,
+  mostrarTotal = true,
 }: {
   opId: string;
   items: OpItemConProducto[];
   despachos: DespachoDetalle[];
   total: number;
   progreso: number;
+  /** false para roles sin Ventas: las cifras de dinero no se muestran. */
+  mostrarTotal?: boolean;
 }) {
   const router = useRouter();
   const [enviando, setEnviando] = useState<string | null>(null);
@@ -75,7 +78,11 @@ export function DespachosOp({
             {progreso}% entregado
           </span>
         </h2>
-        <b className="text-[13.5px] text-dorado-oscuro">Total O.P. {formatCOP(total)}</b>
+        {mostrarTotal && (
+          <b className="text-[13.5px] text-dorado-oscuro">
+            Total O.P. {formatCOP(total)}
+          </b>
+        )}
       </div>
 
       {/* Pendientes por entregar (con registro de despacho parcial) */}
