@@ -152,6 +152,65 @@ class SupabaseProductosRepository implements ProductosRepository {
   }
 }
 
+/**
+ * Sube la foto del producto al bucket `productos` (público) y deja la
+ * URL en productos.imagen_url. Antes las fotos vivían en el repo y
+ * subir una exigía deploy; ahora las carga el equipo desde el ERP.
+ * Escribir el bucket exige permiso de Ventas (RLS).
+ */
+export async function subirFotoProducto(
+  productoId: string,
+  file: File,
+): Promise<Producto> {
+  if (!file || file.size === 0) throw new Error("Selecciona una imagen.");
+  if (!file.type.startsWith("image/")) {
+    throw new Error("El archivo debe ser una imagen (JPG, PNG o WEBP).");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("La imagen no puede pesar más de 5 MB.");
+  }
+
+  const supabase = await createClient();
+  const { data: prod, error: pErr } = await supabase
+    .from("productos")
+    .select("sku")
+    .eq("id", productoId)
+    .maybeSingle();
+  if (pErr) throw new Error(pErr.message);
+  if (!prod) throw new Error("El producto no existe.");
+
+  // Nombre estable por SKU + marca de tiempo: evita choques de caché
+  // cuando se reemplaza la foto de un producto.
+  const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
+  const limpio = String(prod.sku).replace(/[^a-zA-Z0-9._-]/g, "-");
+  const ruta = `${limpio}-${Date.now()}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("productos")
+    .upload(ruta, file, { contentType: file.type, upsert: true });
+  if (upErr) {
+    if (/bucket/i.test(upErr.message) && /not found/i.test(upErr.message)) {
+      throw new Error(
+        "Falta crear el bucket 'productos' en Supabase (script 2026-07-20_bucket_productos.sql).",
+      );
+    }
+    if (/policy|row-level|permission/i.test(upErr.message)) {
+      throw new Error("Solo un Administrador puede subir fotos de productos.");
+    }
+    throw new Error(upErr.message);
+  }
+
+  const { data: pub } = supabase.storage.from("productos").getPublicUrl(ruta);
+  const { data, error } = await supabase
+    .from("productos")
+    .update({ imagen_url: pub.publicUrl })
+    .eq("id", productoId)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return toProducto(data);
+}
+
 const globalRepo = globalThis as unknown as {
   __productosRepositorioServer?: ProductosRepository;
 };

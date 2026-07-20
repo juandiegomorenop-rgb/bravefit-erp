@@ -5,6 +5,7 @@ import {
   CLASIFICACION_DESCRIPCION,
 } from "@/lib/data/productos";
 import { getProductosRepository } from "@/lib/data/productos-server";
+import { SubirFotoProducto } from "./SubirFotoProducto";
 import { formatCOP, formatFecha } from "@/lib/formato";
 import {
   BadgeClasificacion,
@@ -79,9 +80,12 @@ export default async function Page({ params }: { params: Params }) {
       </div>
 
       <div className="mt-5 grid items-start gap-4 lg:grid-cols-[1fr_1.5fr]">
-        {/* Foto grande */}
-        <div className="overflow-hidden rounded-card border border-borde bg-card">
-          <FotoProducto producto={p} clase="aspect-square w-full" grande />
+        {/* Foto grande + subir/reemplazar sin deploy */}
+        <div>
+          <div className="overflow-hidden rounded-card border border-borde bg-card">
+            <FotoProducto producto={p} clase="aspect-square w-full" grande />
+          </div>
+          <SubirFotoProducto productoId={p.id} tieneFoto={!!p.imagen_url} />
         </div>
 
         {/* Ficha */}
