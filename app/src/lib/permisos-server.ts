@@ -1,5 +1,13 @@
+import { redirect } from "next/navigation";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { MODULOS, PERMISOS_ADMIN, type Permiso } from "@/lib/permisos";
+import {
+  MODULOS,
+  PERMISOS_ADMIN,
+  puedeVer,
+  type Modulo,
+  type Permiso,
+} from "@/lib/permisos";
 
 /**
  * Permisos REALES del rol del usuario autenticado (tablas roles/permisos)
@@ -15,7 +23,7 @@ import { MODULOS, PERMISOS_ADMIN, type Permiso } from "@/lib/permisos";
  * Fallbacks: sin Supabase configurado (dev/esqueleto) → PERMISOS_ADMIN;
  * usuario sin rol o rol sin filas → sin módulos (la RLS igual bloquea).
  */
-export async function cargarPermisos(): Promise<Permiso[]> {
+export const cargarPermisos = cache(async (): Promise<Permiso[]> => {
   try {
     const supabase = await createClient();
     const {
@@ -57,4 +65,16 @@ export async function cargarPermisos(): Promise<Permiso[]> {
     // Supabase sin configurar (esqueleto/dev): comportamiento previo.
     return PERMISOS_ADMIN;
   }
+});
+
+/**
+ * Guard de RUTA para layouts de módulo: si el rol no puede ver el
+ * módulo, redirige al Dashboard. Con esto las páginas quedan
+ * bloqueadas también por URL directa (no solo menú oculto). La
+ * seguridad de DATOS sigue siendo la RLS; esto evita que un rol sin
+ * Ventas vea siquiera la interfaz (y los datos mock donde aún los hay).
+ */
+export async function exigirModulo(modulo: Modulo): Promise<void> {
+  const permisos = await cargarPermisos();
+  if (!puedeVer(permisos, modulo)) redirect("/");
 }
