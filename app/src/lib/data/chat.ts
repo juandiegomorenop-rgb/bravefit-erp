@@ -325,7 +325,7 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     name: "agenda_entregas",
     modulo: "produccion",
     description:
-      "Agenda de entregas e instalaciones: OPs activas con fecha de entrega pactada en los próximos N días (7 por defecto), separando las que requieren instalación, más las vencidas que siguen pendientes. Úsala para '¿qué instalaciones tengo esta semana?', '¿qué se entrega esta semana?', 'agenda de entregas'.",
+      "Agenda de entregas e instalaciones: OPs activas con fecha de entrega pactada en los próximos N días (7 por defecto), separando las que requieren instalación, más las vencidas que siguen pendientes. Úsala para '¿qué instalaciones tengo esta semana?', '¿qué se entrega esta semana?', '¿cuáles OPs se vencen en los próximos N días?', '¿qué está por vencer?', 'agenda de entregas'. Si preguntan por un rango específico ('en los próximos 15 días', 'este mes'), pasa ese número en `dias`.",
     input_schema: {
       type: "object",
       properties: {
@@ -346,6 +346,11 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       "semana",
       "proximas entregas",
       "próximas entregas",
+      "se vencen",
+      "por vencer",
+      "vencen en",
+      "proximos dias",
+      "próximos días",
     ],
     async ejecutar(input) {
       const dias = Math.max(1, Math.min(60, Number(input.dias) || 7));
