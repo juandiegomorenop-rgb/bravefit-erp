@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  completarDatosCliente,
   crearClienteRapido,
   crearProducto,
   getCotizacionesRepository,
@@ -95,6 +96,33 @@ export async function crearClienteCatalogo(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "No se pudo crear el cliente",
+    };
+  }
+}
+
+/** Completar/actualizar datos del cliente (cédula-NIT, correo, ciudad,
+ *  dirección) sin salir del editor ni del embudo. */
+export async function guardarDatosCliente(
+  clienteId: string,
+  datos: {
+    tipo: "persona" | "empresa";
+    nombre: string;
+    nit_cedula: string | null;
+    telefono: string | null;
+    email: string | null;
+    ciudad_id: number | null;
+    ciudad_nueva?: { nombre: string; departamento: string } | null;
+    direccion?: string | null;
+  },
+): Promise<CrearClienteResp> {
+  try {
+    const cliente = await completarDatosCliente(clienteId, datos);
+    return { ok: true, cliente };
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error ? e.message : "No se pudieron guardar los datos",
     };
   }
 }

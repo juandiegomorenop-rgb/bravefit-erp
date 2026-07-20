@@ -1,6 +1,7 @@
 import {
   getCotizacionesRepository,
   listarCategoriasProducto,
+  listarCiudades,
   listarDimensiones,
   listarProductosCatalogo,
 } from "@/lib/data/crm-cotizaciones-server";
@@ -25,13 +26,14 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const repo = getCotizacionesRepository();
-  const [clientes, vendedores, productos, dimensiones, categorias] =
+  const [clientes, vendedores, productos, dimensiones, categorias, ciudades] =
     await Promise.all([
       repo.listarClientes(),
       repo.listarVendedores(),
       listarProductosCatalogo(),
       listarDimensiones(),
       listarCategoriasProducto(),
+      listarCiudades(),
     ]);
 
   const clienteId = primero(sp.cliente);
@@ -55,6 +57,7 @@ export default async function Page({
       productos={productos}
       dimensiones={dimensiones}
       categorias={categorias}
+      ciudades={ciudades}
       prefill={prefill}
       oportunidadId={oportunidadId}
     />

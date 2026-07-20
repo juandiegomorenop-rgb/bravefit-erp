@@ -15,13 +15,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   calcularTotales,
   totalLinea,
   type CotizacionItemConProducto,
 } from "@/lib/cotizacion-logic";
 import {
+  faltantesParaCotizar,
   vendedorPorDefecto,
   type CotizacionInput,
   type CotizacionItemInput,
@@ -29,6 +30,7 @@ import {
 import { COLORES_ESTANDAR } from "@/lib/data/ops";
 import { formatCOP } from "@/lib/formato";
 import type {
+  Ciudad,
   Cliente,
   Producto,
   ProductoDimension,
@@ -40,6 +42,7 @@ import {
   crearClienteCatalogo,
   crearCotizacion,
   crearProductoCatalogo,
+  guardarDatosCliente,
 } from "./actions";
 
 interface Props {
@@ -48,6 +51,7 @@ interface Props {
   productos: Producto[];
   dimensiones: ProductoDimension[];
   categorias: { id: number; nombre: string; orden: number }[];
+  ciudades: Ciudad[];
   /** Presente al editar un borrador existente. */
   cotizacionId?: string;
   numero?: string;
@@ -136,6 +140,7 @@ export function EditorCotizacion({
   productos,
   dimensiones,
   categorias,
+  ciudades,
   cotizacionId,
   numero,
   inicial,
@@ -199,6 +204,66 @@ export function EditorCotizacion({
       )
       .slice(0, 6);
   }, [busquedaCli, clis]);
+
+  // ---- Datos obligatorios del cliente para poder cotizar ----
+  // (regla de Juan: cédula/NIT, correo y ciudad son de factura)
+  const faltantesCli = clienteSel ? faltantesParaCotizar(clienteSel) : [];
+  const [datosCli, setDatosCli] = useState<null | {
+    tipo: "persona" | "empresa";
+    nombre: string;
+    nit_cedula: string;
+    telefono: string;
+    email: string;
+    ciudad_id: string;
+    ciudad_nueva: string;
+    departamento_nuevo: string;
+  }>(null);
+  const [guardandoCli, setGuardandoCli] = useState(false);
+
+  // Al cambiar de cliente, precargar el formulario con lo que ya existe
+  useEffect(() => {
+    if (!clienteSel || faltantesParaCotizar(clienteSel).length === 0) {
+      setDatosCli(null);
+      return;
+    }
+    setDatosCli({
+      tipo: clienteSel.tipo,
+      nombre: clienteSel.nombre ?? "",
+      nit_cedula: clienteSel.nit_cedula ?? "",
+      telefono: clienteSel.telefono ?? "",
+      email: clienteSel.email ?? "",
+      ciudad_id: clienteSel.ciudad_id != null ? String(clienteSel.ciudad_id) : "",
+      ciudad_nueva: "",
+      departamento_nuevo: "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteSel?.id]);
+
+  async function guardarDatosDelCliente() {
+    if (!clienteSel || !datosCli || guardandoCli) return;
+    setGuardandoCli(true);
+    setError(null);
+    const r = await guardarDatosCliente(clienteSel.id, {
+      tipo: datosCli.tipo,
+      nombre: datosCli.nombre,
+      nit_cedula: datosCli.nit_cedula || null,
+      telefono: datosCli.telefono || null,
+      email: datosCli.email || null,
+      ciudad_id: datosCli.ciudad_id ? Number(datosCli.ciudad_id) : null,
+      ciudad_nueva: datosCli.ciudad_nueva.trim()
+        ? {
+            nombre: datosCli.ciudad_nueva,
+            departamento: datosCli.departamento_nuevo,
+          }
+        : null,
+    });
+    setGuardandoCli(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    setClis((cs) => cs.map((c) => (c.id === r.cliente.id ? r.cliente : c)));
+  }
 
   async function crearClienteNuevo() {
     if (!nuevoCli || creandoCli) return;
@@ -460,6 +525,14 @@ export function EditorCotizacion({
 
   async function guardar() {
     setError(null);
+    // La cotización va a factura: sin cédula/NIT, correo y ciudad no sale
+    if (clienteSel && faltantesParaCotizar(clienteSel).length > 0) {
+      setError(
+        `Completa los datos del cliente antes de guardar: ${faltantesParaCotizar(clienteSel).join(", ")}.`,
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setGuardando(true);
     const input: CotizacionInput = {
       ...cab,
@@ -622,6 +695,134 @@ export function EditorCotizacion({
               </span>
             )}
           </label>
+          {/* Datos de facturación obligatorios (regla de Juan): sin
+              cédula/NIT, correo y ciudad la cotización no se guarda */}
+          {clienteSel && datosCli && faltantesCli.length > 0 && (
+            <div className="rounded-[10px] border border-aviso-borde bg-aviso p-3.5 sm:col-span-2 lg:col-span-3">
+              <p className="text-[11.5px] font-bold uppercase tracking-wider text-aviso-texto">
+                ⚠ Faltan datos del cliente para cotizar:{" "}
+                {faltantesCli.join(" · ")}
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-neutro">
+                Son los datos que exige la factura. La dirección de envío se
+                pide al ganar la cotización.
+              </p>
+              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+                  TIPO
+                  <select
+                    className={inputCls}
+                    value={datosCli.tipo}
+                    onChange={(e) =>
+                      setDatosCli({
+                        ...datosCli,
+                        tipo: e.target.value as "persona" | "empresa",
+                      })
+                    }
+                  >
+                    <option value="persona">Persona natural</option>
+                    <option value="empresa">Empresa</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro lg:col-span-2">
+                  {datosCli.tipo === "empresa"
+                    ? "RAZÓN SOCIAL *"
+                    : "NOMBRES Y APELLIDOS *"}
+                  <input
+                    className={inputCls}
+                    value={datosCli.nombre}
+                    onChange={(e) =>
+                      setDatosCli({ ...datosCli, nombre: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+                  {datosCli.tipo === "empresa" ? "NIT *" : "CÉDULA *"}
+                  <input
+                    className={inputCls}
+                    value={datosCli.nit_cedula}
+                    onChange={(e) =>
+                      setDatosCli({ ...datosCli, nit_cedula: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+                  CELULAR {datosCli.tipo === "empresa" ? "" : "*"}
+                  <input
+                    className={inputCls}
+                    value={datosCli.telefono}
+                    onChange={(e) =>
+                      setDatosCli({ ...datosCli, telefono: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+                  CORREO ELECTRÓNICO *
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={datosCli.email}
+                    onChange={(e) =>
+                      setDatosCli({ ...datosCli, email: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-bold text-neutro">
+                  CIUDAD *
+                  <select
+                    className={inputCls}
+                    value={datosCli.ciudad_id}
+                    onChange={(e) =>
+                      setDatosCli({
+                        ...datosCli,
+                        ciudad_id: e.target.value,
+                        ciudad_nueva: "",
+                      })
+                    }
+                  >
+                    <option value="">Seleccionar…</option>
+                    {ciudades.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                    <option value="">— Otra (escribir) —</option>
+                  </select>
+                </label>
+                {!datosCli.ciudad_id && (
+                  <>
+                    <input
+                      className={inputCls}
+                      placeholder="Ciudad nueva"
+                      value={datosCli.ciudad_nueva}
+                      onChange={(e) =>
+                        setDatosCli({ ...datosCli, ciudad_nueva: e.target.value })
+                      }
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder="Departamento"
+                      value={datosCli.departamento_nuevo}
+                      onChange={(e) =>
+                        setDatosCli({
+                          ...datosCli,
+                          departamento_nuevo: e.target.value,
+                        })
+                      }
+                    />
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={guardandoCli}
+                onClick={() => void guardarDatosDelCliente()}
+                className="mt-2.5 rounded-pill bg-carbon px-4 py-1.5 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-40"
+              >
+                {guardandoCli ? "Guardando…" : "Guardar datos del cliente"}
+              </button>
+            </div>
+          )}
           <label className="flex flex-col gap-1 text-[11.5px] font-bold text-neutro">
             VENDEDOR *
             <select

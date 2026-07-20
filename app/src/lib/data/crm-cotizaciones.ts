@@ -190,6 +190,30 @@ export const ARCHIVO_DIAS_COTIZACION = 30;
  *  el embudo antes de pasar al Archivo del CRM. */
 export const ARCHIVO_DIAS_CRM = 7;
 
+/**
+ * Datos que le faltan al cliente para poder COTIZAR (regla de Juan
+ * 20-jul-2026). Persona: nombres y apellidos, cédula, celular, correo
+ * y ciudad. Empresa: razón social, NIT, correo y ciudad. La DIRECCIÓN
+ * no se pide aquí: se exige al ganar (envío + factura) — ver
+ * `faltaDireccionParaGanar`.
+ */
+export function faltantesParaCotizar(c: Cliente): string[] {
+  const esEmpresa = c.tipo === "empresa";
+  const falta: string[] = [];
+  if (!c.nombre?.trim())
+    falta.push(esEmpresa ? "Razón social" : "Nombres y apellidos");
+  if (!c.nit_cedula?.trim()) falta.push(esEmpresa ? "NIT" : "Cédula");
+  if (!esEmpresa && !c.telefono?.trim()) falta.push("Celular");
+  if (!c.email?.trim()) falta.push("Correo electrónico");
+  if (c.ciudad_id == null) falta.push("Ciudad");
+  return falta;
+}
+
+/** La factura y el envío exigen dirección: se pide al GANAR. */
+export function faltaDireccionParaGanar(c: Cliente): boolean {
+  return !c.direccion?.trim();
+}
+
 /** Vendedor preseleccionado en cotizaciones y oportunidades nuevas
  *  (regla de Juan: siempre Yohan; cambiar el nombre aquí si cambia
  *  el comercial de cabecera). */

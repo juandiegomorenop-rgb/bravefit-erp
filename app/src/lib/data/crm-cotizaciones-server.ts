@@ -928,6 +928,19 @@ class SupabaseCrmRepository implements CrmRepository {
       );
     }
 
+    // Regla de Juan: al ganar hay que tener DIRECCIÓN — la necesitan el
+    // envío y la factura (persona natural o empresa, siempre).
+    const { data: cliDir } = await supabase
+      .from("clientes")
+      .select("direccion")
+      .eq("id", o.cliente_id)
+      .maybeSingle();
+    if (!cliDir?.direccion?.trim()) {
+      throw new Error(
+        "FALTA_DIRECCION: registra la dirección de entrega y facturación del cliente antes de ganar la oportunidad.",
+      );
+    }
+
     const { error: uErr } = await supabase
       .from("oportunidades")
       .update({ etapa_id })
@@ -1192,6 +1205,89 @@ export async function crearClienteRapido(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
+  return toCliente(data);
+}
+
+export async function listarCiudades(): Promise<Ciudad[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ciudades")
+    .select("*")
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(toCiudad);
+}
+
+/**
+ * Completa/actualiza los datos del cliente (pedido de Juan 20-jul-2026:
+ * para cotizar hace falta cédula-NIT, correo y ciudad; la dirección se
+ * exige al GANAR porque la factura y el envío la necesitan).
+ * `ciudad_nueva` permite registrar una ciudad que aún no exista.
+ */
+export async function completarDatosCliente(
+  clienteId: string,
+  datos: {
+    tipo: "persona" | "empresa";
+    nombre: string;
+    nit_cedula: string | null;
+    telefono: string | null;
+    email: string | null;
+    ciudad_id: number | null;
+    ciudad_nueva?: { nombre: string; departamento: string } | null;
+    direccion?: string | null;
+  },
+): Promise<Cliente> {
+  const supabase = await createClient();
+
+  let ciudadId = datos.ciudad_id;
+  const nueva = datos.ciudad_nueva;
+  if (!ciudadId && nueva?.nombre.trim()) {
+    const nombreCiudad = nueva.nombre.trim();
+    const departamento = nueva.departamento.trim() || "—";
+    const { data: existente } = await supabase
+      .from("ciudades")
+      .select("id")
+      .ilike("nombre", nombreCiudad)
+      .maybeSingle();
+    if (existente) {
+      ciudadId = num(existente.id);
+    } else {
+      const { data: creada, error: cErr } = await supabase
+        .from("ciudades")
+        .insert({ nombre: nombreCiudad, departamento })
+        .select("id")
+        .single();
+      if (cErr) throw new Error(cErr.message);
+      ciudadId = num(creada.id);
+    }
+  }
+
+  const patch: Record<string, unknown> = {
+    tipo: datos.tipo,
+    nombre: datos.nombre.trim(),
+    nit_cedula: datos.nit_cedula?.trim() || null,
+    telefono: datos.telefono?.trim() || null,
+    email: datos.email?.trim().toLowerCase() || null,
+    ciudad_id: ciudadId,
+  };
+  if (datos.direccion !== undefined) {
+    patch.direccion = datos.direccion?.trim() || null;
+  }
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .update(patch)
+    .eq("id", clienteId)
+    .select("*")
+    .single();
+  if (error) {
+    if (/uq_clientes_email/i.test(error.message)) {
+      throw new Error(
+        "Ese correo ya está registrado en otro cliente — revisa si es un duplicado.",
+      );
+    }
+    throw new Error(error.message);
+  }
   return toCliente(data);
 }
 

@@ -7,11 +7,15 @@ import { diasEnEtapa } from "@/lib/cotizacion-logic";
 import {
   ARCHIVO_DIAS_CRM,
   esOportunidadArchivada,
+  faltaDireccionParaGanar,
   vendedorPorDefecto,
   type FiltrosCrm,
   type OportunidadCard,
 } from "@/lib/data/crm-cotizaciones";
-import { crearClienteCatalogo } from "../cotizaciones/actions";
+import {
+  crearClienteCatalogo,
+  guardarDatosCliente,
+} from "../cotizaciones/actions";
 import { crearOportunidad, moverEtapaCrm } from "./actions";
 import { formatCOP } from "@/lib/formato";
 import type { Cliente, EtapaCrm, Usuario } from "@/lib/types/db";
@@ -173,10 +177,57 @@ export function CrmClient({
     window.history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
   }
 
-  async function mover(id: string, etapaId: number) {
+  // Ganar exige dirección (envío + factura): si falta, se pide aquí
+  // mismo antes de mover la ficha.
+  const [pedirDir, setPedirDir] = useState<null | {
+    cardId: string;
+    etapaId: number;
+    cliente: Cliente;
+  }>(null);
+  const [direccion, setDireccion] = useState("");
+  const [guardandoDir, setGuardandoDir] = useState(false);
+
+  async function confirmarDireccion() {
+    if (!pedirDir || guardandoDir) return;
+    if (!direccion.trim()) return;
+    setGuardandoDir(true);
+    const cli = pedirDir.cliente;
+    const r = await guardarDatosCliente(cli.id, {
+      tipo: cli.tipo,
+      nombre: cli.nombre,
+      nit_cedula: cli.nit_cedula,
+      telefono: cli.telefono,
+      email: cli.email,
+      ciudad_id: cli.ciudad_id,
+      direccion: direccion.trim(),
+    });
+    setGuardandoDir(false);
+    if (!r.ok) {
+      setBanner({ tipo: "error", texto: r.error });
+      return;
+    }
+    // refrescar el cliente en las fichas y continuar con el movimiento
+    setCards((cs) =>
+      cs.map((c) =>
+        c.cliente.id === r.cliente.id ? { ...c, cliente: r.cliente } : c,
+      ),
+    );
+    const { cardId, etapaId } = pedirDir;
+    setPedirDir(null);
+    setDireccion("");
+    await mover(cardId, etapaId, true);
+  }
+
+  async function mover(id: string, etapaId: number, dirLista = false) {
     const card = cards.find((c) => c.oportunidad.id === id);
     const etapa = etapas.find((e) => e.id === etapaId);
     if (!card || !etapa || card.oportunidad.etapa_id === etapaId) return;
+
+    if (etapa.es_ganada && !dirLista && faltaDireccionParaGanar(card.cliente)) {
+      setPedirDir({ cardId: id, etapaId, cliente: card.cliente });
+      setDireccion(card.cliente.direccion ?? "");
+      return;
+    }
 
     const previo = cards;
     // optimista: mover la ficha ya; revertir si el repo rechaza
@@ -197,6 +248,13 @@ export function CrmClient({
     const r = await moverEtapaCrm(id, etapaId);
     if (!r.ok) {
       setCards(previo);
+      // El servidor también valida la dirección: si es eso, abrir el
+      // modal en vez de mostrar el error crudo.
+      if (r.error.includes("FALTA_DIRECCION")) {
+        setPedirDir({ cardId: id, etapaId, cliente: card.cliente });
+        setDireccion(card.cliente.direccion ?? "");
+        return;
+      }
       setBanner({ tipo: "error", texto: r.error });
       return;
     }
@@ -386,6 +444,49 @@ export function CrmClient({
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dirección obligatoria para ganar (envío + factura) */}
+      {pedirDir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[460px] rounded-card border border-borde bg-card p-5 shadow-xl">
+            <h2 className="text-[16px] font-extrabold">
+              Falta la dirección de {pedirDir.cliente.nombre}
+            </h2>
+            <p className="mt-1 text-[12.5px] text-neutro">
+              La factura y el envío la necesitan. Se guarda en la ficha del
+              cliente y queda como dirección de entrega de la O.P.
+            </p>
+            <input
+              autoFocus
+              className="mt-3 w-full rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+              placeholder="Ej: Calle 25A # 43B 267, barrio…"
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void confirmarDireccion()}
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPedirDir(null);
+                  setDireccion("");
+                }}
+                className="rounded-pill px-4 py-2 text-[12.5px] font-semibold text-neutro hover:bg-neutro-bg"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={guardandoDir || !direccion.trim()}
+                onClick={() => void confirmarDireccion()}
+                className="rounded-pill bg-verde px-5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              >
+                {guardandoDir ? "Guardando…" : "Guardar y ganar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
