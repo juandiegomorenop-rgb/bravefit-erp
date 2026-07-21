@@ -56,6 +56,9 @@ export interface OpCard {
   esperando_proveedor: boolean;
   fecha_creacion: string; // creado_en (OP) | abierta_en (garantía)
   fecha_entrega_pactada: string | null;
+  /** PRIMERA fecha comprometida (congelada): contra esta se mide el
+   *  cumplimiento, aunque después se re-pacte la entrega. */
+  fecha_entrega_original?: string | null;
   fecha_entregada: string | null;
   items: OpItemConProducto[];
   garantia: Garantia | null; // solo tarjetas tipo 'garantia'

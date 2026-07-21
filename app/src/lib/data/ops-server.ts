@@ -275,6 +275,7 @@ class SupabaseOpsRepository implements OpsRepository {
       esperando_proveedor: op.esperando_proveedor,
       fecha_creacion: op.creado_en,
       fecha_entrega_pactada: op.fecha_entrega_pactada ?? null,
+      fecha_entrega_original: op.fecha_entrega_original ?? null,
       fecha_entregada: op.fecha_entregada ?? null,
       items: this.itemsConProducto(op.op_items),
       garantia: null,

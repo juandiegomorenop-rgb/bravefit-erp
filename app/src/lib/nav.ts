@@ -43,6 +43,11 @@ export const NAV: NavItem[] = [
       { label: "Solicitudes de compra", href: "/produccion/compras", modulo: "produccion" },
       { label: "Garantías", href: "/produccion/garantias", modulo: "produccion" },
       { label: "Entregas", href: "/produccion/entregas", modulo: "produccion" },
+      {
+        label: "Nivel de cumplimiento",
+        href: "/produccion/cumplimiento",
+        modulo: "produccion",
+      },
     ],
   },
   { label: "Mercadeo", href: "/mercadeo", modulo: "mercadeo" },

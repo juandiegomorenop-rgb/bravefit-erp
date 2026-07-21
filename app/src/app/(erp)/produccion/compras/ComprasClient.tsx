@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type {
-  FaltanteCard,
-  FiltrosCompras,
-  ScItemInput,
-  SolicitudCard,
+import {
+  esScArchivada,
+  type FaltanteCard,
+  type FiltrosCompras,
+  type ScItemInput,
+  type SolicitudCard,
 } from "@/lib/data/compras";
 import { formatCOP, formatFechaCorta } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
@@ -70,9 +71,17 @@ export function ComprasClient({
   const [creando, setCreando] = useState(!!prefill);
   const [error, setError] = useState<string | null>(null);
 
+  // Archivo: rechazadas (de una) y compradas recibidas completas hace
+  // más de 7 días — dejan de estorbar pero quedan consultables.
+  const [verArchivo, setVerArchivo] = useState(false);
+  const archivadas = useMemo(() => cards.filter((c) => esScArchivada(c)), [cards]);
+
   const filtradas = useMemo(() => {
     const q = filtros.texto?.trim().toLowerCase();
-    return cards.filter((c) => {
+    const base = verArchivo
+      ? archivadas
+      : cards.filter((c) => !esScArchivada(c));
+    return base.filter((c) => {
       if (filtros.estado && c.sc.estado !== filtros.estado) return false;
       if (
         filtros.tipo_material_id !== undefined &&
@@ -93,7 +102,7 @@ export function ComprasClient({
       }
       return true;
     });
-  }, [cards, filtros]);
+  }, [cards, archivadas, verArchivo, filtros]);
 
   function actualizar(nuevos: FiltrosCompras) {
     setFiltros(nuevos);
@@ -218,6 +227,18 @@ export function ComprasClient({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => setVerArchivo((v) => !v)}
+          title="Rechazadas y compradas ya recibidas hace más de 7 días"
+          className={`rounded-pill border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+            verArchivo
+              ? "border-carbon bg-carbon text-white"
+              : "border-borde bg-card text-neutro hover:border-dorado"
+          }`}
+        >
+          🗄 Archivo ({archivadas.length})
+        </button>
         <span className="ml-auto text-[12.5px] text-neutro">
           <b className="text-carbon">{filtradas.length}</b> solicitudes
         </span>

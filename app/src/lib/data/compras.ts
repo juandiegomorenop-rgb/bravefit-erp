@@ -66,6 +66,24 @@ export interface FiltrosCompras {
   texto?: string;
 }
 
+/** Días que una SC cerrada sigue en la lista antes del Archivo. */
+export const ARCHIVO_DIAS_SC = 7;
+
+/**
+ * Una SC sale del listado activo cuando ya es historia: rechazada (se
+ * archiva de inmediato — no estorba, pero queda consultable) o
+ * comprada y recibida completa hace más de ARCHIVO_DIAS_SC.
+ */
+export function esScArchivada(c: SolicitudCard, hoy = new Date()): boolean {
+  if (c.sc.estado === "rechazada") return true;
+  if (c.sc.estado !== "comprado" || !c.recepcion_completa) return false;
+  const ultima = c.recepciones[0]?.fecha ?? c.sc.creado_en;
+  return (
+    (hoy.getTime() - new Date(ultima).getTime()) / 86_400_000 >
+    ARCHIVO_DIAS_SC
+  );
+}
+
 export interface ScItemInput {
   material_id: string | null;
   descripcion: string | null;
