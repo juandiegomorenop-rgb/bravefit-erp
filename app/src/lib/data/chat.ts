@@ -20,8 +20,14 @@
 // (solo el route /api/chat importa este módulo — contexto server).
 // RRHH sigue mock (módulo sin conectar; igual que su página).
 import {
+  faltantesParaCotizar,
+  vendedorPorDefecto,
+} from "@/lib/data/crm-cotizaciones";
+import {
+  crearClienteRapido,
   getCotizacionesRepository,
   getCrmRepository,
+  listarProductosCatalogo,
 } from "@/lib/data/crm-cotizaciones-server";
 import { kpisDashboard } from "@/lib/data/dashboard-server";
 import { getEntregasRepository } from "@/lib/data/entregas-server";
@@ -213,6 +219,218 @@ export const HERRAMIENTAS: HerramientaChat[] = [
         proximas_a_vencer: kpis.produccion.proximas_vencer,
         por_etapa: kpis.produccion.por_etapa,
         lista_vencidas: vencidas.slice(0, 25),
+      };
+    },
+  },
+  {
+    name: "crear_cotizacion",
+    modulo: "ventas",
+    description:
+      "CREA una cotización en estado BORRADOR (número COT_CHAT_####) con los productos y el cliente que indique el usuario. Es una ACCIÓN de escritura: úsala SOLO cuando el usuario pida explícitamente crear/montar/armar una cotización Y haya dado el nombre del cliente y al menos un producto con cantidad. Si un producto no coincide o es ambiguo, la herramienta NO crea nada y devuelve los candidatos: muéstraselos al usuario y pregunta cuál es. El cliente se busca por nombre/teléfono/cédula y si no existe se crea (sin duplicar). La cotización queda en Borrador para que el vendedor la revise, complete los datos de facturación que falten y la envíe desde el ERP — dile siempre al usuario el número creado y qué datos del cliente faltan.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente: {
+          type: "object",
+          properties: {
+            nombre: { type: "string", description: "Nombre o razón social." },
+            telefono: { type: "string" },
+            nit_cedula: { type: "string" },
+            email: { type: "string" },
+            tipo: { type: "string", enum: ["persona", "empresa"] },
+          },
+          required: ["nombre"],
+          additionalProperties: false,
+        },
+        items: {
+          type: "array",
+          description: "Productos pedidos, por nombre o SKU.",
+          items: {
+            type: "object",
+            properties: {
+              producto: {
+                type: "string",
+                description: "Nombre o SKU del producto del catálogo.",
+              },
+              cantidad: { type: "integer", description: "Default 1." },
+              precio_unit: {
+                type: "number",
+                description:
+                  "Solo si el usuario pide un precio distinto al de lista.",
+              },
+              descuento_pct: { type: "number", description: "0–100." },
+            },
+            required: ["producto"],
+            additionalProperties: false,
+          },
+        },
+        vendedor: {
+          type: "string",
+          description: "Nombre del vendedor. Default: Yohan.",
+        },
+        segmento: { type: "string", enum: ["B2B", "B2C"] },
+        notas: { type: "string" },
+      },
+      required: ["cliente", "items"],
+      additionalProperties: false,
+    },
+    claves: [
+      "crear cotizacion",
+      "crear cotización",
+      "montar cotizacion",
+      "armar cotizacion",
+      "cotizale",
+      "cotízale",
+      "hazle una cotizacion",
+    ],
+    async ejecutar(input) {
+      const cli = input.cliente as {
+        nombre: string;
+        telefono?: string;
+        nit_cedula?: string;
+        email?: string;
+        tipo?: "persona" | "empresa";
+      };
+      const itemsIn = (input.items ?? []) as {
+        producto: string;
+        cantidad?: number;
+        precio_unit?: number;
+        descuento_pct?: number;
+      }[];
+      if (!cli?.nombre?.trim() || itemsIn.length === 0) {
+        return {
+          error:
+            "Faltan datos: se necesita el nombre del cliente y al menos un producto.",
+        };
+      }
+
+      // 1) Resolver TODOS los productos primero — si algo es ambiguo o no
+      //    existe, no se crea nada (mejor preguntar que cotizar mal).
+      const catalogo = (await listarProductosCatalogo()).filter(
+        (p) => p.activo,
+      );
+      const limpiar = (s: string) =>
+        s
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .trim();
+      const ambiguos: { pedido: string; candidatos: string[] }[] = [];
+      const noEncontrados: string[] = [];
+      const resueltos: {
+        producto: (typeof catalogo)[number];
+        cantidad: number;
+        precio_unit?: number;
+        descuento_pct?: number;
+      }[] = [];
+      for (const it of itemsIn) {
+        const q = limpiar(it.producto);
+        const porSku = catalogo.filter((p) => limpiar(p.sku) === q);
+        const porNombre = catalogo.filter((p) =>
+          limpiar(p.nombre).includes(q),
+        );
+        const matches = porSku.length ? porSku : porNombre;
+        if (matches.length === 1) {
+          resueltos.push({
+            producto: matches[0],
+            cantidad: Math.max(1, Number(it.cantidad) || 1),
+            precio_unit: it.precio_unit,
+            descuento_pct: it.descuento_pct,
+          });
+        } else if (matches.length > 1) {
+          ambiguos.push({
+            pedido: it.producto,
+            candidatos: matches
+              .slice(0, 6)
+              .map((p) => `${p.nombre} (${p.sku})`),
+          });
+        } else {
+          noEncontrados.push(it.producto);
+        }
+      }
+      if (ambiguos.length || noEncontrados.length) {
+        return {
+          creada: false,
+          motivo:
+            "No se creó la cotización: hay productos por aclarar. Pregunta al usuario cuál quiere.",
+          productos_ambiguos: ambiguos,
+          productos_no_encontrados: noEncontrados,
+        };
+      }
+
+      // 2) Cliente: crearClienteRapido dedup-ea por documento/teléfono/
+      //    nombre y completa campos vacíos si ya existía.
+      const cliente = await crearClienteRapido({
+        nombre: cli.nombre,
+        tipo: cli.tipo ?? "persona",
+        nit_cedula: cli.nit_cedula ?? null,
+        telefono: cli.telefono ?? null,
+        email: cli.email ?? null,
+        direccion: null,
+      });
+
+      // 3) Vendedor: el pedido por nombre, o Yohan por defecto.
+      const vendedores = await getCotizacionesRepository().listarVendedores();
+      const vendedorPedido = input.vendedor
+        ? vendedores.find((v) =>
+            limpiar(v.nombre).includes(limpiar(String(input.vendedor))),
+          )
+        : undefined;
+      const vendedor_id =
+        vendedorPedido?.id ?? vendedorPorDefecto(vendedores);
+
+      // 4) Crear el borrador (regla de Juan: entra sola al embudo CRM).
+      const r = await getCotizacionesRepository().crear({
+        cliente_id: cliente.id,
+        vendedor_id,
+        origen: "chat",
+        segmento: (input.segmento as "B2B" | "B2C") ?? "B2C",
+        no_facturar: false,
+        pago_anticipado_completo: false,
+        descuento_pct: 0,
+        tiempo_entrega:
+          "Fabricados: 45 días hábiles · Comercializados: 5 días hábiles",
+        notas: (input.notas as string | undefined)?.trim() || null,
+        items: resueltos.map((x) => ({
+          producto_id: x.producto.id,
+          descripcion: null,
+          es_transporte: false,
+          aplica_iva: true,
+          cantidad: x.cantidad,
+          precio_unit: x.precio_unit ?? x.producto.precio_lista,
+          descuento_pct: Math.min(100, Math.max(0, x.descuento_pct ?? 0)),
+          alto_override_cm: null,
+          fondo_override_cm: null,
+          color:
+            x.producto.color_default ??
+            (x.producto.origen === "propio" ? "Negro" : null),
+          recargos: [],
+        })),
+      });
+
+      const sinPrecio = resueltos.filter(
+        (x) => (x.precio_unit ?? x.producto.precio_lista) <= 0,
+      );
+      return {
+        creada: true,
+        numero: r.numero,
+        estado: "Borrador",
+        ruta: `/ventas/cotizaciones/${r.id}`,
+        cliente: cliente.nombre,
+        cliente_nuevo: !cli.nit_cedula && !cliente.nit_cedula,
+        vendedor:
+          vendedores.find((v) => v.id === vendedor_id)?.nombre ?? "—",
+        items: resueltos.map((x) => ({
+          producto: x.producto.nombre,
+          cantidad: x.cantidad,
+          precio_unit: x.precio_unit ?? x.producto.precio_lista,
+        })),
+        datos_cliente_faltantes: faltantesParaCotizar(cliente),
+        avisos: sinPrecio.length
+          ? [
+              `OJO: ${sinPrecio.map((x) => x.producto.nombre).join(", ")} tiene(n) precio $0 en el catálogo — el vendedor debe ponerlo antes de enviar.`,
+            ]
+          : [],
       };
     },
   },
