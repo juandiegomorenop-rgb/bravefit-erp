@@ -542,40 +542,74 @@ export async function sugerirReposicion(
     },
   ];
 
-  // Productos cuyos BOM usan el material pedido → sus demás materiales
+  // JUEGO = materiales que SIEMPRE van con el pedido: aparecen en
+  // exactamente el MISMO conjunto de productos (ambas direcciones).
+  // Así los J-Locks (P011/12/13, en los 11 racks) se arrastran entre
+  // sí, pero la xbean (que va en 6 de esos 11 y en 2 bancos) NO —
+  // hallazgo de Juan 20-jul.
   const { data: usos } = await supabase
     .from("producto_componentes")
     .select("producto_id")
     .eq("material_id", materialId);
-  const productoIds = [...new Set((usos ?? []).map((u: any) => u.producto_id))];
-  if (productoIds.length) {
+  const productosTarget = new Set(
+    (usos ?? []).map((u: any) => u.producto_id as string),
+  );
+  const n = productosTarget.size;
+  if (n > 0) {
+    // en cuántos productos del target aparece cada candidato
     const { data: comps } = await supabase
       .from("producto_componentes")
-      .select("material_id")
-      .in("producto_id", productoIds)
+      .select("material_id, producto_id")
+      .in("producto_id", [...productosTarget])
       .not("material_id", "is", null)
       .neq("material_id", materialId);
-    const companIds = [...new Set((comps ?? []).map((c: any) => c.material_id))];
-    if (companIds.length) {
-      const { data: mats } = await supabase
-        .from("materiales")
-        .select("*")
-        .in("id", companIds)
-        .eq("activo", true)
-        .eq("tipo_material_id", target.tipo_material_id); // regla: SC por tipo
-      const companeros = ((mats ?? []) as any[])
-        .map(toMaterial)
-        // solo los que están en REPONER (bajo el mínimo): los urgentes
-        .filter((m) => (disponible.get(m.id) ?? 0) < m.buffer_min)
-        .map((m) => ({
-          material_id: m.id,
-          nombre: m.nombre,
-          cantidad: Math.max(1, faltanteDe(m)),
-          companero: true,
-        }))
-        .sort((a, b) => b.cantidad - a.cantidad)
-        .slice(0, 12);
-      out.push(...companeros);
+    const enTarget = new Map<string, Set<string>>();
+    for (const r of (comps ?? []) as any[]) {
+      const set = enTarget.get(r.material_id) ?? new Set<string>();
+      set.add(r.producto_id);
+      enTarget.set(r.material_id, set);
+    }
+    const candidatos = [...enTarget.entries()]
+      .filter(([, set]) => set.size === n)
+      .map(([id]) => id);
+
+    if (candidatos.length) {
+      // …y que NO aparezcan en ningún producto fuera de los del target
+      const { data: totales } = await supabase
+        .from("producto_componentes")
+        .select("material_id, producto_id")
+        .in("material_id", candidatos);
+      const totalDe = new Map<string, Set<string>>();
+      for (const r of (totales ?? []) as any[]) {
+        const set = totalDe.get(r.material_id) ?? new Set<string>();
+        set.add(r.producto_id);
+        totalDe.set(r.material_id, set);
+      }
+      const juegoIds = candidatos.filter(
+        (id) => (totalDe.get(id)?.size ?? 0) === n,
+      );
+
+      if (juegoIds.length) {
+        const { data: mats } = await supabase
+          .from("materiales")
+          .select("*")
+          .in("id", juegoIds)
+          .eq("activo", true)
+          .eq("tipo_material_id", target.tipo_material_id); // regla: SC por tipo
+        const companeros = ((mats ?? []) as any[])
+          .map(toMaterial)
+          // solo los que están en REPONER (bajo el mínimo): los urgentes
+          .filter((m) => (disponible.get(m.id) ?? 0) < m.buffer_min)
+          .map((m) => ({
+            material_id: m.id,
+            nombre: m.nombre,
+            cantidad: Math.max(1, faltanteDe(m)),
+            companero: true,
+          }))
+          .sort((a, b) => b.cantidad - a.cantidad)
+          .slice(0, 12);
+        out.push(...companeros);
+      }
     }
   }
   return out;
