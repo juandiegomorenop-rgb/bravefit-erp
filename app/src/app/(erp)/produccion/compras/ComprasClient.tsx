@@ -26,8 +26,14 @@ interface Props {
   proveedores: Proveedor[];
   filtrosIniciales: FiltrosCompras;
   /** Atajo "Sugerir SC" de Inventarios: abre el form con el material
-   *  y la cantidad (óptimo − disponible) ya puestos. */
-  prefill?: { material_id: string; cantidad: number };
+   *  pedido + su JUEGO (compañeros de BOM en REPONER), cantidades
+   *  óptimo − disponible, y una nota que explica el origen. */
+  prefill?: {
+    items: { material_id: string; cantidad: number }[];
+    nota?: string;
+  };
+  /** Qué tipos de material vende cada proveedor (filtra el selector). */
+  proveedorTipos: { proveedor_id: string; tipo_material_id: number }[];
 }
 
 const ESTADOS: { clave: FiltrosCompras["estado"]; nombre: string; badge: string }[] = [
@@ -55,6 +61,7 @@ export function ComprasClient({
   proveedores,
   filtrosIniciales,
   prefill,
+  proveedorTipos,
 }: Props) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(filtrosIniciales);
@@ -239,6 +246,7 @@ export function ComprasClient({
                 abierta={abierta === c.sc.id}
                 onToggle={() => setAbierta(abierta === c.sc.id ? null : c.sc.id)}
                 proveedores={proveedores}
+                proveedorTipos={proveedorTipos}
                 onError={setError}
                 onRefrescar={() => router.refresh()}
               />
@@ -297,6 +305,7 @@ function FilaSolicitud({
   abierta,
   onToggle,
   proveedores,
+  proveedorTipos,
   onError,
   onRefrescar,
 }: {
@@ -304,9 +313,20 @@ function FilaSolicitud({
   abierta: boolean;
   onToggle: () => void;
   proveedores: Proveedor[];
+  proveedorTipos: { proveedor_id: string; tipo_material_id: number }[];
   onError: (e: string | null) => void;
   onRefrescar: () => void;
 }) {
+  // Anti-error de digitación (regla de Juan): solo proveedores que
+  // venden ESTE tipo de material. Un proveedor sin tipos registrados
+  // aparece igual (fallback mientras se nutre el filtro).
+  const proveedoresDelTipo = proveedores.filter((p) => {
+    const tipos = proveedorTipos.filter((t) => t.proveedor_id === p.id);
+    return (
+      tipos.length === 0 ||
+      tipos.some((t) => t.tipo_material_id === c.sc.tipo_material_id)
+    );
+  });
   const [valor, setValor] = useState(c.sc.valor_estimado ?? 0);
   const [fecha, setFecha] = useState("");
   const [proveedor, setProveedor] = useState(c.sc.proveedor_id ?? "");
@@ -447,7 +467,7 @@ function FilaSolicitud({
                       onChange={(e) => setProveedor(e.target.value)}
                     >
                       <option value="">Seleccionar…</option>
-                      {proveedores.map((p) => (
+                      {proveedoresDelTipo.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.nombre}
                         </option>
@@ -693,31 +713,32 @@ function FormNuevaSolicitud({
 }: {
   tipos: TipoMaterial[];
   materiales: Material[];
-  /** Prellenado del atajo "Sugerir SC" de Inventarios. */
-  inicial?: { material_id: string; cantidad: number };
+  /** Prellenado del atajo "Sugerir SC": material pedido + juego. */
+  inicial?: {
+    items: { material_id: string; cantidad: number }[];
+    nota?: string;
+  };
   onListo: () => void;
   onError: (e: string | null) => void;
 }) {
-  const matInicial = inicial
-    ? materiales.find((m) => m.id === inicial.material_id)
-    : undefined;
-  const [tipo, setTipo] = useState<number>(matInicial?.tipo_material_id ?? 0);
-  const [notas, setNotas] = useState(
-    matInicial
-      ? `Reposición sugerida desde Inventarios: ${matInicial.nombre} (óptimo − disponible).`
-      : "",
+  // Solo los materiales del prellenado que existen en el catálogo
+  const iniciales = (inicial?.items ?? [])
+    .map((it) => ({
+      material: materiales.find((m) => m.id === it.material_id),
+      cantidad: it.cantidad,
+    }))
+    .filter((x) => x.material);
+  const [tipo, setTipo] = useState<number>(
+    iniciales[0]?.material?.tipo_material_id ?? 0,
   );
+  const [notas, setNotas] = useState(inicial?.nota ?? "");
   const [items, setItems] = useState<(ScItemInput & { _k: number })[]>(
-    matInicial
-      ? [
-          {
-            _k: 1,
-            material_id: matInicial.id,
-            descripcion: null,
-            cantidad: Math.max(1, inicial!.cantidad),
-          },
-        ]
-      : [],
+    iniciales.map((x, n) => ({
+      _k: n + 1,
+      material_id: x.material!.id,
+      descripcion: null,
+      cantidad: Math.max(1, x.cantidad),
+    })),
   );
   const [guardando, setGuardando] = useState(false);
   const delTipo = materiales.filter((m) => m.tipo_material_id === tipo);
@@ -792,7 +813,7 @@ function FormNuevaSolicitud({
           <div key={it._k} className="flex flex-wrap items-center gap-2.5 text-[12.5px]">
             {it.material_id !== null ? (
               <select
-                className={`${inputCls} min-w-[280px] flex-1`}
+                className={`${inputCls} w-full max-w-[420px] sm:w-auto sm:min-w-[300px]`}
                 value={it.material_id}
                 onChange={(e) =>
                   setItems((xs) =>
@@ -808,7 +829,7 @@ function FormNuevaSolicitud({
               </select>
             ) : (
               <input
-                className={`${inputCls} min-w-[280px] flex-1`}
+                className={`${inputCls} w-full max-w-[420px] sm:w-auto sm:min-w-[300px]`}
                 placeholder="Descripción del material nuevo…"
                 value={it.descripcion ?? ""}
                 onChange={(e) =>

@@ -1,5 +1,9 @@
 import type { FiltrosCompras } from "@/lib/data/compras";
-import { getComprasRepository } from "@/lib/data/compras-server";
+import {
+  getComprasRepository,
+  listarProveedorTipos,
+  sugerirReposicion,
+} from "@/lib/data/compras-server";
 import { ComprasClient } from "./ComprasClient";
 
 export const metadata = { title: "Solicitudes de compra" };
@@ -28,22 +32,36 @@ export default async function Page({
 
   const estadoParam = primero(sp.estado);
 
-  // Atajo "Sugerir SC" de Inventarios: ?sugerir=<material_id>&cantidad=<n>
-  // → el formulario de nueva solicitud abre prellenado con ese material.
+  // Atajo "Sugerir SC" de Inventarios: ?sugerir=<material_id> → el form
+  // abre prellenado con ese material Y el resto del JUEGO (las demás
+  // platinas de los mismos productos que estén en REPONER).
   const sugerirId = primero(sp.sugerir);
-  const sugerirCant = Number(primero(sp.cantidad)) || 1;
-  const materialSugerido = sugerirId
-    ? (materiales.find((m) => m.id === sugerirId) ?? null)
-    : null;
+  const [sugerencias, proveedorTipos] = await Promise.all([
+    sugerirId ? sugerirReposicion(sugerirId) : Promise.resolve([]),
+    listarProveedorTipos(),
+  ]);
 
   return (
     <>
       <ComprasClient
         prefill={
-          materialSugerido
-            ? { material_id: materialSugerido.id, cantidad: sugerirCant }
+          sugerencias.length
+            ? {
+                items: sugerencias.map((s) => ({
+                  material_id: s.material_id,
+                  cantidad: s.cantidad,
+                })),
+                nota:
+                  sugerencias.length > 1
+                    ? `Reposición sugerida desde Inventarios: ${sugerencias[0].nombre} + juego (${sugerencias
+                        .filter((s) => s.companero)
+                        .map((s) => s.nombre)
+                        .join(", ")}). Cantidades = óptimo − disponible.`
+                    : `Reposición sugerida desde Inventarios: ${sugerencias[0].nombre} (óptimo − disponible).`,
+              }
             : undefined
         }
+        proveedorTipos={proveedorTipos}
         cards={cards}
         faltantes={faltantes}
         tipos={tipos}

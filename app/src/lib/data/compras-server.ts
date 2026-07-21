@@ -496,6 +496,114 @@ class SupabaseComprasRepository implements ComprasRepository {
   }
 }
 
+// ---------------------------------------------------------------
+// Sugerencia de reposición con JUEGO COMPLETO (pedido de Juan):
+// si la platina pedida hace parte del BOM de un producto (ej. P012 de
+// los J-Locks), se sugieren también las DEMÁS platinas de esos mismos
+// productos que estén en REPONER, cada una con óptimo − disponible.
+// ---------------------------------------------------------------
+
+export interface SugerenciaSc {
+  material_id: string;
+  nombre: string;
+  cantidad: number;
+  /** true = vino de completar el juego (no fue la pedida). */
+  companero: boolean;
+}
+
+export async function sugerirReposicion(
+  materialId: string,
+): Promise<SugerenciaSc[]> {
+  const supabase = await createClient();
+  const { data: mat } = await supabase
+    .from("materiales")
+    .select("*")
+    .eq("id", materialId)
+    .maybeSingle();
+  if (!mat) return [];
+  const target = toMaterial(mat);
+
+  const { data: exs } = await supabase
+    .from("existencias")
+    .select("material_id, cantidad_disponible")
+    .eq("tipo", "materia_prima");
+  const disponible = new Map(
+    ((exs ?? []) as any[]).map((e) => [e.material_id, num(e.cantidad_disponible)]),
+  );
+  const faltanteDe = (m: Material) =>
+    Math.max(0, Math.ceil(m.buffer_max - (disponible.get(m.id) ?? 0)));
+
+  const out: SugerenciaSc[] = [
+    {
+      material_id: target.id,
+      nombre: target.nombre,
+      cantidad: Math.max(1, faltanteDe(target)),
+      companero: false,
+    },
+  ];
+
+  // Productos cuyos BOM usan el material pedido → sus demás materiales
+  const { data: usos } = await supabase
+    .from("producto_componentes")
+    .select("producto_id")
+    .eq("material_id", materialId);
+  const productoIds = [...new Set((usos ?? []).map((u: any) => u.producto_id))];
+  if (productoIds.length) {
+    const { data: comps } = await supabase
+      .from("producto_componentes")
+      .select("material_id")
+      .in("producto_id", productoIds)
+      .not("material_id", "is", null)
+      .neq("material_id", materialId);
+    const companIds = [...new Set((comps ?? []).map((c: any) => c.material_id))];
+    if (companIds.length) {
+      const { data: mats } = await supabase
+        .from("materiales")
+        .select("*")
+        .in("id", companIds)
+        .eq("activo", true)
+        .eq("tipo_material_id", target.tipo_material_id); // regla: SC por tipo
+      const companeros = ((mats ?? []) as any[])
+        .map(toMaterial)
+        // solo los que están en REPONER (bajo el mínimo): los urgentes
+        .filter((m) => (disponible.get(m.id) ?? 0) < m.buffer_min)
+        .map((m) => ({
+          material_id: m.id,
+          nombre: m.nombre,
+          cantidad: Math.max(1, faltanteDe(m)),
+          companero: true,
+        }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 12);
+      out.push(...companeros);
+    }
+  }
+  return out;
+}
+
+/**
+ * Qué tipos de material vende cada proveedor (tabla
+ * proveedor_tipos_material — la nutre Juan con su lista). Tolerante:
+ * si la tabla aún no existe devuelve vacío y el selector no filtra.
+ */
+export async function listarProveedorTipos(): Promise<
+  { proveedor_id: string; tipo_material_id: number }[]
+> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("proveedor_tipos_material")
+      .select("proveedor_id, tipo_material_id");
+    if (error) return [];
+    return ((data ?? []) as any[]).map((r) => ({
+      proveedor_id: r.proveedor_id,
+      tipo_material_id: num(r.tipo_material_id),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 const g = globalThis as unknown as {
   __comprasRepositorioServer?: ComprasRepository;
 };
