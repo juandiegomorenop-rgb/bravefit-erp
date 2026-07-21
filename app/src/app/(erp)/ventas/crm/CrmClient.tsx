@@ -16,7 +16,11 @@ import {
   crearClienteCatalogo,
   guardarDatosCliente,
 } from "../cotizaciones/actions";
-import { crearOportunidad, moverEtapaCrm } from "./actions";
+import {
+  crearOportunidad,
+  descartarOportunidad,
+  moverEtapaCrm,
+} from "./actions";
 import { formatCOP } from "@/lib/formato";
 import type { Cliente, EtapaCrm, Usuario } from "@/lib/types/db";
 
@@ -621,7 +625,27 @@ export function CrmClient({
                 {formatCOP(totalCol)}
               </div>
               {fichas.map((card) => (
-                <TarjetaOportunidad key={card.oportunidad.id} card={card} />
+                <TarjetaOportunidad
+                  key={card.oportunidad.id}
+                  card={card}
+                  onDescartar={async () => {
+                    if (
+                      !window.confirm(
+                        `¿Descartar la ficha de ${card.cliente.nombre}? Sale del embudo (no cuenta como Perdido). No se puede deshacer.`,
+                      )
+                    )
+                      return;
+                    const r = await descartarOportunidad(card.oportunidad.id);
+                    if (!r.ok) {
+                      setBanner({ tipo: "error", texto: r.error });
+                      return;
+                    }
+                    setCards((cs) =>
+                      cs.filter((c) => c.oportunidad.id !== card.oportunidad.id),
+                    );
+                    setBanner({ tipo: "ok", texto: "Ficha descartada." });
+                  }}
+                />
               ))}
             </div>
           );
@@ -640,7 +664,14 @@ function iniciales(nombre: string): string {
     .toUpperCase();
 }
 
-function TarjetaOportunidad({ card }: { card: OportunidadCard }) {
+function TarjetaOportunidad({
+  card,
+  onDescartar,
+}: {
+  card: OportunidadCard;
+  /** Solo fichas SIN cotización: las que tienen se anulan desde la cotización. */
+  onDescartar: () => void;
+}) {
   const dias = diasEnEtapa(card.oportunidad.movida_en);
   return (
     <div
@@ -688,14 +719,27 @@ function TarjetaOportunidad({ card }: { card: OportunidadCard }) {
             {!card.cotizacion.tiene_items && " · vacía"}
           </Link>
         ) : (
-          <Link
-            href={`/ventas/cotizaciones/nueva?cliente=${card.cliente.id}&vendedor=${card.vendedor.id}&oportunidad=${card.oportunidad.id}`}
-            onClick={(e) => e.stopPropagation()}
-            title="Crear la cotización de esta oportunidad (queda vinculada a esta ficha)"
-            className="rounded-pill border border-dorado bg-dorado-suave px-2 py-0.5 text-[10.5px] font-bold text-dorado-oscuro hover:border-dorado-oscuro"
-          >
-            ＋ Cotizar
-          </Link>
+          <>
+            <Link
+              href={`/ventas/cotizaciones/nueva?cliente=${card.cliente.id}&vendedor=${card.vendedor.id}&oportunidad=${card.oportunidad.id}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Crear la cotización de esta oportunidad (queda vinculada a esta ficha)"
+              className="rounded-pill border border-dorado bg-dorado-suave px-2 py-0.5 text-[10.5px] font-bold text-dorado-oscuro hover:border-dorado-oscuro"
+            >
+              ＋ Cotizar
+            </Link>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDescartar();
+              }}
+              title="Descartar la ficha (error o prueba) — no cuenta como Perdido"
+              className="rounded-pill border border-borde px-2 py-0.5 text-[10.5px] font-bold text-neutro hover:border-rojo hover:text-rojo"
+            >
+              ✕ Descartar
+            </button>
+          </>
         )}
         {card.op && (
           <Link

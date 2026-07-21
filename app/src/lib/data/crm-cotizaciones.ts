@@ -80,6 +80,12 @@ export interface CrmRepository {
   /** Crea la oportunidad en la PRIMERA etapa del embudo (En conversaciones). */
   crearOportunidad(input: OportunidadNuevaInput): Promise<void>;
   /**
+   * Descarta la ficha del embudo (creada por error o de prueba): la
+   * saca del tablero sin borrarla de la BD. NO es lo mismo que
+   * Perdido — eso es un cierre real y sí cuenta en el embudo.
+   */
+  descartarOportunidad(id: string): Promise<void>;
+  /**
    * Mueve la ficha de etapa. Si la etapa destino es_ganada, EXIGE
    * cotización con ítems (si no, lanza Error con mensaje claro) y crea
    * la OP automática en "En Cola" con origen 'cotizacion'.
@@ -561,6 +567,13 @@ export class MockCrmRepository implements CrmRepository {
       eliminado_en: null,
       creado_en: tsRel(0),
     });
+  }
+
+  async descartarOportunidad(id: string): Promise<void> {
+    const o = this.store.oportunidades.find((x) => x.id === id && x.activo);
+    if (!o) throw new Error("La oportunidad no existe o ya fue descartada");
+    o.activo = false;
+    o.eliminado_en = tsRel(0);
   }
 
   async moverEtapa(oportunidad_id: string, etapa_id: number): Promise<ResultadoMoverCrm> {

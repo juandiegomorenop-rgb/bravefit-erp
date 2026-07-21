@@ -15,6 +15,22 @@ export type MoverEtapaCrmResp =
 
 export type CrearOportunidadResp = { ok: true } | { ok: false; error: string };
 
+/** Descartar ficha del embudo (error/prueba) — no es un cierre Perdido. */
+export async function descartarOportunidad(
+  id: string,
+): Promise<CrearOportunidadResp> {
+  try {
+    await getCrmRepository().descartarOportunidad(id);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error ? e.message : "No se pudo descartar la oportunidad.",
+    };
+  }
+}
+
 /** Alta manual de un lead al embudo (entra a la primera etapa). */
 export async function crearOportunidad(
   input: OportunidadNuevaInput,

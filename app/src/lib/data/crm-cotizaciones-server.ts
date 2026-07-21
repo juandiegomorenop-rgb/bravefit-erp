@@ -771,6 +771,29 @@ class SupabaseCrmRepository implements CrmRepository {
     if (error) throw new Error(error.message);
   }
 
+  async descartarOportunidad(id: string): Promise<void> {
+    const supabase = await createClient();
+    const { data: opo, error: oErr } = await supabase
+      .from("oportunidades")
+      .select("id, activo")
+      .eq("id", id)
+      .maybeSingle();
+    if (oErr) throw new Error(oErr.message);
+    if (!opo?.activo) {
+      throw new Error("La oportunidad no existe o ya fue descartada");
+    }
+    const { error } = await supabase
+      .from("oportunidades")
+      .update({ activo: false, eliminado_en: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      if (/policy|row-level|permission/i.test(error.message)) {
+        throw new Error("Solo un Administrador puede descartar oportunidades.");
+      }
+      throw new Error(error.message);
+    }
+  }
+
   async listarOportunidades(
     filtros: FiltrosCrm = {},
   ): Promise<OportunidadCard[]> {
