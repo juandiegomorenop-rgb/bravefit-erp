@@ -586,7 +586,7 @@ export function EditorCotizacion({
                   cambiar
                 </button>
               </span>
-            ) : (
+            ) : nuevoCli ? null : (
               <span className="relative">
                 <input
                   className={`${inputCls} w-full`}
@@ -617,14 +617,16 @@ export function EditorCotizacion({
                     ))}
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
                         setNuevoCli({
                           nombre: busquedaCli.trim(),
                           tipo: "persona",
                           nit_cedula: "",
                           telefono: "",
-                        })
-                      }
+                        });
+                        // cerrar el desplegable: el form toma su lugar
+                        setBusquedaCli("");
+                      }}
                       className="block w-full border-t border-borde bg-dorado-suave px-3 py-2 text-left text-[12.5px] font-semibold text-dorado-oscuro hover:bg-dorado/20"
                     >
                       ＋ Crear cliente “{busquedaCli.trim()}”
