@@ -470,7 +470,7 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     name: "editar_cotizacion",
     modulo: "ventas",
     description:
-      "EDITA una cotización en BORRADOR: agregar productos, quitar líneas, cambiar cantidades/precios/descuentos y/o anexar una observación — todo en una sola llamada. Solo funciona con Borradores (si está Enviada/Aprobada lo informa: sugiere Duplicarla). Acepta número completo o parcial. Es ATÓMICA: si un producto del catálogo o una línea de la cotización es ambigua o no existe, NO cambia nada y devuelve los candidatos — muéstralos y pregunta. Úsala para 'agrégale…', 'quítale…', 'cámbiale la cantidad…', 'ponle 3 en vez de 2', 'súbele el descuento'.",
+      "EDITA una cotización en Borrador o Enviada: agregar productos, quitar líneas, cambiar cantidades/precios/descuentos y/o anexar una observación — todo en una sola llamada. Aprobadas/Anuladas no se editan (lo informa: sugiere Duplicarla). Acepta número completo o parcial. Es ATÓMICA: si un producto del catálogo o una línea de la cotización es ambigua o no existe, NO cambia nada y devuelve los candidatos — muéstralos y pregunta. Úsala para 'agrégale…', 'quítale…', 'cámbiale la cantidad…', 'ponle 3 en vez de 2', 'súbele el descuento'.",
     input_schema: {
       type: "object",
       properties: {
@@ -559,10 +559,13 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       const repo = getCotizacionesRepository();
       const det = await repo.obtener(matches[0].id);
       if (!det) return { error: "No se pudo leer la cotización." };
-      if (det.estado.nombre !== "Borrador") {
+      if (
+        det.estado.nombre !== "Borrador" &&
+        det.estado.nombre !== "Enviada"
+      ) {
         return {
           editada: false,
-          motivo: `La ${det.cotizacion.numero} está ${det.estado.nombre} y solo los Borradores se editan. Sugiere al usuario DUPLICARLA (botón ⧉ en el detalle) para re-cotizar con cambios.`,
+          motivo: `La ${det.cotizacion.numero} está ${det.estado.nombre} y no se puede editar (solo Borradores y Enviadas). Sugiere al usuario DUPLICARLA (botón ⧉ en el detalle) para re-cotizar con cambios.`,
         };
       }
 

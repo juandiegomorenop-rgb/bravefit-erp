@@ -771,9 +771,10 @@ export class MockCotizacionesRepository implements CotizacionesRepository {
     const cot = this.store.cotizaciones.find((c) => c.id === id && c.activo);
     if (!cot) throw new Error(`Cotización ${id} no existe`);
     const estado = ESTADOS.find((e) => e.id === cot.estado_id)!;
-    if (estado.nombre !== "Borrador") {
+    // Regla de Juan (21-jul): Borradores Y Enviadas se editan.
+    if (estado.nombre !== "Borrador" && estado.nombre !== "Enviada") {
       throw new Error(
-        `Solo los borradores se editan; la ${cot.numero} está ${estado.nombre}. Duplíquela para re-cotizar.`,
+        `La ${cot.numero} está ${estado.nombre} y no se puede editar. Duplíquela para re-cotizar.`,
       );
     }
     Object.assign(cot, {

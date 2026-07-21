@@ -10,7 +10,8 @@ import { EditorCotizacion } from "../../EditorCotizacion";
 
 export const metadata = { title: "Editar cotización" };
 
-/** Solo los BORRADORES se editan; el resto redirige a su detalle. */
+/** Borradores Y Enviadas se editan (regla de Juan: los ajustes que
+ *  pida el cliente no deben exigir duplicar); el resto va al detalle. */
 export default async function Page({
   params,
 }: {
@@ -20,7 +21,8 @@ export default async function Page({
   const repo = getCotizacionesRepository();
   const det = await repo.obtener(id);
   if (!det) redirect("/ventas/cotizaciones");
-  if (det.estado.nombre !== "Borrador") redirect(`/ventas/cotizaciones/${id}`);
+  if (det.estado.nombre !== "Borrador" && det.estado.nombre !== "Enviada")
+    redirect(`/ventas/cotizaciones/${id}`);
 
   const [clientes, vendedores, productos, dimensiones, categorias, ciudades] =
     await Promise.all([

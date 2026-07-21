@@ -560,7 +560,7 @@ export function EditorCotizacion({
       <div className="mb-5">
         <p className="text-[12.5px] text-neutro">Ventas / Cotizaciones /</p>
         <h1 className="text-[26px] font-extrabold tracking-tight">
-          {cotizacionId ? `Editar ${numero} (borrador)` : "Nueva cotización"}
+          {cotizacionId ? `Editar ${numero}` : "Nueva cotización"}
         </h1>
       </div>
 
@@ -635,46 +635,51 @@ export function EditorCotizacion({
             )}
             {nuevoCli && (
               <span className="mt-1 flex flex-col gap-1.5 rounded-input border border-dorado bg-dorado-suave p-2.5">
-                <input
+                {/* Las etiquetas siguen al tipo: Empresa = Razón social + NIT */}
+                <select
+                  aria-label="Tipo de cliente"
                   className={inputCls}
-                  placeholder="Nombre / Razón social *"
+                  value={nuevoCli.tipo}
+                  onChange={(e) =>
+                    setNuevoCli({
+                      ...nuevoCli,
+                      tipo: e.target.value as "persona" | "empresa",
+                    })
+                  }
+                >
+                  <option value="persona">Persona natural</option>
+                  <option value="empresa">Empresa</option>
+                </select>
+                <input
+                  className={`${inputCls} min-w-0`}
+                  placeholder={
+                    nuevoCli.tipo === "empresa"
+                      ? "Razón social *"
+                      : "Nombres y apellidos *"
+                  }
                   value={nuevoCli.nombre}
                   onChange={(e) =>
                     setNuevoCli({ ...nuevoCli, nombre: e.target.value })
                   }
                 />
-                <span className="flex gap-1.5">
-                  <select
-                    aria-label="Tipo de cliente"
-                    className={`${inputCls} flex-1`}
-                    value={nuevoCli.tipo}
-                    onChange={(e) =>
-                      setNuevoCli({
-                        ...nuevoCli,
-                        tipo: e.target.value as "persona" | "empresa",
-                      })
-                    }
-                  >
-                    <option value="persona">Persona</option>
-                    <option value="empresa">Empresa</option>
-                  </select>
+                <span className="flex min-w-0 gap-1.5">
                   <input
-                    className={`${inputCls} flex-1`}
-                    placeholder="Cédula / NIT"
+                    className={`${inputCls} min-w-0 flex-1`}
+                    placeholder={nuevoCli.tipo === "empresa" ? "NIT" : "Cédula"}
                     value={nuevoCli.nit_cedula}
                     onChange={(e) =>
                       setNuevoCli({ ...nuevoCli, nit_cedula: e.target.value })
                     }
                   />
+                  <input
+                    className={`${inputCls} min-w-0 flex-1`}
+                    placeholder="Teléfono"
+                    value={nuevoCli.telefono}
+                    onChange={(e) =>
+                      setNuevoCli({ ...nuevoCli, telefono: e.target.value })
+                    }
+                  />
                 </span>
-                <input
-                  className={inputCls}
-                  placeholder="Teléfono"
-                  value={nuevoCli.telefono}
-                  onChange={(e) =>
-                    setNuevoCli({ ...nuevoCli, telefono: e.target.value })
-                  }
-                />
                 <span className="flex gap-2">
                   <button
                     type="button"
@@ -1381,7 +1386,7 @@ export function EditorCotizacion({
               {guardando
                 ? "Guardando…"
                 : cotizacionId
-                  ? "Guardar borrador"
+                  ? "Guardar cambios"
                   : "Crear borrador"}
             </button>
           </div>

@@ -71,23 +71,28 @@ export function AccionesCotizacion({
       >
         Anular
       </button>
+      {(esBorrador || estadoNombre === "Enviada") && (
+        <Link
+          href={`/ventas/cotizaciones/${id}/editar`}
+          title={
+            esBorrador
+              ? undefined
+              : "Ajustar la cotización enviada (sigue Enviada al guardar)"
+          }
+          className="rounded-pill border border-borde bg-card px-5 py-2.5 text-[13.5px] font-semibold hover:border-dorado"
+        >
+          ✎ Editar
+        </Link>
+      )}
       {esBorrador && (
-        <>
-          <Link
-            href={`/ventas/cotizaciones/${id}/editar`}
-            className="rounded-pill border border-borde bg-card px-5 py-2.5 text-[13.5px] font-semibold hover:border-dorado"
-          >
-            ✎ Editar
-          </Link>
-          <button
-            type="button"
-            disabled={ocupado}
-            onClick={() => void enviar()}
-            className="rounded-pill bg-verde px-5 py-2.5 text-[13.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {ocupado ? "Un momento…" : "Marcar Enviada"}
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={ocupado}
+          onClick={() => void enviar()}
+          className="rounded-pill bg-verde px-5 py-2.5 text-[13.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {ocupado ? "Un momento…" : "Marcar Enviada"}
+        </button>
       )}
     </span>
   );

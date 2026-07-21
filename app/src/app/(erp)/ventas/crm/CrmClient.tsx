@@ -74,6 +74,9 @@ export function CrmClient({
   const [clis, setClis] = useState<Cliente[]>(clientes);
   const [nuevoCliNombre, setNuevoCliNombre] = useState<string | null>(null);
   const [nuevoCliTel, setNuevoCliTel] = useState("");
+  const [nuevoCliTipo, setNuevoCliTipo] = useState<"persona" | "empresa">(
+    "persona",
+  );
   const [guardando, setGuardando] = useState(false);
   const [errorNueva, setErrorNueva] = useState<string | null>(null);
 
@@ -105,7 +108,7 @@ export function CrmClient({
       setGuardando(true);
       const rc = await crearClienteCatalogo({
         nombre: nuevoCliNombre.trim(),
-        tipo: "persona",
+        tipo: nuevoCliTipo,
         nit_cedula: null,
         telefono: nuevoCliTel.trim() || null,
       });
@@ -323,9 +326,24 @@ export function CrmClient({
                 </span>
               ) : nuevoCliNombre !== null ? (
                 <span className="flex flex-col gap-1.5">
+                  <select
+                    aria-label="Tipo de cliente"
+                    className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
+                    value={nuevoCliTipo}
+                    onChange={(e) =>
+                      setNuevoCliTipo(e.target.value as "persona" | "empresa")
+                    }
+                  >
+                    <option value="persona">Persona natural</option>
+                    <option value="empresa">Empresa</option>
+                  </select>
                   <input
                     className="rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
-                    placeholder="Nombre del cliente nuevo *"
+                    placeholder={
+                      nuevoCliTipo === "empresa"
+                        ? "Razón social *"
+                        : "Nombres y apellidos *"
+                    }
                     value={nuevoCliNombre}
                     onChange={(e) => setNuevoCliNombre(e.target.value)}
                   />

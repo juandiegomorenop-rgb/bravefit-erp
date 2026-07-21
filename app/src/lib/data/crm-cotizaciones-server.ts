@@ -631,9 +631,14 @@ class SupabaseCotizacionesRepository implements CotizacionesRepository {
     const supabase = await createClient();
     const det = await this.obtener(id);
     if (!det) throw new Error(`Cotización ${id} no existe`);
-    if (det.estado.nombre !== "Borrador") {
+    // Regla de Juan (21-jul): Borradores Y Enviadas se editan (ajustes
+    // que pide el cliente en la negociación, sin duplicar). Aprobadas
+    // no (ya generaron OP) ni Anuladas.
+    if (det.estado.nombre !== "Borrador" && det.estado.nombre !== "Enviada") {
       throw new Error(
-        `Solo los borradores se editan; la ${det.cotizacion.numero} está ${det.estado.nombre}. Duplíquela para re-cotizar.`,
+        `La ${det.cotizacion.numero} está ${det.estado.nombre} y no se puede editar` +
+          (det.estado.nombre === "Aprobada" ? " (ya generó O.P.)" : "") +
+          ". Duplíquela para re-cotizar.",
       );
     }
     const { error } = await supabase
