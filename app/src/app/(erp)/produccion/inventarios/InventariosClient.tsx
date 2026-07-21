@@ -225,7 +225,15 @@ export function InventariosClient({
                     />
                   </td>
                   <td className="px-4 py-2.5">
-                    <BadgeEstadoBuffer estado={estado} conSugerirSc />
+                    <BadgeEstadoBuffer
+                      estado={estado}
+                      sugerirHref={`/produccion/compras?sugerir=${material.id}&cantidad=${Math.max(
+                        1,
+                        Math.ceil(
+                          material.buffer_max - existencia.cantidad_disponible,
+                        ),
+                      )}`}
+                    />
                   </td>
                 </tr>
               );

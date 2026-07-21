@@ -27,9 +27,23 @@ export default async function Page({
   ]);
 
   const estadoParam = primero(sp.estado);
+
+  // Atajo "Sugerir SC" de Inventarios: ?sugerir=<material_id>&cantidad=<n>
+  // → el formulario de nueva solicitud abre prellenado con ese material.
+  const sugerirId = primero(sp.sugerir);
+  const sugerirCant = Number(primero(sp.cantidad)) || 1;
+  const materialSugerido = sugerirId
+    ? (materiales.find((m) => m.id === sugerirId) ?? null)
+    : null;
+
   return (
     <>
       <ComprasClient
+        prefill={
+          materialSugerido
+            ? { material_id: materialSugerido.id, cantidad: sugerirCant }
+            : undefined
+        }
         cards={cards}
         faltantes={faltantes}
         tipos={tipos}

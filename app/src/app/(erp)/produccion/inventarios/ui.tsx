@@ -19,10 +19,12 @@ const ESTADO_BADGE: Record<EstadoBuffer, { etiqueta: string; clase: string }> = 
  */
 export function BadgeEstadoBuffer({
   estado,
-  conSugerirSc = false,
+  sugerirHref,
 }: {
   estado: EstadoBuffer;
-  conSugerirSc?: boolean;
+  /** Link "Sugerir SC" con el material y la cantidad prellenados
+   *  (lo arma el llamador: /produccion/compras?sugerir=…&cantidad=…). */
+  sugerirHref?: string;
 }) {
   const b = ESTADO_BADGE[estado];
   return (
@@ -32,9 +34,10 @@ export function BadgeEstadoBuffer({
       >
         {b.etiqueta}
       </span>
-      {conSugerirSc && estado === "reponer" && (
+      {sugerirHref && estado === "reponer" && (
         <Link
-          href="/produccion/compras"
+          href={sugerirHref}
+          title="Abre Compras con la solicitud prellenada (óptimo − disponible)"
           className="whitespace-nowrap text-[11.5px] font-semibold text-dorado-oscuro hover:underline"
         >
           Sugerir SC →

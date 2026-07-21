@@ -25,6 +25,9 @@ interface Props {
   materiales: Material[];
   proveedores: Proveedor[];
   filtrosIniciales: FiltrosCompras;
+  /** Atajo "Sugerir SC" de Inventarios: abre el form con el material
+   *  y la cantidad (óptimo − disponible) ya puestos. */
+  prefill?: { material_id: string; cantidad: number };
 }
 
 const ESTADOS: { clave: FiltrosCompras["estado"]; nombre: string; badge: string }[] = [
@@ -51,11 +54,13 @@ export function ComprasClient({
   materiales,
   proveedores,
   filtrosIniciales,
+  prefill,
 }: Props) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(filtrosIniciales);
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [creando, setCreando] = useState(false);
+  // Con prefill (atajo Sugerir SC de Inventarios) el form abre solo
+  const [creando, setCreando] = useState(!!prefill);
   const [error, setError] = useState<string | null>(null);
 
   const filtradas = useMemo(() => {
@@ -152,6 +157,7 @@ export function ComprasClient({
         <FormNuevaSolicitud
           tipos={tipos}
           materiales={materiales}
+          inicial={prefill}
           onListo={() => {
             setCreando(false);
             router.refresh();
@@ -681,17 +687,38 @@ function FilaFaltante({
 function FormNuevaSolicitud({
   tipos,
   materiales,
+  inicial,
   onListo,
   onError,
 }: {
   tipos: TipoMaterial[];
   materiales: Material[];
+  /** Prellenado del atajo "Sugerir SC" de Inventarios. */
+  inicial?: { material_id: string; cantidad: number };
   onListo: () => void;
   onError: (e: string | null) => void;
 }) {
-  const [tipo, setTipo] = useState<number>(0);
-  const [notas, setNotas] = useState("");
-  const [items, setItems] = useState<(ScItemInput & { _k: number })[]>([]);
+  const matInicial = inicial
+    ? materiales.find((m) => m.id === inicial.material_id)
+    : undefined;
+  const [tipo, setTipo] = useState<number>(matInicial?.tipo_material_id ?? 0);
+  const [notas, setNotas] = useState(
+    matInicial
+      ? `Reposición sugerida desde Inventarios: ${matInicial.nombre} (óptimo − disponible).`
+      : "",
+  );
+  const [items, setItems] = useState<(ScItemInput & { _k: number })[]>(
+    matInicial
+      ? [
+          {
+            _k: 1,
+            material_id: matInicial.id,
+            descripcion: null,
+            cantidad: Math.max(1, inicial!.cantidad),
+          },
+        ]
+      : [],
+  );
   const [guardando, setGuardando] = useState(false);
   const delTipo = materiales.filter((m) => m.tipo_material_id === tipo);
 

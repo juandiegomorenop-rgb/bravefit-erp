@@ -68,7 +68,15 @@ export default async function Page({ params }: { params: Params }) {
             <span className="rounded-pill bg-neutro-bg px-2.5 py-0.5 text-[11px] font-bold text-neutro">
               {tipo.nombre}
             </span>
-            <BadgeEstadoBuffer estado={estado} conSugerirSc />
+            <BadgeEstadoBuffer
+              estado={estado}
+              sugerirHref={`/produccion/compras?sugerir=${material.id}&cantidad=${Math.max(
+                1,
+                Math.ceil(
+                  material.buffer_max - existencia.cantidad_disponible,
+                ),
+              )}`}
+            />
           </div>
         </div>
         <RegistrarAjuste existenciaId={existencia.id} unidad={unidad} />
