@@ -65,6 +65,14 @@ function rangoDe(periodo: Periodo): RangoFechas {
 
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 
+/** Normaliza texto para comparar nombres/SKUs sin acentos ni mayúsculas. */
+const limpiarTxt = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+
 // ---------------------------------------------------------------
 // Definición de herramientas
 // ---------------------------------------------------------------
@@ -455,6 +463,265 @@ export const HERRAMIENTAS: HerramientaChat[] = [
               `OJO: ${sinPrecio.map((x) => x.producto.nombre).join(", ")} tiene(n) precio $0 en el catálogo — el vendedor debe ponerlo antes de enviar.`,
             ]
           : [],
+      };
+    },
+  },
+  {
+    name: "editar_cotizacion",
+    modulo: "ventas",
+    description:
+      "EDITA una cotización en BORRADOR: agregar productos, quitar líneas, cambiar cantidades/precios/descuentos y/o anexar una observación — todo en una sola llamada. Solo funciona con Borradores (si está Enviada/Aprobada lo informa: sugiere Duplicarla). Acepta número completo o parcial. Es ATÓMICA: si un producto del catálogo o una línea de la cotización es ambigua o no existe, NO cambia nada y devuelve los candidatos — muéstralos y pregunta. Úsala para 'agrégale…', 'quítale…', 'cámbiale la cantidad…', 'ponle 3 en vez de 2', 'súbele el descuento'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cotizacion: {
+          type: "string",
+          description: "Número de la cotización (completo o parcial).",
+        },
+        agregar: {
+          type: "array",
+          description: "Productos nuevos (nombre o SKU del catálogo).",
+          items: {
+            type: "object",
+            properties: {
+              producto: { type: "string" },
+              cantidad: { type: "integer", description: "Default 1." },
+              precio_unit: { type: "number" },
+              descuento_pct: { type: "number" },
+            },
+            required: ["producto"],
+            additionalProperties: false,
+          },
+        },
+        quitar: {
+          type: "array",
+          items: { type: "string" },
+          description: "Líneas a eliminar (nombre o SKU del producto).",
+        },
+        cambiar: {
+          type: "array",
+          description:
+            "Cambios sobre líneas existentes: cantidad, precio o % descuento.",
+          items: {
+            type: "object",
+            properties: {
+              producto: { type: "string" },
+              cantidad: { type: "integer" },
+              precio_unit: { type: "number" },
+              descuento_pct: { type: "number" },
+            },
+            required: ["producto"],
+            additionalProperties: false,
+          },
+        },
+        nota: {
+          type: "string",
+          description: "Observación a anexar al campo de notas.",
+        },
+      },
+      required: ["cotizacion"],
+      additionalProperties: false,
+    },
+    claves: [
+      "agregale",
+      "agrégale",
+      "quitale",
+      "quítale",
+      "cambiale",
+      "cámbiale",
+      "edita la cotizacion",
+      "modifica la cotizacion",
+      "aumenta la cantidad",
+      "disminuye la cantidad",
+      "en vez de",
+    ],
+    async ejecutar(input) {
+      const q = String(input.cotizacion ?? "").trim();
+      if (!q) return { error: "Indica el número de la cotización." };
+      const supabase = await createClient();
+      const { data: matches, error: mErr } = await supabase
+        .from("cotizaciones")
+        .select("id, numero")
+        .eq("activo", true)
+        .ilike("numero", `%${q.replace(/[\s\-–]/g, "_")}%`);
+      if (mErr) throw new Error(mErr.message);
+      if (!matches?.length) {
+        return { error: `Ninguna cotización coincide con '${q}'.` };
+      }
+      if (matches.length > 1) {
+        return {
+          editada: false,
+          motivo: "El número coincide con varias — pregunta cuál.",
+          candidatas: matches.map((m) => m.numero),
+        };
+      }
+
+      const repo = getCotizacionesRepository();
+      const det = await repo.obtener(matches[0].id);
+      if (!det) return { error: "No se pudo leer la cotización." };
+      if (det.estado.nombre !== "Borrador") {
+        return {
+          editada: false,
+          motivo: `La ${det.cotizacion.numero} está ${det.estado.nombre} y solo los Borradores se editan. Sugiere al usuario DUPLICARLA (botón ⧉ en el detalle) para re-cotizar con cambios.`,
+        };
+      }
+
+      // Líneas actuales (con nombre/SKU auxiliares para matchearlas)
+      type Linea = (typeof det.items)[number];
+      const aux = (i: Linea) => ({
+        producto_id: i.producto_id,
+        descripcion: i.descripcion,
+        es_transporte: i.es_transporte,
+        aplica_iva: i.aplica_iva,
+        cantidad: i.cantidad,
+        precio_unit: i.precio_unit,
+        descuento_pct: i.descuento_pct,
+        alto_override_cm: i.alto_override_cm,
+        fondo_override_cm: i.fondo_override_cm,
+        color: i.color,
+        recargos: i.recargos,
+        _nombre: i.producto?.nombre ?? i.descripcion ?? "",
+        _sku: i.producto?.sku ?? "",
+        _quitar: false,
+      });
+      const lineas = det.items.map(aux);
+      const buscarLineas = (ref: string) =>
+        lineas.filter(
+          (l) =>
+            !l._quitar &&
+            (limpiarTxt(l._sku) === limpiarTxt(ref) ||
+              limpiarTxt(l._nombre).includes(limpiarTxt(ref))),
+        );
+
+      const problemas: string[] = [];
+      const cambiosHechos: string[] = [];
+
+      for (const ref of (input.quitar as string[] | undefined) ?? []) {
+        const m = buscarLineas(ref);
+        if (m.length === 0) problemas.push(`No hay línea que coincida con '${ref}'.`);
+        else if (m.length > 1)
+          problemas.push(
+            `'${ref}' coincide con varias líneas: ${m.map((l) => l._nombre).join(" / ")}.`,
+          );
+        else {
+          m[0]._quitar = true;
+          cambiosHechos.push(`Quitada: ${m[0]._nombre}`);
+        }
+      }
+
+      for (const c of ((input.cambiar as {
+        producto: string;
+        cantidad?: number;
+        precio_unit?: number;
+        descuento_pct?: number;
+      }[]) ?? [])) {
+        const m = buscarLineas(c.producto);
+        if (m.length === 0) problemas.push(`No hay línea que coincida con '${c.producto}'.`);
+        else if (m.length > 1)
+          problemas.push(
+            `'${c.producto}' coincide con varias líneas: ${m.map((l) => l._nombre).join(" / ")}.`,
+          );
+        else {
+          const l = m[0];
+          if (c.cantidad !== undefined) l.cantidad = Math.max(1, Number(c.cantidad) || 1);
+          if (c.precio_unit !== undefined) l.precio_unit = Math.max(0, Number(c.precio_unit) || 0);
+          if (c.descuento_pct !== undefined)
+            l.descuento_pct = Math.min(100, Math.max(0, Number(c.descuento_pct) || 0));
+          cambiosHechos.push(
+            `Cambiada: ${l._nombre} → cant ${l.cantidad}, precio ${l.precio_unit}, dcto ${l.descuento_pct}%`,
+          );
+        }
+      }
+
+      const agregarIn = ((input.agregar as {
+        producto: string;
+        cantidad?: number;
+        precio_unit?: number;
+        descuento_pct?: number;
+      }[]) ?? []);
+      const nuevas: (typeof lineas)[number][] = [];
+      if (agregarIn.length) {
+        const catalogo = (await listarProductosCatalogo()).filter((p) => p.activo);
+        for (const it of agregarIn) {
+          const qp = limpiarTxt(it.producto);
+          const porSku = catalogo.filter((p) => limpiarTxt(p.sku) === qp);
+          const porNombre = catalogo.filter((p) => limpiarTxt(p.nombre).includes(qp));
+          const m = porSku.length ? porSku : porNombre;
+          if (m.length === 0) problemas.push(`Producto '${it.producto}' no está en el catálogo.`);
+          else if (m.length > 1)
+            problemas.push(
+              `'${it.producto}' es ambiguo: ${m.slice(0, 6).map((p) => `${p.nombre} (${p.sku})`).join(" / ")}.`,
+            );
+          else {
+            const p = m[0];
+            nuevas.push({
+              producto_id: p.id,
+              descripcion: null,
+              es_transporte: false,
+              aplica_iva: true,
+              cantidad: Math.max(1, Number(it.cantidad) || 1),
+              precio_unit: it.precio_unit ?? p.precio_lista,
+              descuento_pct: Math.min(100, Math.max(0, it.descuento_pct ?? 0)),
+              alto_override_cm: null,
+              fondo_override_cm: null,
+              color: p.color_default ?? (p.origen === "propio" ? "Negro" : null),
+              recargos: [],
+              _nombre: p.nombre,
+              _sku: p.sku,
+              _quitar: false,
+            });
+            cambiosHechos.push(`Agregada: ${p.nombre} ×${Math.max(1, Number(it.cantidad) || 1)}`);
+          }
+        }
+      }
+
+      if (problemas.length) {
+        return {
+          editada: false,
+          motivo: "No se aplicó NINGÚN cambio: hay referencias por aclarar.",
+          problemas,
+        };
+      }
+
+      const finales = [...lineas.filter((l) => !l._quitar), ...nuevas];
+      if (!finales.length) {
+        return {
+          editada: false,
+          motivo: "La edición dejaría la cotización sin ítems — no se aplicó.",
+        };
+      }
+
+      const notaExtra = (input.nota as string | undefined)?.trim();
+      const notas = notaExtra
+        ? det.cotizacion.notas
+          ? `${det.cotizacion.notas}\n${notaExtra}`
+          : notaExtra
+        : det.cotizacion.notas;
+      if (notaExtra) cambiosHechos.push(`Nota anexada: "${notaExtra}"`);
+
+      await repo.actualizar(det.cotizacion.id, {
+        cliente_id: det.cotizacion.cliente_id,
+        vendedor_id: det.cotizacion.vendedor_id,
+        origen: det.cotizacion.origen,
+        segmento: det.cotizacion.segmento,
+        no_facturar: det.cotizacion.no_facturar,
+        pago_anticipado_completo: det.cotizacion.pago_anticipado_completo,
+        descuento_pct: det.cotizacion.descuento_pct,
+        tiempo_entrega: det.cotizacion.tiempo_entrega,
+        notas,
+        items: finales.map(({ _nombre, _sku, _quitar, ...item }) => item),
+      });
+
+      return {
+        editada: true,
+        cotizacion: det.cotizacion.numero,
+        cambios: cambiosHechos,
+        items_finales: finales.map((l) => ({
+          producto: l._nombre,
+          cantidad: l.cantidad,
+          precio_unit: l.precio_unit,
+          descuento_pct: l.descuento_pct,
+        })),
       };
     },
   },
