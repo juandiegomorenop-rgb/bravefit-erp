@@ -211,7 +211,7 @@ export function ComprasClient({
       </div>
 
       {/* Tabla: un renglón por solicitud, expandible */}
-      <div className="overflow-x-auto rounded-card border border-borde bg-card">
+      <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
         <table className="w-full min-w-[880px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-borde text-left text-[11.5px] uppercase tracking-wider text-neutro">

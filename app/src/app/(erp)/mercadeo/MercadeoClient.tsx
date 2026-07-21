@@ -226,7 +226,7 @@ export function MercadeoClient({
         <h2 className="mb-3 text-[16px] font-extrabold tracking-tight">
           Rendimiento de contenido orgánico
         </h2>
-        <div className="overflow-x-auto rounded-card border border-borde bg-card">
+        <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
           <table className="w-full min-w-[820px] border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-borde text-left text-[11px] uppercase tracking-wider text-neutro">
@@ -288,7 +288,7 @@ export function MercadeoClient({
           <h2 className="mb-3 text-[16px] font-extrabold tracking-tight">
             Rendimiento de pauta por canal
           </h2>
-          <div className="overflow-x-auto rounded-card border border-borde bg-card">
+          <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
             <table className="w-full min-w-[420px] border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-borde text-left text-[11px] uppercase tracking-wider text-neutro">
@@ -332,7 +332,7 @@ export function MercadeoClient({
             (leads cerrados vinculados a ventas)
           </span>
         </h2>
-        <div className="overflow-x-auto rounded-card border border-borde bg-card">
+        <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
           <table className="w-full min-w-[620px] border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-borde text-left text-[11px] uppercase tracking-wider text-neutro">

@@ -157,7 +157,7 @@ export default async function Page({ params }: { params: Params }) {
             Inmutable: toda corrección se registra como un ajuste nuevo.
           </p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="thead-flotante overflow-x-auto">
           <table className="w-full min-w-[760px] border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-borde bg-sutil text-left text-[11.5px] uppercase tracking-wider text-neutro">

@@ -123,7 +123,7 @@ export function VacacionesClient({ vacaciones, empleados }: Props) {
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
         <div className="space-y-5">
           {/* Solicitudes */}
-          <div className="overflow-x-auto rounded-card border border-borde bg-card">
+          <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
             <table className="w-full min-w-[680px] border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-borde text-left text-[11.5px] uppercase tracking-wider text-neutro">
@@ -149,7 +149,7 @@ export function VacacionesClient({ vacaciones, empleados }: Props) {
           </div>
 
           {/* Saldos por empleado */}
-          <div className="overflow-x-auto rounded-card border border-borde bg-card">
+          <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
             <p className="border-b border-borde px-4 py-3 text-[11.5px] font-bold uppercase tracking-wider text-neutro">
               Saldos — días pendientes y cuándo cumplen derecho
             </p>

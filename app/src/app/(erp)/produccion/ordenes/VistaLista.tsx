@@ -33,7 +33,7 @@ export function VistaLista({ cards, etapas }: Props) {
 
   return (
     <div className="overflow-hidden rounded-card border border-borde bg-card">
-      <div className="overflow-x-auto">
+      <div className="thead-flotante overflow-x-auto">
         <table className="w-full min-w-[880px] border-collapse text-left text-[13px]">
           <thead>
             <tr className="border-b border-[#f0efec] text-[11.5px] font-semibold tracking-[.4px] text-neutro">

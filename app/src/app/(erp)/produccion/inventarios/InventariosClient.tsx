@@ -155,7 +155,7 @@ export function InventariosClient({
       </div>
 
       {/* Tabla materia prima */}
-      <div className="overflow-x-auto rounded-card border border-borde bg-card">
+      <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
         <table className="w-full min-w-[960px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-borde bg-sutil text-left text-[11.5px] uppercase tracking-wider text-neutro">
@@ -262,7 +262,7 @@ export function InventariosClient({
       <p className="mb-3 mt-0.5 text-[12.5px] text-neutro">
         Stock de productos listos en bodega (MTS y comercializados).
       </p>
-      <div className="overflow-x-auto rounded-card border border-borde bg-card">
+      <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
         <table className="w-full min-w-[520px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-borde bg-sutil text-left text-[11.5px] uppercase tracking-wider text-neutro">

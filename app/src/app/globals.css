@@ -79,3 +79,22 @@ body {
     display: none !important;
   }
 }
+
+/* ------------------------------------------------------------
+ * Encabezados de tabla FLOTANTES (pedido de Juan 20-jul-2026):
+ * el contenedor scrollea por dentro (máx. 75vh) y el thead queda
+ * pegado arriba — siempre se sabe a qué columna corresponde el
+ * dato. Se activa poniendo .thead-flotante en el wrapper de la
+ * tabla (el mismo div que ya tiene overflow-x-auto).
+ * ------------------------------------------------------------ */
+.thead-flotante {
+  max-height: 75vh;
+  overflow: auto;
+}
+.thead-flotante thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--color-card);
+  box-shadow: inset 0 -1px 0 var(--color-borde);
+}

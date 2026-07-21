@@ -1,10 +1,10 @@
 "use server";
 
 import {
-  getComprasRepository,
   type RecepcionItemInput,
   type ScItemInput,
 } from "@/lib/data/compras";
+import { getComprasRepository } from "@/lib/data/compras-server";
 import type { SolicitudCompra } from "@/lib/types/db";
 
 /** SERVER actions de Compras — unión discriminada, nunca throw al cliente. */
