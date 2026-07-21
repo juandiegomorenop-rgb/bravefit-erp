@@ -66,6 +66,15 @@ export interface ResumenCumplimiento {
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const MS_DIA = 86_400_000;
 
+/** Tramos de antigüedad de la deuda (los usan el cálculo y el filtro
+ *  de la tabla al hacer clic en cada tarjeta). */
+export const TRAMOS_ATRASO: { etiqueta: string; min: number; max: number }[] = [
+  { etiqueta: "1 a 7 días", min: 1, max: 7 },
+  { etiqueta: "8 a 15 días", min: 8, max: 15 },
+  { etiqueta: "16 a 30 días", min: 16, max: 30 },
+  { etiqueta: "Más de 30 días", min: 31, max: Number.MAX_SAFE_INTEGER },
+];
+
 const dia = (iso: string) => new Date(`${iso}T00:00:00`);
 const diasEntre = (a: string, b: string) =>
   Math.round((dia(a).getTime() - dia(b).getTime()) / MS_DIA);
@@ -201,13 +210,7 @@ export function calcularCumplimiento(
     : 0;
 
   // Antigüedad de la deuda viva
-  const rangos: [string, number, number][] = [
-    ["1 a 7 días", 1, 7],
-    ["8 a 15 días", 8, 15],
-    ["16 a 30 días", 16, 30],
-    ["Más de 30 días", 31, Number.MAX_SAFE_INTEGER],
-  ];
-  const tramos: TramoAtraso[] = rangos.map(([etiqueta, min, max]) => {
+  const tramos: TramoAtraso[] = TRAMOS_ATRASO.map(({ etiqueta, min, max }) => {
     const filas = atrasadas_hoy.filter(
       (f) => f.dias_atraso >= min && f.dias_atraso <= max,
     );

@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ResumenCumplimiento } from "@/lib/data/cumplimiento";
+import { useMemo, useState } from "react";
+import {
+  TRAMOS_ATRASO,
+  type ResumenCumplimiento,
+} from "@/lib/data/cumplimiento";
 import { formatCOP, formatFechaCorta } from "@/lib/formato";
 import { parseFechaLocal } from "@/lib/ops-logic";
 
@@ -34,6 +38,20 @@ export function CumplimientoClient({
   const { serie, total, atrasadas_hoy, tramos, dias_atraso_promedio } = resumen;
   const maxBarra = Math.max(1, ...serie.map((m) => m.comprometidas));
   const valorAtrasado = atrasadas_hoy.reduce((a, f) => a + f.valor, 0);
+
+  // Las tarjetas de antigüedad filtran la tabla de abajo (clic para
+  // filtrar, clic de nuevo para quitar el filtro).
+  const [tramoSel, setTramoSel] = useState<string | null>(null);
+  const rangoSel = TRAMOS_ATRASO.find((t) => t.etiqueta === tramoSel);
+  const atrasadasVisibles = useMemo(
+    () =>
+      rangoSel
+        ? atrasadas_hoy.filter(
+            (f) => f.dias_atraso >= rangoSel.min && f.dias_atraso <= rangoSel.max,
+          )
+        : atrasadas_hoy,
+    [atrasadas_hoy, rangoSel],
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6">
@@ -201,37 +219,87 @@ export function CumplimientoClient({
 
       {/* Antigüedad de la deuda viva */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {tramos.map((t) => (
-          <div
-            key={t.etiqueta}
-            className={`rounded-card border px-4 py-3 ${
-              t.n > 0 ? "border-rojo/30 bg-rojo-bg" : "border-borde bg-card"
-            }`}
-          >
-            <p className="text-[11px] font-bold uppercase tracking-wider text-neutro">
-              Atraso {t.etiqueta}
-            </p>
-            <p
-              className={`text-[24px] font-extrabold ${t.n > 0 ? "text-rojo" : ""}`}
+        {tramos.map((t) => {
+          const activo = tramoSel === t.etiqueta;
+          return (
+            <button
+              key={t.etiqueta}
+              type="button"
+              disabled={t.n === 0}
+              onClick={() => setTramoSel(activo ? null : t.etiqueta)}
+              title={
+                t.n === 0
+                  ? "Sin pedidos en este tramo"
+                  : activo
+                    ? "Quitar el filtro"
+                    : "Ver solo estos pedidos en la tabla"
+              }
+              className={`rounded-card border px-4 py-3 text-left transition-shadow ${
+                activo
+                  ? "border-carbon bg-carbon text-white shadow-md"
+                  : t.n > 0
+                    ? "border-rojo/30 bg-rojo-bg hover:border-rojo hover:shadow-sm"
+                    : "cursor-default border-borde bg-card"
+              }`}
             >
-              {t.n}
-            </p>
-            {mostrarValores && t.n > 0 && (
-              <p className="text-[11px] text-neutro">{formatCOP(t.valor)}</p>
-            )}
-          </div>
-        ))}
+              <p
+                className={`text-[11px] font-bold uppercase tracking-wider ${
+                  activo ? "text-white/70" : "text-neutro"
+                }`}
+              >
+                Atraso {t.etiqueta}
+              </p>
+              <p
+                className={`text-[24px] font-extrabold ${
+                  activo ? "text-white" : t.n > 0 ? "text-rojo" : ""
+                }`}
+              >
+                {t.n}
+              </p>
+              {mostrarValores && t.n > 0 && (
+                <p
+                  className={`text-[11px] ${activo ? "text-white/70" : "text-neutro"}`}
+                >
+                  {formatCOP(t.valor)}
+                </p>
+              )}
+              {t.n > 0 && (
+                <p
+                  className={`mt-0.5 text-[10.5px] font-semibold ${
+                    activo ? "text-dorado-claro" : "text-dorado-oscuro"
+                  }`}
+                >
+                  {activo ? "✕ quitar filtro" : "ver pedidos →"}
+                </p>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Detalle de atrasados vivos */}
       <div className="mt-5 overflow-x-auto rounded-card border border-borde bg-card">
-        <div className="flex items-center justify-between gap-3 px-5 py-4">
-          <h2 className="text-[14px] font-bold">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <h2 className="flex flex-wrap items-center gap-2 text-[14px] font-bold">
             Atrasados hoy — deuda viva
+            {tramoSel && (
+              <span className="flex items-center gap-1.5 rounded-pill bg-carbon px-2.5 py-0.5 text-[11px] font-bold text-white">
+                {tramoSel}
+                <button
+                  type="button"
+                  onClick={() => setTramoSel(null)}
+                  aria-label="Quitar filtro"
+                  className="text-white/70 hover:text-white"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
           </h2>
           <span className="text-[12px] text-neutro">
-            {atrasadas_hoy.length} pedido
-            {atrasadas_hoy.length === 1 ? "" : "s"}
+            {atrasadasVisibles.length} pedido
+            {atrasadasVisibles.length === 1 ? "" : "s"}
+            {tramoSel && ` de ${atrasadas_hoy.length}`}
           </span>
         </div>
         <table className="w-full min-w-[820px] border-collapse text-[13px]">
@@ -248,7 +316,7 @@ export function CumplimientoClient({
             </tr>
           </thead>
           <tbody>
-            {atrasadas_hoy.map((f) => (
+            {atrasadasVisibles.map((f) => (
               <tr key={f.op_id} className="border-b border-borde last:border-0">
                 <td className="px-5 py-2.5 font-bold">
                   <Link
@@ -278,13 +346,15 @@ export function CumplimientoClient({
                 )}
               </tr>
             ))}
-            {atrasadas_hoy.length === 0 && (
+            {atrasadasVisibles.length === 0 && (
               <tr>
                 <td
                   colSpan={mostrarValores ? 6 : 5}
                   className="px-5 py-10 text-center text-neutro"
                 >
-                  Sin pedidos vencidos sin entregar. 🎉
+                  {tramoSel
+                    ? "Ningún pedido en ese tramo de atraso."
+                    : "Sin pedidos vencidos sin entregar. 🎉"}
                 </td>
               </tr>
             )}
