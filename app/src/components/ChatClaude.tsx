@@ -168,9 +168,9 @@ export function ChatClaude({ modulos }: { modulos: Modulo[] }) {
                     enviar(input);
                   }
                 }}
-                rows={1}
-                placeholder="Escribe tu pregunta…"
-                className="max-h-28 flex-1 resize-none bg-transparent text-[13px] text-carbon outline-none placeholder:text-neutral-400"
+                rows={2}
+                placeholder="Escribe tu pregunta… (Shift+Enter = salto de línea)"
+                className="max-h-56 min-h-[40px] flex-1 resize-y bg-transparent text-[13px] text-carbon outline-none placeholder:text-neutral-400"
               />
               <button
                 onClick={() => enviar(input)}

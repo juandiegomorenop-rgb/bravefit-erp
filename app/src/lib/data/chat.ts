@@ -34,6 +34,7 @@ import { getEntregasRepository } from "@/lib/data/entregas-server";
 import { estadoBuffer } from "@/lib/data/inventario";
 import { getInventarioRepository } from "@/lib/data/inventario-server";
 import { bomDeProductos, getOpsRepository } from "@/lib/data/ops-server";
+import { createClient } from "@/lib/supabase/server";
 import { getRrhhRepository } from "@/lib/data/rrhh";
 import type { RangoFechas } from "@/lib/data/mercadeo";
 import type { Modulo } from "@/lib/permisos";
@@ -226,10 +227,16 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     name: "crear_cotizacion",
     modulo: "ventas",
     description:
-      "CREA una cotización en estado BORRADOR (número COT_CHAT_####) con los productos y el cliente que indique el usuario. Es una ACCIÓN de escritura: úsala SOLO cuando el usuario pida explícitamente crear/montar/armar una cotización Y haya dado el nombre del cliente y al menos un producto con cantidad. Si un producto no coincide o es ambiguo, la herramienta NO crea nada y devuelve los candidatos: muéstraselos al usuario y pregunta cuál es. El cliente se busca por nombre/teléfono/cédula y si no existe se crea (sin duplicar). La cotización queda en Borrador para que el vendedor la revise, complete los datos de facturación que falten y la envíe desde el ERP — dile siempre al usuario el número creado y qué datos del cliente faltan.",
+      "CREA una cotización en estado BORRADOR (número COT_<FUENTE>_####) con los productos y el cliente que indique el usuario. Es una ACCIÓN de escritura: úsala SOLO cuando el usuario pida explícitamente crear/montar/armar una cotización Y haya dado el nombre del cliente, al menos un producto con cantidad Y la fuente del lead. `fuente` = POR DÓNDE LLEGÓ EL CLIENTE (whatsapp → COT_WA, showroom → COT_SR…), NO la herramienta usada — si el usuario no la dijo, PREGÚNTALE antes de llamar esta herramienta, no la asumas. Si un producto no coincide o es ambiguo, la herramienta NO crea nada y devuelve los candidatos: muéstraselos y pregunta cuál es. El cliente se busca por nombre/teléfono/cédula y si no existe se crea (sin duplicar). La cotización queda en Borrador para que el vendedor la revise, complete los datos de facturación que falten y la envíe desde el ERP — dile siempre el número creado y qué datos del cliente faltan.",
     input_schema: {
       type: "object",
       properties: {
+        fuente: {
+          type: "string",
+          enum: ["whatsapp", "showroom", "shopify", "planner"],
+          description:
+            "Por dónde llegó el lead (define la sigla del número). Normalmente whatsapp o showroom. Pregunta al usuario si no lo dijo.",
+        },
         cliente: {
           type: "object",
           properties: {
@@ -237,6 +244,10 @@ export const HERRAMIENTAS: HerramientaChat[] = [
             telefono: { type: "string" },
             nit_cedula: { type: "string" },
             email: { type: "string" },
+            direccion: {
+              type: "string",
+              description: "Dirección de entrega/factura si el usuario la dio.",
+            },
             tipo: { type: "string", enum: ["persona", "empresa"] },
           },
           required: ["nombre"],
@@ -271,7 +282,7 @@ export const HERRAMIENTAS: HerramientaChat[] = [
         segmento: { type: "string", enum: ["B2B", "B2C"] },
         notas: { type: "string" },
       },
-      required: ["cliente", "items"],
+      required: ["fuente", "cliente", "items"],
       additionalProperties: false,
     },
     claves: [
@@ -284,11 +295,24 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       "hazle una cotizacion",
     ],
     async ejecutar(input) {
+      const fuente = input.fuente as
+        | "whatsapp"
+        | "showroom"
+        | "shopify"
+        | "planner"
+        | undefined;
+      if (!fuente) {
+        return {
+          error:
+            "Falta la fuente del lead (whatsapp, showroom…). Pregúntale al usuario por dónde llegó el cliente.",
+        };
+      }
       const cli = input.cliente as {
         nombre: string;
         telefono?: string;
         nit_cedula?: string;
         email?: string;
+        direccion?: string;
         tipo?: "persona" | "empresa";
       };
       const itemsIn = (input.items ?? []) as {
@@ -366,7 +390,7 @@ export const HERRAMIENTAS: HerramientaChat[] = [
         nit_cedula: cli.nit_cedula ?? null,
         telefono: cli.telefono ?? null,
         email: cli.email ?? null,
-        direccion: null,
+        direccion: cli.direccion ?? null,
       });
 
       // 3) Vendedor: el pedido por nombre, o Yohan por defecto.
@@ -383,7 +407,7 @@ export const HERRAMIENTAS: HerramientaChat[] = [
       const r = await getCotizacionesRepository().crear({
         cliente_id: cliente.id,
         vendedor_id,
-        origen: "chat",
+        origen: fuente,
         segmento: (input.segmento as "B2B" | "B2C") ?? "B2C",
         no_facturar: false,
         pago_anticipado_completo: false,
@@ -432,6 +456,64 @@ export const HERRAMIENTAS: HerramientaChat[] = [
             ]
           : [],
       };
+    },
+  },
+  {
+    name: "agregar_nota_cotizacion",
+    modulo: "ventas",
+    description:
+      "AGREGA una nota/observación a una cotización existente (se anexa al campo de notas, que sale en el documento). Sirve para dejar registrada la dirección de envío, condiciones habladas con el cliente o cualquier observación. Acepta el número completo o parcial (ej. 'COT_WA_0003' o '0003'). Si el número coincide con varias, devuelve los candidatos para aclarar. Úsala cuando el usuario pida agregar una nota/observación/dato a una cotización ya creada.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cotizacion: {
+          type: "string",
+          description: "Número de la cotización (completo o parcial).",
+        },
+        nota: { type: "string", description: "Texto a agregar." },
+      },
+      required: ["cotizacion", "nota"],
+      additionalProperties: false,
+    },
+    claves: [
+      "agrega nota",
+      "agregar nota",
+      "observacion",
+      "observación",
+      "anota en la cotizacion",
+      "nota a la cotizacion",
+    ],
+    async ejecutar(input) {
+      const q = String(input.cotizacion ?? "").trim();
+      const nota = String(input.nota ?? "").trim();
+      if (!q || !nota) {
+        return { error: "Se necesita el número de la cotización y la nota." };
+      }
+      const supabase = await createClient();
+      const { data: matches, error } = await supabase
+        .from("cotizaciones")
+        .select("id, numero, notas")
+        .eq("activo", true)
+        .ilike("numero", `%${q.replace(/[\s\-–]/g, "_")}%`);
+      if (error) throw new Error(error.message);
+      if (!matches?.length) {
+        return { error: `Ninguna cotización coincide con '${q}'.` };
+      }
+      if (matches.length > 1) {
+        return {
+          agregada: false,
+          motivo: "El número coincide con varias — pregunta cuál.",
+          candidatas: matches.map((m) => m.numero),
+        };
+      }
+      const cot = matches[0];
+      const nuevas = cot.notas ? `${cot.notas}\n${nota}` : nota;
+      const { error: uErr } = await supabase
+        .from("cotizaciones")
+        .update({ notas: nuevas })
+        .eq("id", cot.id);
+      if (uErr) throw new Error(uErr.message);
+      return { agregada: true, cotizacion: cot.numero, nota };
     },
   },
   {
