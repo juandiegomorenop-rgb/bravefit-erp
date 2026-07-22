@@ -211,6 +211,78 @@ export async function subirFotoProducto(
   return toProducto(data);
 }
 
+/** Campos del catálogo editables desde la ficha del producto. */
+export type CamposProducto = {
+  nombre: string;
+  descripcion: string | null;
+  categoria_id: number;
+  origen: "propio" | "comercializado";
+  precio_lista: number;
+  costo_estandar: number | null;
+  ancho_cm: number | null;
+  profundidad_cm: number | null;
+  alto_cm: number | null;
+  peso_kg: number | null;
+  sku_siigo: string | null;
+};
+
+/**
+ * Edita el catálogo desde la UI (antes solo se podía por SQL, que era el
+ * cuello de botella para mantener la lista de precios al día).
+ * El SKU NO se edita: es la llave de las integraciones (Shopify/Siigo) y
+ * de los scripts de carga. La RLS de `productos` exige permiso de Ventas.
+ */
+export async function actualizarProducto(
+  productoId: string,
+  campos: CamposProducto,
+): Promise<Producto> {
+  const nombre = campos.nombre.trim();
+  if (!nombre) throw new Error("El nombre del producto es obligatorio.");
+  if (!Number.isFinite(campos.precio_lista) || campos.precio_lista < 0) {
+    throw new Error("El precio de lista no puede ser negativo.");
+  }
+  for (const [etiqueta, valor] of [
+    ["El costo estándar", campos.costo_estandar],
+    ["El ancho", campos.ancho_cm],
+    ["El fondo", campos.profundidad_cm],
+    ["El alto", campos.alto_cm],
+    ["El peso", campos.peso_kg],
+  ] as const) {
+    if (valor !== null && (!Number.isFinite(valor) || valor < 0)) {
+      throw new Error(`${etiqueta} no puede ser negativo.`);
+    }
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("productos")
+    .update({
+      nombre,
+      descripcion: campos.descripcion?.trim() || null,
+      categoria_id: campos.categoria_id,
+      origen: campos.origen,
+      precio_lista: campos.precio_lista,
+      costo_estandar: campos.costo_estandar,
+      ancho_cm: campos.ancho_cm,
+      profundidad_cm: campos.profundidad_cm,
+      alto_cm: campos.alto_cm,
+      peso_kg: campos.peso_kg,
+      sku_siigo: campos.sku_siigo?.trim() || null,
+    })
+    .eq("id", productoId)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (/policy|row-level|permission/i.test(error.message)) {
+      throw new Error("Solo un Administrador puede editar el catálogo.");
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error("El producto no existe.");
+  return toProducto(data);
+}
+
 const globalRepo = globalThis as unknown as {
   __productosRepositorioServer?: ProductosRepository;
 };

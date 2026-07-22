@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  CATEGORIA_COMPONENTE_LABEL,
-  CLASIFICACION_DESCRIPCION,
-} from "@/lib/data/productos";
+import { CATEGORIA_COMPONENTE_LABEL } from "@/lib/data/productos";
 import { getProductosRepository } from "@/lib/data/productos-server";
+import { FichaProducto } from "./FichaProducto";
 import { SubirFotoProducto } from "./SubirFotoProducto";
-import { formatCOP, formatFecha } from "@/lib/formato";
+import { formatCOP } from "@/lib/formato";
 import {
   BadgeClasificacion,
   BadgeEsRack,
@@ -29,16 +27,14 @@ const EJE_LABEL: Record<string, string> = { alto: "Alto", fondo: "Fondo" };
 /** Ficha completa del producto — server component (solo lectura). */
 export default async function Page({ params }: { params: Params }) {
   const { id } = await params;
-  const detalle = await getProductosRepository().obtener(id);
+  const repo = getProductosRepository();
+  const [detalle, categorias] = await Promise.all([
+    repo.obtener(id),
+    repo.listarCategorias(),
+  ]);
   if (!detalle) notFound();
 
   const { producto: p, categoria, dimensiones, componentes } = detalle;
-
-  const dimsBase = [
-    p.ancho_cm ? `Ancho ${p.ancho_cm} cm` : null,
-    p.profundidad_cm ? `Fondo ${p.profundidad_cm} cm` : null,
-    p.alto_cm ? `Alto ${p.alto_cm} cm` : null,
-  ].filter(Boolean);
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6">
@@ -90,49 +86,12 @@ export default async function Page({ params }: { params: Params }) {
 
         {/* Ficha */}
         <div className="flex flex-col gap-4">
-          {/* Precio + clasificación explicada */}
-          <div className="rounded-card border border-borde bg-card px-5 py-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-[13px] text-neutro">Precio de lista</span>
-              <b className="text-[26px] font-extrabold tracking-tight text-dorado-oscuro">
-                {formatCOP(p.precio_lista)}
-                <span className="ml-2 text-[11px] font-semibold text-neutro">
-                  IVA incluido (19%)
-                </span>
-              </b>
-            </div>
-            <div className="mt-3 rounded-input bg-sutil px-3.5 py-2.5 text-[12.5px] leading-relaxed text-neutro">
-              <b className="text-carbon">{p.clasificacion}:</b>{" "}
-              {CLASIFICACION_DESCRIPCION[p.clasificacion]}
-            </div>
-          </div>
-
-          {/* Datos generales */}
-          <div className="flex flex-col gap-2.5 rounded-card border border-borde bg-card px-5 py-4 text-[13px]">
-            <h2 className="text-[14px] font-bold">Ficha técnica</h2>
-            <Dato label="Categoría" valor={categoria.nombre} />
-            <Dato
-              label="Origen"
-              valor={p.origen === "propio" ? "Fabricación propia" : "Comercializado"}
-            />
-            <Dato
-              label="Dimensiones base"
-              valor={dimsBase.length > 0 ? dimsBase.join(" · ") : "—"}
-            />
-            <Dato label="Peso" valor={p.peso_kg ? `${p.peso_kg} kg` : "—"} />
-            <Dato
-              label="Costo estándar"
-              valor={p.costo_estandar ? formatCOP(p.costo_estandar) : "—"}
-            />
-            <Dato
-              label="Shopify"
-              valor={p.shopify_product_id ? "Vinculado" : "Sin vincular"}
-            />
-            <Dato label="Creado" valor={formatFecha(new Date(p.creado_en))} />
-            {p.descripcion && (
-              <p className="mt-1 leading-relaxed text-neutro">{p.descripcion}</p>
-            )}
-          </div>
+          {/* Precio + ficha técnica, editables en línea */}
+          <FichaProducto
+            producto={p}
+            categoria={categoria}
+            categorias={categorias}
+          />
 
           {/* Colores disponibles */}
           <div className="rounded-card border border-borde bg-card px-5 py-4">
@@ -276,11 +235,3 @@ export default async function Page({ params }: { params: Params }) {
   );
 }
 
-function Dato({ label, valor }: { label: string; valor: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-neutro">{label}</span>
-      <b className="text-right">{valor}</b>
-    </div>
-  );
-}
