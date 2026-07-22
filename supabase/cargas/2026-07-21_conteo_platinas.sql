@@ -1,18 +1,19 @@
 -- ============================================================
--- CONTEO FÍSICO DE PLATINAS — 21-jul-2026 (hoja física de Juan)
+-- CONTEO FÍSICO DE PLATINAS — 21-jul-2026 · v2 CORREGIDA POR JUAN
 -- ============================================================
--- Ajusta las 67 referencias contadas a su valor físico registrando
--- un movimiento 'ajuste' por la DIFERENCIA contra el saldo actual
--- (traza completa en kardex). Idempotente: saldo ya correcto → no
--- registra nada.
+-- v2 (22-jul): Juan revisó la transcripción en el Excel y corrigió
+-- 13 referencias con notas "confirmo N" + su mensaje en chat:
+--   P057→0, P059→0, P060→7, P061→20, P062→60, P063→4, P064→11,
+--   P065→20, P066→24 (dejar como estaba), P067→13, P069→5,
+--   P070→0 (mensaje manda sobre el Excel), P071→3, P072→30.
+-- Ajusta cada referencia a su valor físico con un movimiento
+-- 'ajuste' por la DIFERENCIA contra el saldo actual (traza en
+-- kardex). IDEMPOTENTE y AUTO-CORRECTIVA: si se corrió la v1, esta
+-- v2 endereza los saldos igual (siempre apunta al objetivo).
 --
--- Incluye la corrección del CRUCE P008/P010: el conteo inicial del
--- 16-jul las tenía invertidas (P008=38 y P010=0; lo físico es
--- P008=0 y P010=60).
+-- Incluye la corrección del CRUCE P008/P010 del conteo inicial.
 --
 -- FUERA de este script (a propósito):
---   · P072 (target doble): la hoja no traía cantidad legible; queda
---     con su saldo actual hasta que Juan la cuente.
 --   · P081-P083 (corazón poleas / alm. 5 elásticos / espaldar dap
 --     bar): referencias nuevas manuscritas, Juan debe aclararlas.
 --   · P076-P080 e i3D001/i3D002: no estaban en la hoja del conteo.
@@ -82,20 +83,21 @@ begin
       ('P054 · Platina pared dc bar',                                   0),
       ('P055 · Platina pull up dc bar',                                 0),
       ('P056 · Platina pie amigo pull up dc bar',                       0),
-      ('P057 · Platina pared dap bar',                                  8),
+      ('P057 · Platina pared dap bar',                                  0),
       ('P058 · Platina gancho platina pared dap bar',                   0),
-      ('P059 · Platina unión dap bar',                                  7),
-      ('P060 · Platina pull up dap bar',                               20),
-      ('P061 · Platina doble tapa polea',                               6),
-      ('P062 · Platina almacenador 3 barras',                           4),
-      ('P063 · Platina almacenador 5 barras',                          11),
-      ('P064 · Almacenador de agarres',                                20),
-      ('P065 · Platinas en L para guías smith tradicional',             1),
-      ('P066 · Platinas basculante almacenador de mancuernas',         13),
-      ('P067 · Platina gancho smith',                                   5),
-      ('P069 · Platina rack pad',                                       0),
-      ('P070 · Platina X para carro integrado',                         3),
-      ('P071 · Platina porta discos sistema de poleas',                30)
+      ('P059 · Platina unión dap bar',                                  0),
+      ('P060 · Platina pull up dap bar',                                7),
+      ('P061 · Platina doble tapa polea',                              20),
+      ('P062 · Platina almacenador 3 barras',                          60),
+      ('P063 · Platina almacenador 5 barras',                           4),
+      ('P064 · Almacenador de agarres',                                11),
+      ('P065 · Platinas en L para guías smith tradicional',            20),
+      ('P066 · Platinas basculante almacenador de mancuernas',         24),
+      ('P067 · Platina gancho smith',                                  13),
+      ('P069 · Platina rack pad',                                       5),
+      ('P070 · Platina X para carro integrado',                         0),
+      ('P071 · Platina porta discos sistema de poleas',                 3),
+      ('P072 · Platina target doble',                                  30)
     ) as t(nombre, objetivo)
   loop
     select e.id, r.objetivo - e.cantidad_disponible
@@ -109,12 +111,12 @@ begin
         (existencia_id, tipo, cantidad, usuario_id, nota)
       values
         (v_ex, 'ajuste', v_delta, v_user,
-         'Conteo físico 21-jul-2026 (incluye corrección cruce P008/P010)');
+         'Conteo físico 21-jul-2026 v2 (correcciones de Juan 22-jul)');
     end if;
   end loop;
 end $$;
 
--- Verificación: saldos tras el ajuste (deben coincidir con la hoja).
+-- Verificación: saldos tras el ajuste (deben coincidir con el Excel corregido).
 select m.nombre, e.cantidad_disponible
   from materiales m
   join existencias e on e.material_id = m.id and e.tipo = 'materia_prima'
