@@ -1,5 +1,9 @@
 -- ============================================================
--- SCRIPT 5 · CARGA DE OPs — PARTE B: ítems, despachos, garantías
+-- SCRIPT 5 · CARGA DE OPs — PARTE B: ítems, despachos, garantías · v2
+-- v2 (fix error 23514): la carga extras del 18-jul YA había agregado a
+-- OP_WA_0009 las barras olímpicas, agarres y mancuernas 5-25kg (y algunas
+-- ya tenían despachos) → se retiran esos 14 ítems de esta carga y el
+-- despacho ahora registra SOLO la cantidad pendiente (cantidad-entregada).
 -- ============================================================
 -- Corre DESPUÉS del script 4 (las 39 OPs deben existir).
 -- Contenido:
@@ -367,20 +371,6 @@ begin
       -- 0055 Rene Lizarazo
       ('OP_WA_0055','5HQRo',1,null,null),
       -- ==== FALTANTES DE OP_WA_0009 (Valbuena, 3 páginas) ====
-      ('OP_WA_0009','6BaOlNeg15kg',1,null,'2m'),
-      ('OP_WA_0009','6BaOlNeg20kg',1,null,'2.2m'),
-      ('OP_WA_0009','3AgPulUp',1,null,null),
-      ('OP_WA_0009','3AgIndivid',2,null,null),
-      ('OP_WA_0009','3AgTob',1,null,null),
-      ('OP_WA_0009','3AgLazo',1,null,null),
-      ('OP_WA_0009','6MaHex5kg',2,null,null),
-      ('OP_WA_0009','6MaHex7.5kg',2,null,null),
-      ('OP_WA_0009','6MaHex10kg',2,null,null),
-      ('OP_WA_0009','6MaHex12.5kg',2,null,null),
-      ('OP_WA_0009','6MaHex15kg',2,null,null),
-      ('OP_WA_0009','6MaHex17.5kg',2,null,null),
-      ('OP_WA_0009','6MaHex20kg',2,null,null),
-      ('OP_WA_0009','6MaHex25kg',2,null,null),
       ('OP_WA_0009','6MaHex30kg',2,null,null),
       ('OP_WA_0009','6MaHex35kg',2,null,null),
       ('OP_WA_0009','6MaHex45kg',2,null,null),
@@ -536,11 +526,13 @@ begin
     ) as t(numero, sku, fecha, nota)
   loop
     insert into op_despachos (op_item_id, cantidad, usuario_id, nota, en)
-    select oi.id, oi.cantidad, v_user, r.nota, (r.fecha || ' 12:00:00-05')::timestamptz
+    select oi.id, oi.cantidad - oi.cantidad_entregada, v_user, r.nota,
+           (r.fecha || ' 12:00:00-05')::timestamptz
       from op_items oi
       join ordenes_pedido o on o.id = oi.op_id
       join productos p on p.id = oi.producto_id
-     where o.numero = r.numero and p.sku = r.sku;
+     where o.numero = r.numero and p.sku = r.sku
+       and oi.cantidad - oi.cantidad_entregada > 0;  -- solo lo pendiente (tolera despachos previos)
   end loop;
 
   -- ======== 4 · GARANTÍAS SIN OP ORIGINAL ========
