@@ -1,9 +1,10 @@
 -- ============================================================
--- CONTEO FÍSICO DE PLATINAS — 21-jul-2026 · v2 CORREGIDA POR JUAN
+-- CONTEO FÍSICO DE PLATINAS — 21-jul-2026 · v3 CORREGIDA POR JUAN
 -- ============================================================
+-- v3 (22-jul): P062=6 (el 'confirmo 60' del Excel era dedazo).
 -- v2 (22-jul): Juan revisó la transcripción en el Excel y corrigió
 -- 13 referencias con notas "confirmo N" + su mensaje en chat:
---   P057→0, P059→0, P060→7, P061→20, P062→60, P063→4, P064→11,
+--   P057→0, P059→0, P060→7, P061→20, P062→6, P063→4, P064→11,
 --   P065→20, P066→24 (dejar como estaba), P067→13, P069→5,
 --   P070→0 (mensaje manda sobre el Excel), P071→3, P072→30.
 -- Ajusta cada referencia a su valor físico con un movimiento
@@ -88,7 +89,7 @@ begin
       ('P059 · Platina unión dap bar',                                  0),
       ('P060 · Platina pull up dap bar',                                7),
       ('P061 · Platina doble tapa polea',                              20),
-      ('P062 · Platina almacenador 3 barras',                          60),
+      ('P062 · Platina almacenador 3 barras',                           6),
       ('P063 · Platina almacenador 5 barras',                           4),
       ('P064 · Almacenador de agarres',                                11),
       ('P065 · Platinas en L para guías smith tradicional',            20),
@@ -111,7 +112,7 @@ begin
         (existencia_id, tipo, cantidad, usuario_id, nota)
       values
         (v_ex, 'ajuste', v_delta, v_user,
-         'Conteo físico 21-jul-2026 v2 (correcciones de Juan 22-jul)');
+         'Conteo físico 21-jul-2026 v3 (correcciones de Juan 22-jul)');
     end if;
   end loop;
 end $$;
