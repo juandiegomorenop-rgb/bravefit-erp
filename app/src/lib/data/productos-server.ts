@@ -72,7 +72,13 @@ class SupabaseProductosRepository implements ProductosRepository {
   async listar(filtros: FiltrosProductos = {}): Promise<ProductoCard[]> {
     const supabase = await createClient();
     const [{ data, error }, categorias] = await Promise.all([
-      supabase.from("productos").select("*").eq("activo", true),
+      // Los subensambles son piezas internas de producción:
+      // no aparecen en el catálogo de Ventas.
+      supabase
+        .from("productos")
+        .select("*")
+        .eq("activo", true)
+        .eq("es_subensamble", false),
       this.listarCategorias(),
     ]);
     if (error) throw new Error(error.message);

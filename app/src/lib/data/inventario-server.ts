@@ -170,6 +170,25 @@ class SupabaseInventarioRepository implements InventarioRepository {
       .sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre, "es"));
   }
 
+  async listarExistenciasSubensambles(): Promise<ExistenciaPT[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("existencias")
+      .select(
+        "id, producto_id, material_id, tipo, cantidad_disponible, cantidad_reservada, productos!inner(*)",
+      )
+      .eq("tipo", "subensamble");
+    if (error) throw new Error(error.message);
+
+    return (data ?? [])
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      .map((r: any) => ({
+        existencia: toExistencia(r),
+        producto: toProducto(r.productos),
+      }))
+      .sort((a, b) => a.producto.sku.localeCompare(b.producto.sku, "es"));
+  }
+
   async kardex(material_id: string): Promise<MovimientoInventario[]> {
     const supabase = await createClient();
     const { data: ex, error: exErr } = await supabase

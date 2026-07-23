@@ -21,9 +21,10 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const repo = getInventarioRepository();
-  const [filasMP, filasPT, compras] = await Promise.all([
+  const [filasMP, filasPT, filasSE, compras] = await Promise.all([
     repo.listarExistenciasMP(),
     repo.listarExistenciasPT(),
+    repo.listarExistenciasSubensambles(),
     repo.comprasMensuales(8),
   ]);
 
@@ -31,6 +32,7 @@ export default async function Page({
     <InventariosClient
       filasMP={filasMP}
       filasPT={filasPT}
+      filasSE={filasSE}
       compras={compras}
       tipos={TIPOS_MATERIAL}
       filtrosIniciales={{

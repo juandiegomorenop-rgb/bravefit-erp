@@ -19,15 +19,29 @@ import { BadgeEstadoBuffer, BarraBuffer, formatCantidad } from "./ui";
 interface Props {
   filasMP: ExistenciaMP[];
   filasPT: ExistenciaPT[];
+  filasSE: ExistenciaPT[];
   compras: CompraMensual[];
   tipos: TipoMaterial[];
   filtrosIniciales: FiltrosInventarioMP;
 }
 
-/** Inventarios (una sola bodega): KPIs + materia prima + PT + tendencia. */
+/**
+ * Juegos estructura + cojín: la estructura (subensamble) espera su
+ * cojín (MP tapizada del proveedor) para volverse producto terminado.
+ * Juan: "a veces hay más rollos que estructuras o viceversa… para eso
+ * es este ERP: para pedir por juegos".
+ */
+const JUEGOS: { nombre: string; skuEstructura: string; prefijoCojin: string }[] = [
+  { nombre: "Rack Pad", skuEstructura: "SE-EST-RACKPAD", prefijoCojin: "COJ005" },
+  { nombre: "Rollos de asiento", skuEstructura: "SE-EST-ROLLOAS", prefijoCojin: "COJ003" },
+  { nombre: "Banco reclinable", skuEstructura: "SE-EST-BANCOREC", prefijoCojin: "COJ004" },
+];
+
+/** Inventarios (una sola bodega): KPIs + MP + subensambles + PT + tendencia. */
 export function InventariosClient({
   filasMP,
   filasPT,
+  filasSE,
   compras,
   tipos,
   filtrosIniciales,
@@ -261,6 +275,104 @@ export function InventariosClient({
             nombre: f.material.nombre,
           }))}
         />
+      </div>
+
+      {/* Subensambles */}
+      <h2 className="mt-8 text-[16px] font-extrabold tracking-tight">
+        Subensambles
+      </h2>
+      <p className="mb-3 mt-0.5 text-[12.5px] text-neutro">
+        Piezas fabricadas en casa (columnas, uniones perforadas, barras,
+        estructuras) que se consumen dentro de otros productos. Las
+        estructuras esperan su cojín para volverse producto terminado.
+      </p>
+
+      {/* Juegos estructura + cojín */}
+      {(() => {
+        const seBySku = new Map(filasSE.map((f) => [f.producto.sku, f]));
+        const mpByPrefijo = (pref: string) =>
+          filasMP.find((f) => f.material.nombre.startsWith(pref));
+        const juegos = JUEGOS.map((j) => {
+          const est = seBySku.get(j.skuEstructura)?.existencia.cantidad_disponible ?? 0;
+          const coj = mpByPrefijo(j.prefijoCojin)?.existencia.cantidad_disponible ?? 0;
+          return { ...j, est, coj, completos: Math.min(est, coj) };
+        }).filter((j) => j.est > 0 || j.coj > 0);
+        if (juegos.length === 0) return null;
+        return (
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            {juegos.map((j) => (
+              <div
+                key={j.skuEstructura}
+                className="rounded-card border border-borde bg-card px-5 py-4"
+              >
+                <p className="text-[12.5px] font-semibold text-neutro">
+                  Juego · {j.nombre}
+                </p>
+                <p className="mt-1 text-[20px] font-extrabold tracking-tight">
+                  {j.completos}{" "}
+                  <span className="text-[12px] font-semibold text-neutro">
+                    completos
+                  </span>
+                </p>
+                <p className="mt-0.5 text-[12px] text-neutro">
+                  {j.est} estructura{j.est === 1 ? "" : "s"} · {j.coj} cojín
+                  {j.coj === 1 ? "" : "es"}
+                </p>
+                {j.est !== j.coj && (
+                  <p className="mt-1.5 rounded-pill bg-dorado-suave px-2.5 py-0.5 text-[11px] font-bold text-dorado-oscuro">
+                    {j.est > j.coj
+                      ? `Faltan ${j.est - j.coj} cojines para completar`
+                      : `Sobran ${j.coj - j.est} cojines sin estructura`}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
+        <table className="w-full min-w-[520px] border-collapse text-[13px]">
+          <thead>
+            <tr className="border-b border-borde bg-sutil text-left text-[11.5px] uppercase tracking-wider text-neutro">
+              <th className="px-4 py-2.5 font-semibold">Subensamble</th>
+              <th className="px-3 py-2.5 font-semibold">SKU</th>
+              <th className="px-3 py-2.5 text-right font-semibold">
+                Disponible
+              </th>
+              <th className="px-4 py-2.5 text-right font-semibold">
+                Reservada
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filasSE.map(({ existencia, producto }) => (
+              <tr
+                key={existencia.id}
+                className="border-b border-[#f6f5f2] last:border-b-0 hover:bg-sutil"
+              >
+                <td className="px-4 py-2.5 font-semibold">{producto.nombre}</td>
+                <td className="px-3 py-2.5 text-neutro">{producto.sku}</td>
+                <td className="px-3 py-2.5 text-right font-bold">
+                  {formatCantidad(existencia.cantidad_disponible)}
+                </td>
+                <td className="px-4 py-2.5 text-right text-neutro">
+                  {formatCantidad(existencia.cantidad_reservada)}
+                </td>
+              </tr>
+            ))}
+            {filasSE.length === 0 && (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="px-4 py-8 text-center text-[13px] text-neutro"
+                >
+                  Sin subensambles en bodega.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Producto terminado */}

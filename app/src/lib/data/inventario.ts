@@ -119,6 +119,12 @@ export function aplicarFiltrosInventario(
 export interface InventarioRepository {
   listarExistenciasMP(filtros?: FiltrosInventarioMP): Promise<ExistenciaMP[]>;
   listarExistenciasPT(): Promise<ExistenciaPT[]>;
+  /**
+   * Subensambles: piezas fabricadas en casa (columnas, uniones
+   * perforadas, barras, estructuras) que se consumen dentro de otros
+   * productos. Vacío en el mock: nacieron directo en Supabase.
+   */
+  listarExistenciasSubensambles(): Promise<ExistenciaPT[]>;
   /** Movimientos del material, descendentes por fecha. */
   kardex(material_id: string): Promise<MovimientoInventario[]>;
   /** Serie por material de los últimos `meses` meses (incluye el actual). */
@@ -382,6 +388,10 @@ export class MockInventarioRepository implements InventarioRepository {
       }))
       .sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre, "es"));
     return structuredClone(filas);
+  }
+
+  async listarExistenciasSubensambles(): Promise<ExistenciaPT[]> {
+    return []; // los subensambles nacieron directo en Supabase (SE-*)
   }
 
   async kardex(material_id: string): Promise<MovimientoInventario[]> {
