@@ -12,6 +12,7 @@ import {
   type ProductoDetalle,
   type ProductosRepository,
 } from "@/lib/data/productos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Producto,
@@ -177,6 +178,18 @@ export async function subirFotoProducto(
   }
 
   const supabase = await createClient();
+
+  // Permiso server-side: solo Ventas edita el catálogo (el update de
+  // imagen_url más abajo lo revalida por RLS, esto solo evita subir un
+  // archivo huérfano si el usuario no tiene permiso).
+  const { data: puede } = await supabase.rpc("fn_puede", {
+    p_modulo: "ventas",
+    p_accion: "editar",
+  });
+  if (!puede) {
+    throw new Error("Solo Ventas puede subir fotos de productos.");
+  }
+
   const { data: prod, error: pErr } = await supabase
     .from("productos")
     .select("sku")
@@ -191,7 +204,12 @@ export async function subirFotoProducto(
   const limpio = String(prod.sku).replace(/[^a-zA-Z0-9._-]/g, "-");
   const ruta = `${limpio}-${Date.now()}.${ext}`;
 
-  const { error: upErr } = await supabase.storage
+  // El upload va con el cliente ADMIN (service_role): en un Server Action
+  // la sesión del usuario no se propaga al storage-api, así que las RLS
+  // del bucket rechazan el insert aunque el usuario tenga permiso. El
+  // permiso ya se validó arriba; el bucket es público (catálogo).
+  const admin = createAdminClient();
+  const { error: upErr } = await admin.storage
     .from("productos")
     .upload(ruta, file, { contentType: file.type, upsert: true });
   if (upErr) {
@@ -200,13 +218,10 @@ export async function subirFotoProducto(
         "Falta crear el bucket 'productos' en Supabase (script 2026-07-20_bucket_productos.sql).",
       );
     }
-    // Se muestra el error REAL de Storage: el mensaje genérico "solo un
-    // Administrador" ocultaba fallos de configuración del bucket que no
-    // tienen que ver con el permiso del usuario.
     throw new Error(`No se pudo subir la foto — Storage: ${upErr.message}`);
   }
 
-  const { data: pub } = supabase.storage.from("productos").getPublicUrl(ruta);
+  const { data: pub } = admin.storage.from("productos").getPublicUrl(ruta);
   const { data, error } = await supabase
     .from("productos")
     .update({ imagen_url: pub.publicUrl })
