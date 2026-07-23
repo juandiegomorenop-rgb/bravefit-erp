@@ -189,21 +189,27 @@ class SupabaseInventarioRepository implements InventarioRepository {
       .sort((a, b) => a.producto.sku.localeCompare(b.producto.sku, "es"));
   }
 
-  async kardex(material_id: string): Promise<MovimientoInventario[]> {
+  /**
+   * Movimientos de una existencia. El id puede ser de un MATERIAL o de un
+   * PRODUCTO (terminado o subensamble): antes solo buscaba materia prima,
+   * así que el detalle de subensambles y productos terminados salía vacío.
+   * Un producto puede tener existencia 'terminado' y 'en_proceso' a la vez;
+   * el kardex las junta, que es lo que se espera al abrir la ficha.
+   */
+  async kardex(id: string): Promise<MovimientoInventario[]> {
     const supabase = await createClient();
-    const { data: ex, error: exErr } = await supabase
+    const { data: exs, error: exErr } = await supabase
       .from("existencias")
       .select("id")
-      .eq("material_id", material_id)
-      .eq("tipo", "materia_prima")
-      .maybeSingle();
+      .or(`material_id.eq.${id},producto_id.eq.${id}`);
     if (exErr) throw new Error(exErr.message);
-    if (!ex) return [];
+    const ids = (exs ?? []).map((e) => e.id);
+    if (!ids.length) return [];
 
     const { data, error } = await supabase
       .from("movimientos_inventario")
       .select("*")
-      .eq("existencia_id", ex.id)
+      .in("existencia_id", ids)
       .order("en", { ascending: false })
       .order("id", { ascending: false });
     if (error) throw new Error(error.message);

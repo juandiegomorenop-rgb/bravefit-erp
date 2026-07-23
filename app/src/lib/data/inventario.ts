@@ -125,8 +125,11 @@ export interface InventarioRepository {
    * productos. Vacío en el mock: nacieron directo en Supabase.
    */
   listarExistenciasSubensambles(): Promise<ExistenciaPT[]>;
-  /** Movimientos del material, descendentes por fecha. */
-  kardex(material_id: string): Promise<MovimientoInventario[]>;
+  /**
+   * Movimientos de una existencia, descendentes por fecha. El id puede ser
+   * de un material o de un producto (terminado o subensamble).
+   */
+  kardex(id: string): Promise<MovimientoInventario[]>;
   /** Serie por material de los últimos `meses` meses (incluye el actual). */
   comprasMensuales(meses: number): Promise<CompraMensual[]>;
   /**
