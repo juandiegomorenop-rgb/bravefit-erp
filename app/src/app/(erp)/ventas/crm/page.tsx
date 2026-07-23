@@ -1,6 +1,7 @@
 import {
   getCotizacionesRepository,
   getCrmRepository,
+  listarCiudades,
 } from "@/lib/data/crm-cotizaciones-server";
 import { CrmClient } from "./CrmClient";
 
@@ -22,11 +23,12 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const repo = getCrmRepository();
-  const [cards, etapas, vendedores, clientes] = await Promise.all([
+  const [cards, etapas, vendedores, clientes, ciudades] = await Promise.all([
     repo.listarOportunidades(),
     repo.listarEtapas(),
     repo.listarVendedores(),
     getCotizacionesRepository().listarClientes(),
+    listarCiudades(),
   ]);
 
   return (
@@ -35,6 +37,7 @@ export default async function Page({
       etapas={etapas}
       vendedores={vendedores}
       clientes={clientes}
+      ciudades={ciudades}
       filtrosIniciales={{
         vendedor_id: primero(sp.vendedor) || undefined,
         texto: primero(sp.q) ?? "",

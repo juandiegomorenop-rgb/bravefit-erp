@@ -7,7 +7,7 @@ import { diasEnEtapa } from "@/lib/cotizacion-logic";
 import {
   ARCHIVO_DIAS_CRM,
   esOportunidadArchivada,
-  faltaDireccionParaGanar,
+  faltantesParaGanar,
   vendedorPorDefecto,
   type FiltrosCrm,
   type OportunidadCard,
@@ -22,19 +22,23 @@ import {
   moverEtapaCrm,
 } from "./actions";
 import { formatCOP } from "@/lib/formato";
-import type { Cliente, EtapaCrm, Usuario } from "@/lib/types/db";
+import type { Ciudad, Cliente, EtapaCrm, Usuario } from "@/lib/types/db";
 
 interface Props {
   cardsIniciales: OportunidadCard[];
   etapas: EtapaCrm[];
   vendedores: Usuario[];
   clientes: Cliente[];
+  ciudades: Ciudad[];
   filtrosIniciales: FiltrosCrm;
 }
 
 type Banner =
   | { tipo: "ok"; texto: string; opId?: string }
   | { tipo: "error"; texto: string };
+
+const MODAL_INPUT =
+  "mt-1 w-full rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado";
 
 /**
  * Embudo CRM: columnas = etapas parametrizables, fichas = oportunidades.
@@ -47,6 +51,7 @@ export function CrmClient({
   etapas,
   vendedores,
   clientes,
+  ciudades,
   filtrosIniciales,
 }: Props) {
   const router = useRouter();
@@ -191,12 +196,41 @@ export function CrmClient({
     etapaId: number;
     cliente: Cliente;
   }>(null);
-  const [direccion, setDireccion] = useState("");
+  const [datosGanar, setDatosGanar] = useState({
+    email: "",
+    direccion: "",
+    ciudadId: "" as string, // id como string, o "nueva"
+    ciudadNombre: "",
+    ciudadDepto: "",
+  });
   const [guardandoDir, setGuardandoDir] = useState(false);
+
+  /** Abre el modal precargado con lo que el cliente ya tenga. */
+  function abrirPedirDatos(cardId: string, etapaId: number, cliente: Cliente) {
+    setDatosGanar({
+      email: cliente.email ?? "",
+      direccion: cliente.direccion ?? "",
+      ciudadId: cliente.ciudad_id != null ? String(cliente.ciudad_id) : "",
+      ciudadNombre: "",
+      ciudadDepto: "",
+    });
+    setPedirDir({ cardId, etapaId, cliente });
+  }
 
   async function confirmarDireccion() {
     if (!pedirDir || guardandoDir) return;
-    if (!direccion.trim()) return;
+    const { email, direccion, ciudadId, ciudadNombre, ciudadDepto } =
+      datosGanar;
+    const ciudadNueva = ciudadId === "nueva";
+    // Faltan los 3: correo, dirección y ciudad (existente o nueva).
+    if (
+      !email.trim() ||
+      !direccion.trim() ||
+      (!ciudadNueva && !ciudadId) ||
+      (ciudadNueva && !ciudadNombre.trim())
+    ) {
+      return;
+    }
     setGuardandoDir(true);
     const cli = pedirDir.cliente;
     const r = await guardarDatosCliente(cli.id, {
@@ -204,8 +238,11 @@ export function CrmClient({
       nombre: cli.nombre,
       nit_cedula: cli.nit_cedula,
       telefono: cli.telefono,
-      email: cli.email,
-      ciudad_id: cli.ciudad_id,
+      email: email.trim(),
+      ciudad_id: ciudadNueva ? null : Number(ciudadId),
+      ciudad_nueva: ciudadNueva
+        ? { nombre: ciudadNombre.trim(), departamento: ciudadDepto.trim() }
+        : null,
       direccion: direccion.trim(),
     });
     setGuardandoDir(false);
@@ -221,7 +258,6 @@ export function CrmClient({
     );
     const { cardId, etapaId } = pedirDir;
     setPedirDir(null);
-    setDireccion("");
     await mover(cardId, etapaId, true);
   }
 
@@ -230,9 +266,12 @@ export function CrmClient({
     const etapa = etapas.find((e) => e.id === etapaId);
     if (!card || !etapa || card.oportunidad.etapa_id === etapaId) return;
 
-    if (etapa.es_ganada && !dirLista && faltaDireccionParaGanar(card.cliente)) {
-      setPedirDir({ cardId: id, etapaId, cliente: card.cliente });
-      setDireccion(card.cliente.direccion ?? "");
+    if (
+      etapa.es_ganada &&
+      !dirLista &&
+      faltantesParaGanar(card.cliente).length > 0
+    ) {
+      abrirPedirDatos(id, etapaId, card.cliente);
       return;
     }
 
@@ -255,11 +294,10 @@ export function CrmClient({
     const r = await moverEtapaCrm(id, etapaId);
     if (!r.ok) {
       setCards(previo);
-      // El servidor también valida la dirección: si es eso, abrir el
-      // modal en vez de mostrar el error crudo.
-      if (r.error.includes("FALTA_DIRECCION")) {
-        setPedirDir({ cardId: id, etapaId, cliente: card.cliente });
-        setDireccion(card.cliente.direccion ?? "");
+      // El servidor también valida correo+dirección+ciudad: si es eso,
+      // abrir el modal en vez de mostrar el error crudo.
+      if (r.error.includes("FALTA_DATOS_GANAR")) {
+        abrirPedirDatos(id, etapaId, card.cliente);
         return;
       }
       setBanner({ tipo: "error", texto: r.error });
@@ -475,34 +513,97 @@ export function CrmClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-[460px] rounded-card border border-borde bg-card p-5 shadow-xl">
             <h2 className="text-[16px] font-extrabold">
-              Falta la dirección de {pedirDir.cliente.nombre}
+              Datos para ganar — {pedirDir.cliente.nombre}
             </h2>
             <p className="mt-1 text-[12.5px] text-neutro">
-              La factura y el envío la necesitan. Se guarda en la ficha del
-              cliente y queda como dirección de entrega de la O.P.
+              La venta ya es real: el correo, la ciudad y la dirección los
+              necesitan la factura y el envío. Se guardan en la ficha del
+              cliente y quedan en la O.P.
             </p>
+
+            <label className="mt-3 block text-[11.5px] font-semibold text-neutro">
+              Correo electrónico
+            </label>
             <input
               autoFocus
-              className="mt-3 w-full rounded-input border border-borde bg-card px-3 py-2 text-[13px] outline-none focus:border-dorado"
-              placeholder="Ej: Calle 25A # 43B 267, barrio…"
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && void confirmarDireccion()}
+              type="email"
+              className={MODAL_INPUT}
+              placeholder="cliente@correo.com"
+              value={datosGanar.email}
+              onChange={(e) =>
+                setDatosGanar((d) => ({ ...d, email: e.target.value }))
+              }
             />
-            <div className="mt-3 flex justify-end gap-2">
+
+            <label className="mt-2.5 block text-[11.5px] font-semibold text-neutro">
+              Ciudad
+            </label>
+            <select
+              className={MODAL_INPUT}
+              value={datosGanar.ciudadId}
+              onChange={(e) =>
+                setDatosGanar((d) => ({ ...d, ciudadId: e.target.value }))
+              }
+            >
+              <option value="">Selecciona…</option>
+              {ciudades.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                  {c.departamento ? ` · ${c.departamento}` : ""}
+                </option>
+              ))}
+              <option value="nueva">➕ Otra ciudad…</option>
+            </select>
+            {datosGanar.ciudadId === "nueva" && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <input
+                  className={MODAL_INPUT}
+                  placeholder="Ciudad"
+                  value={datosGanar.ciudadNombre}
+                  onChange={(e) =>
+                    setDatosGanar((d) => ({
+                      ...d,
+                      ciudadNombre: e.target.value,
+                    }))
+                  }
+                />
+                <input
+                  className={MODAL_INPUT}
+                  placeholder="Departamento"
+                  value={datosGanar.ciudadDepto}
+                  onChange={(e) =>
+                    setDatosGanar((d) => ({
+                      ...d,
+                      ciudadDepto: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
+
+            <label className="mt-2.5 block text-[11.5px] font-semibold text-neutro">
+              Dirección de envío
+            </label>
+            <input
+              className={MODAL_INPUT}
+              placeholder="Ej: Calle 25A # 43B 267, barrio…"
+              value={datosGanar.direccion}
+              onChange={(e) =>
+                setDatosGanar((d) => ({ ...d, direccion: e.target.value }))
+              }
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setPedirDir(null);
-                  setDireccion("");
-                }}
+                onClick={() => setPedirDir(null)}
                 className="rounded-pill px-4 py-2 text-[12.5px] font-semibold text-neutro hover:bg-neutro-bg"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                disabled={guardandoDir || !direccion.trim()}
+                disabled={guardandoDir}
                 onClick={() => void confirmarDireccion()}
                 className="rounded-pill bg-verde px-5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-40"
               >

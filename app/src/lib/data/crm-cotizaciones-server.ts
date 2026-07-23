@@ -32,6 +32,10 @@ import type {
   OportunidadNuevaInput,
   ResultadoMoverCrm,
 } from "@/lib/data/crm-cotizaciones";
+import {
+  capitalizarNombre,
+  formatearDocumento,
+} from "@/lib/data/crm-cotizaciones";
 import { getOpsRepository } from "@/lib/data/ops-server";
 import type {
   Ciudad,
@@ -956,17 +960,20 @@ class SupabaseCrmRepository implements CrmRepository {
       );
     }
 
-    // Regla de Juan: al ganar hay que tener DIRECCIÓN — la necesitan el
-    // envío y la factura (persona natural o empresa, siempre).
-    const { data: cliDir } = await supabase
+    // Regla de Juan (23-jul): al ganar hay que tener CORREO, DIRECCIÓN y
+    // CIUDAD — los necesitan el envío y la factura. Hasta que no estén,
+    // no se crea la OP.
+    const { data: cliGanar } = await supabase
       .from("clientes")
-      .select("direccion")
+      .select("email, direccion, ciudad_id")
       .eq("id", o.cliente_id)
       .maybeSingle();
-    if (!cliDir?.direccion?.trim()) {
-      throw new Error(
-        "FALTA_DIRECCION: registra la dirección de entrega y facturación del cliente antes de ganar la oportunidad.",
-      );
+    const faltan: string[] = [];
+    if (!cliGanar?.email?.trim()) faltan.push("Correo electrónico");
+    if (!cliGanar?.direccion?.trim()) faltan.push("Dirección de envío");
+    if (cliGanar?.ciudad_id == null) faltan.push("Ciudad");
+    if (faltan.length > 0) {
+      throw new Error(`FALTA_DATOS_GANAR: ${faltan.join(", ")}`);
     }
 
     const { error: uErr } = await supabase
@@ -1175,11 +1182,13 @@ const soloDigitos = (v: string | null | undefined) =>
 export async function crearClienteRapido(
   input: ClienteNuevoInput,
 ): Promise<Cliente> {
-  const nombre = input.nombre.trim();
+  const nombre = capitalizarNombre(input.nombre);
   if (!nombre) throw new Error("El nombre del cliente es obligatorio.");
   const supabase = await createClient();
 
-  const doc = input.nit_cedula?.trim() || null;
+  const doc = input.nit_cedula?.trim()
+    ? formatearDocumento(input.nit_cedula)
+    : null;
   const telDigitos = soloDigitos(input.telefono);
   const email = input.email?.trim().toLowerCase() || null;
 
@@ -1189,7 +1198,8 @@ export async function crearClienteRapido(
     .eq("activo", true);
 
   const existente = (candidatos ?? []).find((c: any) => {
-    if (doc && c.nit_cedula && c.nit_cedula.trim() === doc) return true;
+    if (doc && c.nit_cedula && soloDigitos(c.nit_cedula) === soloDigitos(doc))
+      return true;
     if (
       telDigitos.length >= 7 &&
       soloDigitos(c.telefono).endsWith(telDigitos.slice(-7))
@@ -1292,8 +1302,10 @@ export async function completarDatosCliente(
 
   const patch: Record<string, unknown> = {
     tipo: datos.tipo,
-    nombre: datos.nombre.trim(),
-    nit_cedula: datos.nit_cedula?.trim() || null,
+    nombre: capitalizarNombre(datos.nombre),
+    nit_cedula: datos.nit_cedula?.trim()
+      ? formatearDocumento(datos.nit_cedula)
+      : null,
     telefono: datos.telefono?.trim() || null,
     email: datos.email?.trim().toLowerCase() || null,
     ciudad_id: ciudadId,

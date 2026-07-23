@@ -197,11 +197,11 @@ export const ARCHIVO_DIAS_COTIZACION = 30;
 export const ARCHIVO_DIAS_CRM = 7;
 
 /**
- * Datos que le faltan al cliente para poder COTIZAR (regla de Juan
- * 20-jul-2026). Persona: nombres y apellidos, cédula, celular, correo
- * y ciudad. Empresa: razón social, NIT, correo y ciudad. La DIRECCIÓN
- * no se pide aquí: se exige al ganar (envío + factura) — ver
- * `faltaDireccionParaGanar`.
+ * Datos MÍNIMOS para COTIZAR (regla de Juan 23-jul-2026: pedir lo menos
+ * posible sin saber si compran). Persona: nombres y apellidos, cédula,
+ * teléfono. Empresa: razón social, NIT, teléfono. El correo, la ciudad
+ * y la dirección NO se piden aquí: se exigen al GANAR — ver
+ * `faltantesParaGanar`.
  */
 export function faltantesParaCotizar(c: Cliente): string[] {
   const esEmpresa = c.tipo === "empresa";
@@ -209,15 +209,74 @@ export function faltantesParaCotizar(c: Cliente): string[] {
   if (!c.nombre?.trim())
     falta.push(esEmpresa ? "Razón social" : "Nombres y apellidos");
   if (!c.nit_cedula?.trim()) falta.push(esEmpresa ? "NIT" : "Cédula");
-  if (!esEmpresa && !c.telefono?.trim()) falta.push("Celular");
+  if (!c.telefono?.trim()) falta.push("Teléfono");
+  return falta;
+}
+
+/**
+ * Datos que se exigen al GANAR (la venta ya es real): correo, dirección
+ * de envío y ciudad. El envío y la factura los necesitan. Hasta que no
+ * estén, no se puede crear la OP.
+ */
+export function faltantesParaGanar(c: Cliente): string[] {
+  const falta: string[] = [];
   if (!c.email?.trim()) falta.push("Correo electrónico");
+  if (!c.direccion?.trim()) falta.push("Dirección de envío");
   if (c.ciudad_id == null) falta.push("Ciudad");
   return falta;
 }
 
-/** La factura y el envío exigen dirección: se pide al GANAR. */
+/** @deprecated usar `faltantesParaGanar`. Se conserva por compatibilidad. */
 export function faltaDireccionParaGanar(c: Cliente): boolean {
-  return !c.direccion?.trim();
+  return faltantesParaGanar(c).length > 0;
+}
+
+// ---------------------------------------------------------------
+// Normalización de datos (Juan 23-jul-2026): toda la base uniforme.
+// ---------------------------------------------------------------
+
+/** Siglas societarias que van SIEMPRE en mayúscula dentro de un nombre. */
+const SIGLAS_SOCIEDAD = new Set([
+  "SAS", "SA", "SAA", "LTDA", "EU", "SCA", "SENC", "INC", "LLC", "CO", "CI",
+]);
+
+/**
+ * Capitaliza un nombre o razón social: primera letra de cada palabra en
+ * mayúscula, el resto en minúscula. Preserva siglas societarias (SAS,
+ * Ltda…) y siglas con puntos (S.A.S) en mayúscula.
+ *   "CONSTRUCTORA AGATA S.A.S" → "Constructora Agata S.A.S"
+ *   "juan   diego moreno"      → "Juan Diego Moreno"
+ */
+export function capitalizarNombre(texto: string): string {
+  return texto
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => {
+      if (!w) return w;
+      const sinPuntos = w.replace(/\./g, "").toUpperCase();
+      if (SIGLAS_SOCIEDAD.has(sinPuntos)) return w.toUpperCase();
+      // sigla con puntos tipo "S.A.S" o "S.A.S."
+      if (/^([a-zA-Z]\.){2,}[a-zA-Z]?\.?$/.test(w)) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+/**
+ * Formatea una cédula o NIT con puntos de miles, conservando el dígito
+ * de verificación si viene separado por guion.
+ *   "1037570993"  → "1.037.570.993"
+ *   "900748071-5" → "900.748.071-5"
+ */
+export function formatearDocumento(doc: string): string {
+  const t = doc.trim();
+  if (!t) return t;
+  const m = t.match(/^(.+?)\s*-\s*(\d)$/); // <número> - <dv>
+  const base = (m ? m[1] : t).replace(/\D/g, "");
+  if (!base) return t;
+  const conPuntos = base.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return m ? `${conPuntos}-${m[2]}` : conPuntos;
 }
 
 /** Vendedor preseleccionado en cotizaciones y oportunidades nuevas
