@@ -45,6 +45,21 @@ export default async function Page({
   const hayPP = totales.totalPP > 0;
   const hayPC = totales.totalPC > 0;
 
+  // El campo tiempo_entrega guarda ambos tiempos en un solo texto
+  // ("Fabricados: 45… · Comercializados: 5…"). Se parte para mostrar
+  // cada línea SOLO cuando la cotización tiene ese tipo de producto:
+  // sin fabricados no se anuncia tiempo de fabricación, y viceversa.
+  const tiempos = (cot.tiempo_entrega ?? "")
+    .split("·")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const tiempoFabricados = hayPP
+    ? tiempos.find((t) => /fabricado/i.test(t))
+    : undefined;
+  const tiempoComercializados = hayPC
+    ? tiempos.find((t) => /comercializado/i.test(t))
+    : undefined;
+
   // Agrupar por categoría (los ítems libres/transporte van a "Logística")
   const grupos: { nombre: string; items: CotizacionItemConProducto[] }[] = [];
   for (const cat of [...categorias].sort((a, b) => a.orden - b.orden)) {
@@ -285,12 +300,24 @@ export default async function Page({
               {formatCOP(totales.total)}
             </span>
           </div>
-          {cot.tiempo_entrega && (
+          {tiempoFabricados && (
             <div className="mt-2 flex justify-between gap-4 px-3 text-[12.5px]">
               <span className="text-neutro">
                 Tiempo de entrega de productos a fabricar
               </span>
-              <span className="whitespace-nowrap font-bold">{cot.tiempo_entrega}</span>
+              <span className="text-right font-bold">
+                {tiempoFabricados.replace(/^Fabricados:\s*/i, "")}
+              </span>
+            </div>
+          )}
+          {tiempoComercializados && (
+            <div className="mt-1 flex justify-between gap-4 px-3 text-[12.5px]">
+              <span className="text-neutro">
+                Tiempo de entrega de productos comercializados
+              </span>
+              <span className="text-right font-bold">
+                {tiempoComercializados.replace(/^Comercializados:\s*/i, "")}
+              </span>
             </div>
           )}
         </div>
