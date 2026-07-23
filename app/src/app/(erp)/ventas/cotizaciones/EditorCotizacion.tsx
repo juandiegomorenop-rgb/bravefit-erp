@@ -1177,6 +1177,18 @@ export function EditorCotizacion({
                                 ? "PC 100%"
                                 : "PP 60/40"}
                             </span>
+                            {/* Descripción / especificaciones libres por ítem:
+                                medidas del pedido, color, notas de fabricación… */}
+                            <input
+                              className={`${inputCls} mt-1.5 w-full`}
+                              placeholder="Descripción o especificaciones (opcional)…"
+                              value={l.descripcion ?? ""}
+                              onChange={(e) =>
+                                actualizarLinea(l._key, {
+                                  descripcion: e.target.value,
+                                })
+                              }
+                            />
                           </>
                         ) : (
                           <input

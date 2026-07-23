@@ -221,6 +221,13 @@ export default async function Page({
                           {sub.join(" · ")}
                         </p>
                       )}
+                      {/* Descripción/especificaciones libres del ítem. En los
+                          ítems SIN producto la descripción ya es el título. */}
+                      {it.producto && it.descripcion && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-carbon">
+                          {it.descripcion}
+                        </p>
+                      )}
                     </div>
                     <div className="w-[44px] text-center text-[13px] font-bold">
                       {it.cantidad}
