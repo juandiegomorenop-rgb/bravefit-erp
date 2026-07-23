@@ -892,6 +892,171 @@ export const HERRAMIENTAS: HerramientaChat[] = [
     },
   },
   {
+    name: "demanda_productos",
+    modulo: "produccion",
+    description:
+      "Cuántas UNIDADES de cada producto piden TODAS las OPs activas (sin anular y sin entregar), con la fecha en que se necesitan y cuánto hay en inventario. Sin filtro devuelve el ranking de productos más pedidos. Con `producto` (nombre o SKU, parcial) devuelve además el desglose OP por OP ordenado por fecha de entrega, con el acumulado y desde cuál OP el inventario ya no alcanza. Úsala para '¿cuántos bancos reclinables necesito?', '¿qué productos me piden las OPs activas?', '¿alcanza lo que tengo?', '¿qué debo adelantar a fabricar?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        producto: {
+          type: "string",
+          description:
+            "Opcional. Nombre o SKU del producto, parcial (ej. 'banco reclinable', '6BaPle'). Sin esto devuelve todos los productos pedidos.",
+        },
+        disponible_extra: {
+          type: "number",
+          description:
+            "Opcional. Unidades que estarán listas pronto y aún no figuran en inventario (ej. las que están en fabricación). Se suman al disponible para calcular la cobertura.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    claves: [
+      "cuantos",
+      "cuántos",
+      "cuantas",
+      "cuántas",
+      "necesito",
+      "demanda",
+      "piden",
+      "pedidos de",
+      "adelantar",
+      "alcanza",
+      "banco",
+      "bancos",
+      "unidades",
+    ],
+    async ejecutar(input) {
+      const filtro = String(input.producto ?? "").trim();
+      const extra = Number(input.disponible_extra ?? 0) || 0;
+
+      // OPs vivas: sin anular, sin entregar. Lo pendiente = lo pedido
+      // menos lo ya despachado (una OP parcial sigue contando el resto).
+      const cards = (await getOpsRepository().listarOps()).filter(
+        (c) => c.tipo === "op" && !c.anulada && !c.fecha_entregada,
+      );
+
+      interface Linea {
+        producto: string;
+        sku: string;
+        unidades: number;
+        ops: {
+          numero: string;
+          cliente: string;
+          fecha: string | null;
+          unidades: number;
+        }[];
+      }
+      const porProducto = new Map<string, Linea>();
+      for (const c of cards) {
+        for (const it of c.items) {
+          const pend = it.cantidad - it.cantidad_entregada;
+          if (pend <= 0) continue;
+          if (
+            filtro &&
+            !limpiarTxt(it.producto.nombre).includes(limpiarTxt(filtro)) &&
+            !limpiarTxt(it.producto.sku).includes(limpiarTxt(filtro))
+          ) {
+            continue;
+          }
+          const l = porProducto.get(it.producto_id) ?? {
+            producto: it.producto.nombre,
+            sku: it.producto.sku,
+            unidades: 0,
+            ops: [],
+          };
+          l.unidades += pend;
+          l.ops.push({
+            numero: c.numero,
+            cliente: c.cliente.nombre,
+            fecha: c.fecha_entrega_pactada,
+            unidades: pend,
+          });
+          porProducto.set(it.producto_id, l);
+        }
+      }
+      if (!porProducto.size) {
+        return filtro
+          ? { error: `Ninguna OP activa pide '${filtro}'.` }
+          : { productos: [], nota: "No hay OPs activas con unidades pendientes." };
+      }
+
+      // Inventario: producto terminado + subensambles (una estructura de
+      // banco también cuenta como capacidad de despacho).
+      const inv = getInventarioRepository();
+      const [pt, sub] = await Promise.all([
+        inv.listarExistenciasPT(),
+        inv.listarExistenciasSubensambles(),
+      ]);
+      const stock = new Map<string, number>();
+      for (const e of [...pt, ...sub]) {
+        stock.set(
+          e.producto.id,
+          (stock.get(e.producto.id) ?? 0) + e.existencia.cantidad_disponible,
+        );
+      }
+
+      const productos = [...porProducto.entries()]
+        .map(([producto_id, l]) => {
+          const disponible = (stock.get(producto_id) ?? 0) + extra;
+          return {
+            producto: l.producto,
+            sku: l.sku,
+            unidades_pedidas: l.unidades,
+            ops: l.ops.length,
+            disponible,
+            falta_fabricar: Math.max(0, l.unidades - disponible),
+            primera_fecha: l.ops
+              .map((o) => o.fecha)
+              .filter(Boolean)
+              .sort()[0] ?? null,
+            _lineas: l.ops,
+          };
+        })
+        .sort((a, b) => b.falta_fabricar - a.falta_fabricar || b.unidades_pedidas - a.unidades_pedidas);
+
+      // Con filtro: además el detalle OP por OP con acumulado, que es lo
+      // que responde "¿desde cuál cliente me quedo corto?".
+      if (filtro && productos.length <= 3) {
+        const detalle = productos.map((p) => {
+          let acum = 0;
+          return {
+            producto: p.producto,
+            sku: p.sku,
+            unidades_pedidas: p.unidades_pedidas,
+            disponible: p.disponible,
+            falta_fabricar: p.falta_fabricar,
+            ops: [...p._lineas]
+              .sort((a, b) =>
+                (a.fecha ?? "9999").localeCompare(b.fecha ?? "9999") ||
+                a.numero.localeCompare(b.numero),
+              )
+              .map((o) => {
+                acum += o.unidades;
+                return {
+                  ...o,
+                  acumulado: acum,
+                  estado: acum <= p.disponible ? "CUBIERTO" : "FALTA FABRICAR",
+                };
+              }),
+          };
+        });
+        return {
+          detalle,
+          nota: "Lo pendiente = pedido menos despachado. El acumulado va ordenado por fecha de entrega: la primera fila 'FALTA FABRICAR' es el primer cliente que no alcanzas y su fecha es tu límite.",
+        };
+      }
+
+      return {
+        productos: productos.slice(0, 25).map(({ _lineas, ...p }) => p),
+        total_productos: productos.length,
+        nota: "Unidades pendientes de OPs activas (sin anular, sin entregar). 'disponible' es inventario de producto terminado y subensambles. Pregunta por un producto concreto para ver el desglose OP por OP con fechas.",
+      };
+    },
+  },
+  {
     name: "agenda_entregas",
     modulo: "produccion",
     description:
@@ -1382,6 +1547,61 @@ function resumirDemo(
         (filas ? `\n\nOPs vencidas:\n${filas}` : "") +
         nota
       );
+    }
+    case "demanda_productos": {
+      const det =
+        (d.detalle as {
+          producto: string;
+          unidades_pedidas: number;
+          disponible: number;
+          falta_fabricar: number;
+          ops: {
+            numero: string;
+            cliente: string;
+            fecha: string | null;
+            unidades: number;
+            acumulado: number;
+            estado: string;
+          }[];
+        }[]) ?? [];
+      if (det.length) {
+        return det
+          .map((p) => {
+            const filas = p.ops
+              .map(
+                (o) =>
+                  `  · ${o.numero} — ${o.cliente} (${o.fecha ?? "sin fecha"}): ${o.unidades} · acum ${o.acumulado} — ${o.estado}`,
+              )
+              .join("\n");
+            return (
+              `**${p.producto}** — piden ${p.unidades_pedidas}, hay ${p.disponible}` +
+              (p.falta_fabricar > 0
+                ? `, **faltan ${p.falta_fabricar} por fabricar**`
+                : ", alcanza") +
+              `\n${filas}`
+            );
+          })
+          .join("\n\n") + nota;
+      }
+      const prods =
+        (d.productos as {
+          producto: string;
+          unidades_pedidas: number;
+          disponible: number;
+          falta_fabricar: number;
+          primera_fecha: string | null;
+        }[]) ?? [];
+      if (!prods.length) return "No hay OPs activas con unidades pendientes." + nota;
+      const filas = prods
+        .slice(0, 15)
+        .map(
+          (p) =>
+            `  · ${p.producto}: piden ${p.unidades_pedidas}, hay ${p.disponible}` +
+            (p.falta_fabricar > 0 ? ` → faltan ${p.falta_fabricar}` : " → alcanza") +
+            (p.primera_fecha ? ` (primera entrega ${p.primera_fecha})` : ""),
+        )
+        .join("\n");
+      return `**Demanda de las OPs activas (${d.total_productos} productos)**\n${filas}` + nota;
     }
     case "inventario_materiales": {
       const mats =
