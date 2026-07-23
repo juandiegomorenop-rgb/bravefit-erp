@@ -4,11 +4,13 @@
  * pendiente→en_cotizacion→comprado / rechazada, recepción ítem×ítem con
  * faltantes en seguimiento). Numeración SC-### vía fn_siguiente_numero.
  *
- * NOTA kardex: la recepción registra lo recibido EN LA SOLICITUD pero
- * NO genera movimientos entrada_compra todavía — ese movimiento exige
- * costo unitario por material (check de la BD) y hoy el costo entra por
- * la foto de la factura / el conteo periódico. Cuando definamos captura
- * de costos en la recepción, se conecta aquí.
+ * KARDEX: la recepción SÍ sube el material al inventario. Por cada ítem
+ * recibido que apunte a un material del catálogo se inserta un movimiento
+ * `entrada_compra` (creando la existencia en cero si aún no existe). El
+ * costo unitario es opcional en la pantalla: si no se digita se usa el
+ * costo promedio vigente del material —que no mueve el promedio— y el
+ * movimiento queda anotado como "costo estimado". Los ítems libres (sin
+ * material del catálogo) no mueven inventario: no hay qué descontar luego.
  */
 import type {
   ComprasRepository,
@@ -37,6 +39,11 @@ const num = (v: unknown): number =>
   typeof v === "string" ? Number(v) : (v as number);
 const numN = (v: unknown): number | null =>
   v === null || v === undefined ? null : num(v);
+
+/** La recepción ya quedó guardada: el mensaje debe decir qué falta hacer. */
+const errorKardex = (numero: string, detalle: string) =>
+  `La recepción de la ${numero} quedó registrada, pero el material NO subió al inventario (${detalle}). ` +
+  `Corrija el saldo con un ajuste en Inventarios y avise para revisarlo.`;
 
 const toSc = (r: any): SolicitudCompra => ({
   id: r.id,
@@ -425,6 +432,104 @@ class SupabaseComprasRepository implements ComprasRepository {
       })),
     );
     if (iErr) throw new Error(iErr.message);
+
+    await this.subirAlKardex(sc, rec.id, user.id, utiles, pedidoPor);
+  }
+
+  /**
+   * Sube al inventario lo recibido (movimientos `entrada_compra`).
+   *
+   * Se llama DESPUÉS de guardar la recepción: si algo falla aquí la recepción
+   * ya quedó registrada, así que el error explica que el material no subió y
+   * hay que corregir con un ajuste. No se puede duplicar por reintento: la
+   * validación de "no recibir más de lo pedido" bloquea una segunda recepción
+   * de las mismas unidades.
+   */
+  private async subirAlKardex(
+    sc: SolicitudCompra,
+    recepcion_id: string,
+    usuario_id: string,
+    items: RecepcionItemInput[],
+    pedidoPor: Map<string, ScItem>,
+  ): Promise<void> {
+    const supabase = await createClient();
+
+    // Ítems que sí son material del catálogo y de los que llegó algo.
+    const conMaterial = items
+      .map((it) => ({ it, material_id: pedidoPor.get(it.sc_item_id)?.material_id }))
+      .filter(
+        (x): x is { it: RecepcionItemInput; material_id: string } =>
+          x.it.cant_recibida > 0 && !!x.material_id,
+      );
+    if (!conMaterial.length) return;
+
+    const materialIds = [...new Set(conMaterial.map((x) => x.material_id))];
+
+    const [{ data: mats }, { data: exs, error: exErr }] = await Promise.all([
+      supabase
+        .from("materiales")
+        .select("id, nombre, costo_promedio")
+        .in("id", materialIds),
+      supabase
+        .from("existencias")
+        .select("id, material_id")
+        .eq("tipo", "materia_prima")
+        .in("material_id", materialIds),
+    ]);
+    if (exErr) throw new Error(errorKardex(sc.numero, exErr.message));
+
+    const costoPor = new Map(
+      ((mats ?? []) as any[]).map((m) => [m.id, num(m.costo_promedio) || 0]),
+    );
+    const existenciaPor = new Map(
+      ((exs ?? []) as any[]).map((e) => [e.material_id as string, e.id as string]),
+    );
+
+    // El material que nunca ha tenido movimiento no tiene fila de existencia:
+    // se crea EN CERO (la RLS solo permite así) y el kardex le pone el saldo.
+    const faltantes = materialIds.filter((id) => !existenciaPor.has(id));
+    if (faltantes.length) {
+      const { data: nuevas, error: nErr } = await supabase
+        .from("existencias")
+        .insert(
+          faltantes.map((material_id) => ({
+            material_id,
+            tipo: "materia_prima",
+            cantidad_disponible: 0,
+            cantidad_reservada: 0,
+          })),
+        )
+        .select("id, material_id");
+      if (nErr) throw new Error(errorKardex(sc.numero, nErr.message));
+      for (const e of (nuevas ?? []) as any[]) {
+        existenciaPor.set(e.material_id, e.id);
+      }
+    }
+
+    const movimientos = conMaterial.map(({ it, material_id }) => {
+      const digitado =
+        it.costo_unit !== undefined &&
+        it.costo_unit !== null &&
+        Number.isFinite(it.costo_unit) &&
+        it.costo_unit > 0;
+      const costo = digitado ? Number(it.costo_unit) : (costoPor.get(material_id) ?? 0);
+      return {
+        existencia_id: existenciaPor.get(material_id)!,
+        tipo: "entrada_compra",
+        cantidad: it.cant_recibida,
+        costo_unit: costo,
+        recepcion_id,
+        usuario_id,
+        nota: digitado
+          ? `Entrada por recepción de ${sc.numero}`
+          : `Entrada por recepción de ${sc.numero} · costo estimado (promedio vigente, sin factura)`,
+      };
+    });
+
+    const { error: mErr } = await supabase
+      .from("movimientos_inventario")
+      .insert(movimientos);
+    if (mErr) throw new Error(errorKardex(sc.numero, mErr.message));
   }
 
   async resolverFaltante(

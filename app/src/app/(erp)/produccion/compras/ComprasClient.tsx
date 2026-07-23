@@ -587,12 +587,16 @@ function FormRecepcion({
     pendientes.map((i) => ({
       sc_item_id: i.id,
       nombre: i.material?.nombre ?? i.descripcion ?? "Ítem",
+      // Solo lo que es material del catálogo sube al inventario
+      es_material: !!i.material,
       pendiente: i.cantidad - i.recibido,
       cant_recibida: i.cantidad - i.recibido, // por defecto: llegó todo
+      costo_unit: "", // opcional: costo de la factura
       nota: "",
     })),
   );
   const [guardando, setGuardando] = useState(false);
+  const hayMateriales = filas.some((f) => f.es_material);
 
   async function guardar() {
     onError(null);
@@ -604,6 +608,7 @@ function FormRecepcion({
         cant_recibida: f.cant_recibida,
         cant_faltante: Math.max(0, f.pendiente - f.cant_recibida),
         nota: f.nota.trim() || null,
+        costo_unit: f.costo_unit.trim() ? Number(f.costo_unit) : null,
       })),
     );
     setGuardando(false);
@@ -619,6 +624,13 @@ function FormRecepcion({
       <p className="text-[11px] font-bold uppercase tracking-wider text-neutro">
         Recepción — chequee ítem por ítem
       </p>
+      {hayMateriales && (
+        <p className="mt-1 text-[11.5px] text-neutro">
+          Lo recibido <b>sube al inventario</b> al guardar. El costo unitario es
+          opcional: si lo digita (el de la factura) actualiza el costo promedio
+          del material; si lo deja vacío se usa el promedio actual.
+        </p>
+      )}
       <div className="mt-2 space-y-2">
         {filas.map((f, idx) => (
           <div key={f.sc_item_id} className="flex flex-wrap items-center gap-3 text-[12.5px]">
@@ -652,6 +664,28 @@ function FormRecepcion({
                 ? `faltan ${f.pendiente - f.cant_recibida}`
                 : "completo ✓"}
             </span>
+            {f.es_material ? (
+              <label className="flex items-center gap-1.5 text-neutro">
+                costo unit.
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder="opcional"
+                  className={`${inputCls} w-[110px] py-1`}
+                  value={f.costo_unit}
+                  onChange={(e) =>
+                    setFilas((fs) =>
+                      fs.map((x, i) =>
+                        i === idx ? { ...x, costo_unit: e.target.value } : x,
+                      ),
+                    )
+                  }
+                />
+              </label>
+            ) : (
+              <span className="text-[11.5px] text-neutro">no mueve inventario</span>
+            )}
             <input
               placeholder="Nota (ej: proveedor envía el resto el lunes)"
               className={`${inputCls} min-w-[200px] flex-1 py-1`}

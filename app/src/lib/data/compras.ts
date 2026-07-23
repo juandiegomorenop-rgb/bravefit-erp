@@ -95,6 +95,12 @@ export interface RecepcionItemInput {
   cant_recibida: number;
   cant_faltante: number;
   nota: string | null;
+  /**
+   * Costo unitario de la factura, opcional. Si viene, alimenta el promedio
+   * ponderado del material; si no, la entrada al kardex se registra al costo
+   * promedio vigente (no mueve el promedio) y queda anotada como tal.
+   */
+  costo_unit?: number | null;
 }
 
 export interface ComprasRepository {
@@ -443,9 +449,9 @@ export class MockComprasRepository implements ComprasRepository {
           faltante_resuelto: false,
         }),
       );
-    // NOTA: en producción el worker registra aquí los movimientos
-    // entrada_compra en el kardex (fn_aplicar_movimiento actualiza saldos
-    // y costo promedio). El mock de inventario es independiente.
+    // NOTA: en producción (compras-server) esto además inserta los
+    // movimientos entrada_compra en el kardex, que suben el saldo y el costo
+    // promedio. Aquí no, porque el mock de inventario es un store aparte.
   }
 
   async resolverFaltante(recepcion_item_id: string, nota?: string): Promise<void> {
