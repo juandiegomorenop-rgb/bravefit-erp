@@ -200,10 +200,10 @@ export async function subirFotoProducto(
         "Falta crear el bucket 'productos' en Supabase (script 2026-07-20_bucket_productos.sql).",
       );
     }
-    if (/policy|row-level|permission/i.test(upErr.message)) {
-      throw new Error("Solo un Administrador puede subir fotos de productos.");
-    }
-    throw new Error(upErr.message);
+    // Se muestra el error REAL de Storage: el mensaje genérico "solo un
+    // Administrador" ocultaba fallos de configuración del bucket que no
+    // tienen que ver con el permiso del usuario.
+    throw new Error(`No se pudo subir la foto — Storage: ${upErr.message}`);
   }
 
   const { data: pub } = supabase.storage.from("productos").getPublicUrl(ruta);
