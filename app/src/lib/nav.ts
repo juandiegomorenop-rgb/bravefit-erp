@@ -40,7 +40,7 @@ export const NAV: NavItem[] = [
     children: [
       { label: "Inventarios", href: "/produccion/inventarios", modulo: "produccion" },
       { label: "Órdenes de pedido", href: "/produccion/ordenes", modulo: "produccion" },
-      { label: "Solicitudes de compra", href: "/produccion/compras", modulo: "produccion" },
+      { label: "Compras", href: "/produccion/compras", modulo: "produccion" },
       { label: "Garantías", href: "/produccion/garantias", modulo: "produccion" },
       { label: "Entregas", href: "/produccion/entregas", modulo: "produccion" },
       {
