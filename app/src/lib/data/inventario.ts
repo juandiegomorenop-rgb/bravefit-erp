@@ -150,6 +150,9 @@ export interface InventarioRepository {
   registrarConsumoEspecial(
     items: ConsumoEspecialItem[],
     motivo: string,
+    /** Clave de idempotencia opcional: un reintento con la misma clave no
+     *  vuelve a descontar (protege contra respuesta perdida tras el commit). */
+    opId?: string,
   ): Promise<void>;
   /**
    * Movimientos de una existencia, descendentes por fecha. El id puede ser

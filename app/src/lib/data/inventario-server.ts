@@ -239,6 +239,7 @@ class SupabaseInventarioRepository implements InventarioRepository {
   async registrarConsumoEspecial(
     items: ConsumoEspecialItem[],
     motivo: string,
+    opId?: string,
   ): Promise<void> {
     const limpios = items.filter((i) => i.material_id && i.cantidad > 0);
     if (!limpios.length) {
@@ -255,6 +256,21 @@ class SupabaseInventarioRepository implements InventarioRepository {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Sesión no válida: vuelve a iniciar sesión.");
+
+    // Idempotencia: si un reintento trae la misma clave y ya hay movimientos
+    // con ella, el consumo ya se registró (la respuesta anterior se perdió
+    // tras el commit). No se vuelve a descontar. El token vive en la nota
+    // porque el kardex no tiene columna dedicada y es inmutable.
+    const marca = opId ? ` [op:${opId}]` : "";
+    if (opId) {
+      const { data: previo, error: pErr } = await supabase
+        .from("movimientos_inventario")
+        .select("id")
+        .like("nota", `%[op:${opId}]%`)
+        .limit(1);
+      if (pErr) throw new Error(pErr.message);
+      if (previo?.length) return; // ya quedó registrado
+    }
 
     const materialIds = [...new Set(limpios.map((i) => i.material_id))];
     const { data: exs, error: exErr } = await supabase
@@ -289,7 +305,7 @@ class SupabaseInventarioRepository implements InventarioRepository {
       tipo: "salida_produccion",
       cantidad: -cantidad,
       usuario_id: user.id,
-      nota: `Consumo especial · ${motivo.trim()}`,
+      nota: `Consumo especial · ${motivo.trim()}${marca}`,
     }));
 
     const { error } = await supabase

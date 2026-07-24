@@ -43,9 +43,10 @@ export async function fabricarSubensamble(
 export async function registrarConsumoEspecial(
   items: ConsumoEspecialItem[],
   motivo: string,
+  opId?: string,
 ): Promise<RegistrarAjusteResp> {
   try {
-    await getInventarioRepository().registrarConsumoEspecial(items, motivo);
+    await getInventarioRepository().registrarConsumoEspecial(items, motivo, opId);
     return { ok: true };
   } catch (e) {
     return {

@@ -39,6 +39,59 @@ const JUEGOS: { nombre: string; skuEstructura: string; prefijoCojin: string }[] 
   { nombre: "Banco reclinable", skuEstructura: "SE-EST-BANCOREC", prefijoCojin: "COJ004" },
 ];
 
+/**
+ * Recetas de las piezas ESPECIALES más comunes (columnas, uniones, barras
+ * de medida no estándar). Julián elige el tipo + la medida + la cantidad y
+ * el sistema calcula las platinas fijas y el tubo (= medida × cantidad),
+ * en vez de que las tenga que seleccionar una por una.
+ *
+ * Los `fijos` (platinas, tapa) son por UNIDAD y se multiplican por la
+ * cantidad. El tubo se calcula aparte: metros = medida × cantidad, del
+ * bucket que corresponda. Consumibles (nivelador, chazos) NO van, igual
+ * que en las recetas de subensamble.
+ *
+ * Los códigos coinciden con el primer token del nombre del material
+ * ("P005 · …", "TUB70L · …"), que sobrevive a renombres.
+ */
+type TuboReceta = "70-por-medida" | "70-largo" | "redondo";
+const RECETAS_ESPECIALES: {
+  clave: string;
+  label: string;
+  fijos: { codigo: string; cant: number }[];
+  tubo: TuboReceta;
+}[] = [
+  {
+    clave: "union",
+    label: "Unión perforada especial",
+    fijos: [{ codigo: "P005", cant: 2 }],
+    tubo: "70-por-medida", // ≥2.2m sale del bucket largo, si no del retazo
+  },
+  {
+    clave: "col-niv",
+    label: "Columna niveladora especial",
+    fijos: [
+      { codigo: "P014", cant: 1 },
+      { codigo: "i3D001", cant: 1 },
+    ],
+    tubo: "70-largo", // una columna siempre sale de un tramo largo
+  },
+  {
+    clave: "col-base",
+    label: "Columna base especial",
+    fijos: [
+      { codigo: "P001", cant: 1 },
+      { codigo: "i3D001", cant: 1 },
+    ],
+    tubo: "70-largo",
+  },
+  {
+    clave: "barra",
+    label: "Barra sencilla especial",
+    fijos: [{ codigo: "P002", cant: 2 }],
+    tubo: "redondo", // tubería redonda Ø33
+  },
+];
+
 /** Inventarios (una sola bodega): KPIs + MP + subensambles + PT + tendencia. */
 export function InventariosClient({
   filasMP,
@@ -552,6 +605,15 @@ function ConsumoEspecial({ materiales }: { materiales: ExistenciaMP[] }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [preset, setPreset] = useState<string | null>(null);
+  const [medida, setMedida] = useState("");
+  const [cantPreset, setCantPreset] = useState("1");
+  // Clave de idempotencia: estable entre reintentos del MISMO consumo (si el
+  // insert se comitea pero se pierde la respuesta, reintentar no duplica).
+  // Se genera al primer envío y se limpia al cerrar → cada consumo nuevo trae
+  // una clave nueva. No se genera en render para no romper la hidratación.
+  const [opId, setOpId] = useState("");
+
   const opciones = useMemo(
     () =>
       [...materiales]
@@ -565,11 +627,74 @@ function ConsumoEspecial({ materiales }: { materiales: ExistenciaMP[] }) {
     [materiales],
   );
 
+  // Busca un material por el primer token del nombre ("P005 · …" → "P005").
+  // Sin distinguir mayúsculas: un recase (i3D001 → I3D001) no debe romper el match.
+  const porCodigo = (codigo: string) =>
+    opciones.find(
+      (o) => o.nombre.split(" ")[0].toUpperCase() === codigo.toUpperCase(),
+    );
+
+  /**
+   * Aplica una receta especial: convierte (tipo + medida + cantidad) en las
+   * filas de materiales, listas para que Julián las revise y confirme. Si
+   * falta algún material en el catálogo, avisa en vez de descontar de menos.
+   */
+  function aplicarReceta(clave: string) {
+    setError(null);
+    const receta = RECETAS_ESPECIALES.find((r) => r.clave === clave);
+    if (!receta) return;
+    const m = Number(medida);
+    const n = Number(cantPreset);
+    if (!(m > 0) || !(n > 0)) {
+      setError("Indica la medida (m) y la cantidad para aplicar la receta.");
+      return;
+    }
+
+    const nuevas: { material_id: string; cantidad: string }[] = [];
+    const faltan: string[] = [];
+
+    for (const f of receta.fijos) {
+      const mat = porCodigo(f.codigo);
+      if (!mat) faltan.push(f.codigo);
+      else nuevas.push({ material_id: mat.id, cantidad: String(f.cant * n) });
+    }
+
+    // Tubo: metros = medida × cantidad, del bucket que corresponda.
+    const codigoTubo =
+      receta.tubo === "redondo"
+        ? "TUBR33"
+        : receta.tubo === "70-largo" || m >= 2.2
+          ? "TUB70L"
+          : "TUB70R";
+    const tubo = porCodigo(codigoTubo);
+    if (!tubo) faltan.push(codigoTubo);
+    else
+      nuevas.push({
+        material_id: tubo.id,
+        cantidad: String(Number((m * n).toFixed(3))),
+      });
+
+    // Si falta cualquier material de la receta, NO se carga NADA: cargar una
+    // receta incompleta y dejarla registrable descontaría de menos en silencio.
+    if (faltan.length) {
+      setError(
+        `No están en el catálogo: ${faltan.join(", ")}. Créalos primero o arma la lista a mano — no se cargó la receta para no descontar de menos.`,
+      );
+      return;
+    }
+    setFilas(nuevas);
+    setMotivo(`${receta.label} ${m}m ×${n}`);
+  }
+
   function cerrar() {
     setAbierto(false);
     setFilas([{ material_id: "", cantidad: "" }]);
     setMotivo("");
+    setPreset(null);
+    setMedida("");
+    setCantPreset("1");
     setError(null);
+    setOpId(""); // consumo cerrado → el próximo trae clave nueva
   }
 
   async function guardar() {
@@ -581,11 +706,17 @@ function ConsumoEspecial({ materiales }: { materiales: ExistenciaMP[] }) {
       setError("Agrega al menos un material con cantidad.");
       return;
     }
+    // Misma clave en cada reintento de este consumo; se limpia al cerrar.
+    let id = opId;
+    if (!id) {
+      id = crypto.randomUUID();
+      setOpId(id);
+    }
     setGuardando(true);
-    const r = await registrarConsumoEspecial(items, motivo);
+    const r = await registrarConsumoEspecial(items, motivo, id);
     setGuardando(false);
     if (!r.ok) {
-      setError(r.error);
+      setError(r.error); // se conserva opId: reintentar no duplica
       return;
     }
     cerrar();
@@ -613,6 +744,71 @@ function ConsumoEspecial({ materiales }: { materiales: ExistenciaMP[] }) {
         Para piezas fuera de receta (uniones de medida rara), mermas o material
         dañado. Descuenta del inventario y queda en el consumo del mes.
       </p>
+
+      {/* Atajos: piezas especiales comunes con receta parametrizada */}
+      <div className="mt-3 rounded-[10px] border border-borde bg-sutil p-3">
+        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-neutro">
+          Pieza especial común — pon la medida y el sistema calcula platinas y
+          tubo
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {RECETAS_ESPECIALES.map((r) => (
+            <button
+              key={r.clave}
+              type="button"
+              onClick={() => {
+                setPreset(r.clave);
+                setError(null);
+              }}
+              className={`rounded-pill border px-3 py-1 text-[12px] font-semibold ${
+                preset === r.clave
+                  ? "border-carbon bg-carbon text-white"
+                  : "border-borde hover:bg-card"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {preset && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px]">
+            <label className="flex items-center gap-1.5">
+              medida
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder="m"
+                className="w-[90px] rounded-[8px] border border-borde bg-card px-2 py-1.5"
+                value={medida}
+                onChange={(e) => setMedida(e.target.value)}
+              />
+              m
+            </label>
+            <label className="flex items-center gap-1.5">
+              cantidad
+              <input
+                type="number"
+                min={1}
+                step="1"
+                className="w-[80px] rounded-[8px] border border-borde bg-card px-2 py-1.5"
+                value={cantPreset}
+                onChange={(e) => setCantPreset(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => aplicarReceta(preset)}
+              className="rounded-pill bg-dorado px-4 py-1.5 text-[12.5px] font-semibold text-carbon hover:opacity-90"
+            >
+              Aplicar receta
+            </button>
+            <span className="text-[11.5px] text-neutro">
+              Llena la lista de abajo; puedes ajustarla antes de registrar.
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="mt-3 space-y-2">
         {filas.map((f, idx) => {
