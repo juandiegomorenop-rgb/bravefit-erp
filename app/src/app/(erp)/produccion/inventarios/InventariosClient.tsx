@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { fabricarSubensamble } from "./actions";
 import {
   aplicarFiltrosInventario,
   estadoBuffer,
@@ -340,26 +342,18 @@ export function InventariosClient({
               <th className="px-3 py-2.5 text-right font-semibold">
                 Disponible
               </th>
-              <th className="px-4 py-2.5 text-right font-semibold">
-                Reservada
-              </th>
+              <th className="px-4 py-2.5 text-right font-semibold">Fabricar</th>
             </tr>
           </thead>
           <tbody>
             {filasSE.map(({ existencia, producto }) => (
-              <tr
+              <FilaSubensamble
                 key={existencia.id}
-                className="border-b border-[#f6f5f2] last:border-b-0 hover:bg-sutil"
-              >
-                <td className="px-4 py-2.5 font-semibold">{producto.nombre}</td>
-                <td className="px-3 py-2.5 text-neutro">{producto.sku}</td>
-                <td className="px-3 py-2.5 text-right font-bold">
-                  {formatCantidad(existencia.cantidad_disponible)}
-                </td>
-                <td className="px-4 py-2.5 text-right text-neutro">
-                  {formatCantidad(existencia.cantidad_reservada)}
-                </td>
-              </tr>
+                producto_id={producto.id}
+                nombre={producto.nombre}
+                sku={producto.sku}
+                disponible={existencia.cantidad_disponible}
+              />
             ))}
             {filasSE.length === 0 && (
               <tr>
@@ -426,5 +420,113 @@ export function InventariosClient({
         </table>
       </div>
     </div>
+  );
+}
+
+/**
+ * Fila de subensamble con declaración de fabricación.
+ *
+ * Es la pieza que le faltaba al ERP: hasta hoy no había forma de SUMAR
+ * algo fabricado, solo de descontarlo. Un clic de Julián dispara los dos
+ * movimientos en una sola transacción — sube el subensamble al estante y
+ * baja su receta — porque la regla que acordamos con Juan es que todo lo
+ * fabricado pasa por el estante, aunque salga para un pedido el mismo día.
+ *
+ * La columna "Reservada" se quitó a propósito: `cantidad_reservada` no la
+ * mantiene ningún proceso (siempre muestra 0) y hacía creer que el ERP
+ * sabe qué material está apartado. No lo sabe.
+ */
+function FilaSubensamble({
+  producto_id,
+  nombre,
+  sku,
+  disponible,
+}: {
+  producto_id: string;
+  nombre: string;
+  sku: string;
+  disponible: number;
+}) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
+  const [cantidad, setCantidad] = useState("1");
+  const [nota, setNota] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function guardar() {
+    setError(null);
+    setGuardando(true);
+    const r = await fabricarSubensamble(producto_id, Number(cantidad), nota);
+    setGuardando(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    setAbierto(false);
+    setCantidad("1");
+    setNota("");
+    router.refresh();
+  }
+
+  return (
+    <>
+      <tr className="border-b border-[#f6f5f2] last:border-b-0 hover:bg-sutil">
+        <td className="px-4 py-2.5 font-semibold">{nombre}</td>
+        <td className="px-3 py-2.5 text-neutro">{sku}</td>
+        <td className="px-3 py-2.5 text-right font-bold">
+          {formatCantidad(disponible)}
+        </td>
+        <td className="px-4 py-2.5 text-right">
+          <button
+            type="button"
+            onClick={() => setAbierto((v) => !v)}
+            className="rounded-pill border border-borde px-3 py-1 text-[12px] font-semibold hover:bg-sutil"
+          >
+            {abierto ? "Cancelar" : "＋ Fabriqué"}
+          </button>
+        </td>
+      </tr>
+      {abierto && (
+        <tr className="border-b border-[#f6f5f2] bg-sutil">
+          <td colSpan={4} className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 text-[12.5px]">
+              <label className="flex items-center gap-1.5">
+                Fabriqué
+                <input
+                  type="number"
+                  min={1}
+                  step="any"
+                  className="w-[90px] rounded-[8px] border border-borde bg-card px-2 py-1"
+                  value={cantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                />
+              </label>
+              <input
+                placeholder="Nota (ej: para la OP de Jamer)"
+                className="min-w-[220px] flex-1 rounded-[8px] border border-borde bg-card px-2 py-1"
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={guardando || !(Number(cantidad) > 0)}
+                onClick={() => void guardar()}
+                className="rounded-pill bg-carbon px-4 py-1.5 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-50"
+              >
+                {guardando ? "Registrando…" : "Registrar"}
+              </button>
+            </div>
+            <p className="mt-2 text-[11.5px] text-neutro">
+              Sube {nombre} al estante y descuenta su receta. Si no alcanza el
+              material, no se registra nada.
+            </p>
+            {error && (
+              <p className="mt-2 text-[12px] font-semibold text-rojo">{error}</p>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

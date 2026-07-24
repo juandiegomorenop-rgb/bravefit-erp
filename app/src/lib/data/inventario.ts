@@ -126,6 +126,16 @@ export interface InventarioRepository {
    */
   listarExistenciasSubensambles(): Promise<ExistenciaPT[]>;
   /**
+   * Declara fabricación: sube `cantidad` del subensamble al estante y baja
+   * su receta, en UNA transacción. Si no alcanza el material, la BD aborta
+   * todo (no queda subensamble sin su materia prima).
+   */
+  fabricarSubensamble(
+    producto_id: string,
+    cantidad: number,
+    nota?: string,
+  ): Promise<void>;
+  /**
    * Movimientos de una existencia, descendentes por fecha. El id puede ser
    * de un material o de un producto (terminado o subensamble).
    */
@@ -395,6 +405,14 @@ export class MockInventarioRepository implements InventarioRepository {
 
   async listarExistenciasSubensambles(): Promise<ExistenciaPT[]> {
     return []; // los subensambles nacieron directo en Supabase (SE-*)
+  }
+
+  async fabricarSubensamble(): Promise<void> {
+    // El mock no tiene subensambles (nacieron en Supabase), así que no hay
+    // nada que fabricar. En producción esto llama a fn_fabricar_subensamble.
+    throw new Error(
+      "La fabricación de subensambles solo está disponible con la base de datos real.",
+    );
   }
 
   async kardex(material_id: string): Promise<MovimientoInventario[]> {

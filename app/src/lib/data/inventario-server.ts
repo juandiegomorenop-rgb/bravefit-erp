@@ -190,6 +190,43 @@ class SupabaseInventarioRepository implements InventarioRepository {
   }
 
   /**
+   * Declara fabricación de un subensamble. Todo el trabajo lo hace
+   * `fn_fabricar_subensamble` en la BD, en UNA transacción: sube el
+   * subensamble al estante y baja su receta. Se hace allá y no aquí a
+   * propósito — dos inserts desde la app no son atómicos, y a mitad de
+   * camino quedaría un subensamble sin su materia prima descontada.
+   */
+  async fabricarSubensamble(
+    producto_id: string,
+    cantidad: number,
+    nota?: string,
+  ): Promise<void> {
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      throw new Error("La cantidad fabricada debe ser mayor que cero.");
+    }
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_fabricar_subensamble", {
+      p_producto_id: producto_id,
+      p_cantidad: cantidad,
+      p_nota: nota?.trim() || null,
+    });
+    if (error) {
+      // El CHECK >= 0 de existencias aborta la transacción cuando no
+      // alcanza el material: se traduce a lenguaje de planta.
+      if (
+        error.code === "23514" ||
+        /cantidad_disponible|check constraint|negativ/i.test(error.message)
+      ) {
+        throw new Error(
+          "No alcanza el material de la receta para fabricar esa cantidad. " +
+            "Revisa el inventario de platinas y tubo, o registra primero la compra.",
+        );
+      }
+      throw new Error(error.message || "No se pudo registrar la fabricación.");
+    }
+  }
+
+  /**
    * Movimientos de una existencia. El id puede ser de un MATERIAL o de un
    * PRODUCTO (terminado o subensamble): antes solo buscaba materia prima,
    * así que el detalle de subensambles y productos terminados salía vacío.
