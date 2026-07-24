@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   aplicarFiltrosInventario,
   type CompraMensual,
+  type ConsumoEspecialItem,
   type ExistenciaMP,
   type ExistenciaPT,
   type FiltrosInventarioMP,
@@ -223,6 +224,87 @@ class SupabaseInventarioRepository implements InventarioRepository {
         );
       }
       throw new Error(error.message || "No se pudo registrar la fabricación.");
+    }
+  }
+
+  /**
+   * Consumo directo de materiales: piezas especiales fuera de receta,
+   * mermas, material dañado. Se registra como `salida_produccion` (no
+   * `ajuste`) a propósito: así entra en el consumo mensual y en el
+   * indicador de perforado — una unión especial también se perfora.
+   *
+   * Todas las líneas van en UN insert (una sola transacción): si algún
+   * material quedaría negativo, la BD aborta TODO y no se descuenta nada.
+   */
+  async registrarConsumoEspecial(
+    items: ConsumoEspecialItem[],
+    motivo: string,
+  ): Promise<void> {
+    const limpios = items.filter((i) => i.material_id && i.cantidad > 0);
+    if (!limpios.length) {
+      throw new Error("Agrega al menos un material con cantidad mayor que cero.");
+    }
+    if (!motivo.trim()) {
+      throw new Error(
+        "El motivo es obligatorio: el kardex es inmutable y todo consumo debe quedar explicado.",
+      );
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("Sesión no válida: vuelve a iniciar sesión.");
+
+    const materialIds = [...new Set(limpios.map((i) => i.material_id))];
+    const { data: exs, error: exErr } = await supabase
+      .from("existencias")
+      .select("id, material_id, materiales(nombre)")
+      .eq("tipo", "materia_prima")
+      .in("material_id", materialIds);
+    if (exErr) throw new Error(exErr.message);
+
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const exPor = new Map((exs ?? []).map((e: any) => [e.material_id, e]));
+    // Un material sin existencia tiene saldo 0: no se puede consumir.
+    const sinEx = materialIds.filter((id) => !exPor.has(id));
+    if (sinEx.length) {
+      throw new Error(
+        "Hay materiales sin existencia registrada (saldo 0): no se pueden consumir.",
+      );
+    }
+
+    // Se agrupa por material por si el mismo aparece en dos líneas.
+    const porMaterial = new Map<string, number>();
+    for (const i of limpios) {
+      porMaterial.set(
+        i.material_id,
+        (porMaterial.get(i.material_id) ?? 0) + i.cantidad,
+      );
+    }
+
+    const filas = [...porMaterial.entries()].map(([material_id, cantidad]) => ({
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      existencia_id: (exPor.get(material_id) as any).id,
+      tipo: "salida_produccion",
+      cantidad: -cantidad,
+      usuario_id: user.id,
+      nota: `Consumo especial · ${motivo.trim()}`,
+    }));
+
+    const { error } = await supabase
+      .from("movimientos_inventario")
+      .insert(filas);
+    if (error) {
+      if (
+        error.code === "23514" ||
+        /cantidad_disponible|check constraint|negativ/i.test(error.message)
+      ) {
+        throw new Error(
+          "El consumo dejaría algún material en negativo. Revisa las cantidades contra el inventario disponible.",
+        );
+      }
+      throw new Error(error.message || "No se pudo registrar el consumo.");
     }
   }
 

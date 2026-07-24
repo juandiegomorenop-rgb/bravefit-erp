@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { fabricarSubensamble } from "./actions";
+import { fabricarSubensamble, registrarConsumoEspecial } from "./actions";
 import {
   aplicarFiltrosInventario,
   estadoBuffer,
@@ -169,6 +169,8 @@ export function InventariosClient({
           {filtradas.length === 1 ? "referencia" : "referencias"}
         </span>
       </div>
+
+      <ConsumoEspecial materiales={filasMP} />
 
       {/* Tabla materia prima */}
       <div className="thead-flotante overflow-x-auto rounded-card border border-borde bg-card">
@@ -528,5 +530,184 @@ function FilaSubensamble({
         </tr>
       )}
     </>
+  );
+}
+
+/**
+ * Consumo especial de materiales — piezas fuera de receta (uniones de
+ * medida rara), mermas y material dañado. Es el hogar honesto de lo que
+ * gasta material sin ser una receta estándar: sin esto, fabricar una
+ * unión especial descontaría platinas y tubo del mundo físico pero no
+ * del ERP, y el saldo quedaría inflado. Se descuenta como salida de
+ * producción, así que cuenta en el consumo del mes y en el indicador de
+ * perforado (una unión especial también se perfora).
+ */
+function ConsumoEspecial({ materiales }: { materiales: ExistenciaMP[] }) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
+  const [filas, setFilas] = useState<{ material_id: string; cantidad: string }[]>(
+    [{ material_id: "", cantidad: "" }],
+  );
+  const [motivo, setMotivo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const opciones = useMemo(
+    () =>
+      [...materiales]
+        .map((m) => ({
+          id: m.material.id,
+          nombre: m.material.nombre,
+          disponible: m.existencia.cantidad_disponible,
+          unidad: UNIDAD_LABEL[m.material.unidad_id] ?? "und",
+        }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
+    [materiales],
+  );
+
+  function cerrar() {
+    setAbierto(false);
+    setFilas([{ material_id: "", cantidad: "" }]);
+    setMotivo("");
+    setError(null);
+  }
+
+  async function guardar() {
+    setError(null);
+    const items = filas
+      .filter((f) => f.material_id && Number(f.cantidad) > 0)
+      .map((f) => ({ material_id: f.material_id, cantidad: Number(f.cantidad) }));
+    if (!items.length) {
+      setError("Agrega al menos un material con cantidad.");
+      return;
+    }
+    setGuardando(true);
+    const r = await registrarConsumoEspecial(items, motivo);
+    setGuardando(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    cerrar();
+    router.refresh();
+  }
+
+  if (!abierto) {
+    return (
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          className="rounded-pill border border-borde px-4 py-2 text-[12.5px] font-semibold hover:bg-sutil"
+        >
+          ＋ Registrar consumo especial / merma
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-card border border-borde bg-card p-4">
+      <p className="text-[13px] font-bold">Consumo especial de material</p>
+      <p className="mt-0.5 text-[11.5px] text-neutro">
+        Para piezas fuera de receta (uniones de medida rara), mermas o material
+        dañado. Descuenta del inventario y queda en el consumo del mes.
+      </p>
+
+      <div className="mt-3 space-y-2">
+        {filas.map((f, idx) => {
+          const sel = opciones.find((o) => o.id === f.material_id);
+          return (
+            <div key={idx} className="flex flex-wrap items-center gap-2 text-[12.5px]">
+              <select
+                aria-label="Material"
+                className="min-w-[240px] flex-1 rounded-[8px] border border-borde bg-card px-2 py-1.5"
+                value={f.material_id}
+                onChange={(e) =>
+                  setFilas((fs) =>
+                    fs.map((x, i) =>
+                      i === idx ? { ...x, material_id: e.target.value } : x,
+                    ),
+                  )
+                }
+              >
+                <option value="">Elegir material…</option>
+                {opciones.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.nombre} (hay {formatCantidad(o.disponible)} {o.unidad})
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder="cantidad"
+                className="w-[110px] rounded-[8px] border border-borde bg-card px-2 py-1.5"
+                value={f.cantidad}
+                onChange={(e) =>
+                  setFilas((fs) =>
+                    fs.map((x, i) =>
+                      i === idx ? { ...x, cantidad: e.target.value } : x,
+                    ),
+                  )
+                }
+              />
+              {sel && <span className="text-neutro">{sel.unidad}</span>}
+              {filas.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFilas((fs) => fs.filter((_, i) => i !== idx))
+                  }
+                  className="text-[12px] text-rojo hover:underline"
+                >
+                  quitar
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          setFilas((fs) => [...fs, { material_id: "", cantidad: "" }])
+        }
+        className="mt-2 text-[12px] font-semibold text-dorado hover:underline"
+      >
+        ＋ Otro material
+      </button>
+
+      <input
+        placeholder="Motivo (ej: unión especial 0.6m para OP de Orlando)"
+        className="mt-3 w-full rounded-[8px] border border-borde bg-card px-3 py-2 text-[12.5px]"
+        value={motivo}
+        onChange={(e) => setMotivo(e.target.value)}
+      />
+
+      {error && (
+        <p className="mt-2 text-[12px] font-semibold text-rojo">{error}</p>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          disabled={guardando}
+          onClick={() => void guardar()}
+          className="rounded-pill bg-carbon px-5 py-2 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-50"
+        >
+          {guardando ? "Registrando…" : "Registrar consumo"}
+        </button>
+        <button
+          type="button"
+          onClick={cerrar}
+          className="rounded-pill border border-borde px-4 py-2 text-[12.5px] font-semibold hover:bg-sutil"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }

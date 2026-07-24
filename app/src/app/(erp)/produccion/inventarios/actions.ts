@@ -1,6 +1,7 @@
 "use server";
 
 import { getInventarioRepository } from "@/lib/data/inventario-server";
+import type { ConsumoEspecialItem } from "@/lib/data/inventario";
 
 /**
  * Registrar ajuste de inventario — SERVER action: el kardex vive en el
@@ -31,6 +32,25 @@ export async function fabricarSubensamble(
       ok: false,
       error:
         e instanceof Error ? e.message : "No se pudo registrar la fabricación.",
+    };
+  }
+}
+
+/**
+ * Registrar consumo especial de materiales — SERVER action. Piezas fuera
+ * de receta, mermas, material dañado. Se descuenta como salida_produccion.
+ */
+export async function registrarConsumoEspecial(
+  items: ConsumoEspecialItem[],
+  motivo: string,
+): Promise<RegistrarAjusteResp> {
+  try {
+    await getInventarioRepository().registrarConsumoEspecial(items, motivo);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo registrar el consumo.",
     };
   }
 }

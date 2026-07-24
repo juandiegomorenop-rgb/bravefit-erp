@@ -54,6 +54,12 @@ export interface FiltrosInventarioMP {
   solo_bajo_buffer?: boolean;
 }
 
+/** Una línea del consumo directo: material + cuánto se gastó (positivo). */
+export interface ConsumoEspecialItem {
+  material_id: string;
+  cantidad: number;
+}
+
 // ---------------------------------------------------------------
 // Dominio compartido (lista, kardex y detalle)
 // ---------------------------------------------------------------
@@ -134,6 +140,16 @@ export interface InventarioRepository {
     producto_id: string,
     cantidad: number,
     nota?: string,
+  ): Promise<void>;
+  /**
+   * Consumo directo de materiales (piezas especiales fuera de receta,
+   * mermas, material dañado). Descuenta como `salida_produccion` — cuenta
+   * en el consumo del mes y en el indicador de perforado. Si algún material
+   * quedaría negativo, la BD aborta todo.
+   */
+  registrarConsumoEspecial(
+    items: ConsumoEspecialItem[],
+    motivo: string,
   ): Promise<void>;
   /**
    * Movimientos de una existencia, descendentes por fecha. El id puede ser
@@ -412,6 +428,12 @@ export class MockInventarioRepository implements InventarioRepository {
     // nada que fabricar. En producción esto llama a fn_fabricar_subensamble.
     throw new Error(
       "La fabricación de subensambles solo está disponible con la base de datos real.",
+    );
+  }
+
+  async registrarConsumoEspecial(): Promise<void> {
+    throw new Error(
+      "El consumo especial solo está disponible con la base de datos real.",
     );
   }
 
